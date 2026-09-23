@@ -5,7 +5,7 @@ import {
   IngredientTarget,
   LoosePiece,
   CoreEventMap
-} from '../../../packages/game-core/src/index.js';
+} from '../../game-core/index.js';
 
 const { ccclass, property } = _decorator;
 

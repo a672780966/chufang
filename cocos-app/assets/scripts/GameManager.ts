@@ -4,7 +4,7 @@ import {
   DEFAULT_DAYS,
   DEFAULT_INGREDIENTS,
   DEFAULT_RECIPES
-} from '../../packages/game-core/src/index.js';
+} from '../game-core/index.js';
 import { BoardView } from './presentation/BoardView.js';
 import { ReceiptPrinterView } from './presentation/ReceiptPrinterView.js';
 

@@ -1,6 +1,7 @@
-import { _decorator, Component, Node, EventTouch, Vec3 } from 'cc';
+import { _decorator, Component, Node, EventTouch, Vec3, UITransform, tween, Vec2 } from 'cc';
 import { GameManager } from '../GameManager.js';
 import { BoardView } from './BoardView.js';
+import { LoosePiece, IngredientTarget, DEFAULT_INGREDIENTS } from '../../game-core/index.js';
 
 const { ccclass, property } = _decorator;
 
@@ -12,8 +13,10 @@ export class TouchController extends Component {
   @property(BoardView)
   boardView: BoardView | null = null;
 
-  private _draggingPieceId: string | null = null;
-  private _dragOriginPos: Vec3 = new Vec3();
+  private _draggingPiece: LoosePiece | null = null;
+  private _draggingNode: Node | null = null;
+  private _originLocalPos: Vec3 = new Vec3();
+  private _snapRadius: number = 90;
 
   onLoad() {
     this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this);
@@ -29,19 +32,112 @@ export class TouchController extends Component {
     this.node.off(Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
   }
 
+  private screenToBoardLocal(uiLocation: Vec2): Vec3 {
+    const uiTransform = this.node.getComponent(UITransform);
+    if (!uiTransform) return new Vec3(uiLocation.x, uiLocation.y, 0);
+    const local = uiTransform.convertToNodeSpaceAR(new Vec3(uiLocation.x, uiLocation.y, 0));
+    return local;
+  }
+
   private onTouchStart(event: EventTouch) {
-    // Touch tracking logic mapped to BoardView
+    if (!this.gameManager || this.gameManager.session.isGameOver || !this.boardView) return;
+
+    const localPos = this.screenToBoardLocal(event.getUILocation());
+    const loosePieces = this.gameManager.session.grid.getAllLoosePieces();
+
+    // Hit-test loose pieces on board
+    for (const piece of loosePieces) {
+      const piecePos = this.boardView.gridToLocalPos(piece.coord);
+      const dist = Vec3.distance(localPos, piecePos);
+
+      // Hit radius based on cell size
+      if (dist < 45) {
+        const pieceNode = this.boardView.piecesContainer?.getChildByName(`Piece_${piece.instanceId}`);
+        if (pieceNode) {
+          this._draggingPiece = piece;
+          this._draggingNode = pieceNode;
+          this._originLocalPos.set(pieceNode.position);
+
+          // Raise to top and scale up
+          pieceNode.setSiblingIndex(999);
+          tween(pieceNode).to(0.1, { scale: new Vec3(1.15, 1.15, 1) }).start();
+          break;
+        }
+      }
+    }
   }
 
   private onTouchMove(event: EventTouch) {
-    // Drag following logic
+    if (!this._draggingNode || !this._draggingPiece) return;
+
+    const localPos = this.screenToBoardLocal(event.getUILocation());
+    this._draggingNode.setPosition(localPos);
   }
 
   private onTouchEnd(event: EventTouch) {
-    // Drop validation logic: calls gameManager.session.placePiece
+    if (!this._draggingNode || !this._draggingPiece || !this.gameManager || !this.boardView) {
+      this.clearDragState();
+      return;
+    }
+
+    const currentPos = this._draggingNode.position;
+    const session = this.gameManager.session;
+    const target = session.grid.getTarget(this._draggingPiece.targetInstanceId);
+
+    let placed = false;
+
+    if (target) {
+      const def = DEFAULT_INGREDIENTS[target.ingredientId];
+      const slotDef = def?.slots.find(s => s.slotId === this._draggingPiece!.slotId);
+
+      if (slotDef) {
+        // Calculate slot absolute target position
+        const slotAbsCoord = {
+          col: target.anchor.col + slotDef.relativeCol,
+          row: target.anchor.row + slotDef.relativeRow
+        };
+        const slotLocalPos = this.boardView.gridToLocalPos(slotAbsCoord);
+        const dist = Vec3.distance(currentPos, slotLocalPos);
+
+        // Snap proximity check
+        if (dist <= this._snapRadius) {
+          const res = session.placePiece(
+            this._draggingPiece.instanceId,
+            target.instanceId,
+            slotDef.slotId
+          );
+
+          if (res.success) {
+            placed = true;
+          }
+        }
+      }
+    }
+
+    if (!placed) {
+      // Rebound smoothly to original grid location
+      const origin = this._originLocalPos.clone();
+      const node = this._draggingNode;
+      tween(node)
+        .to(0.18, { position: origin, scale: new Vec3(1, 1, 1) }, { easing: 'backOut' })
+        .start();
+    }
+
+    this.clearDragState();
   }
 
   private onTouchCancel(event: EventTouch) {
-    // Revert piece to origin pos
+    if (this._draggingNode) {
+      const origin = this._originLocalPos.clone();
+      tween(this._draggingNode)
+        .to(0.15, { position: origin, scale: new Vec3(1, 1, 1) })
+        .start();
+    }
+    this.clearDragState();
+  }
+
+  private clearDragState() {
+    this._draggingPiece = null;
+    this._draggingNode = null;
   }
 }

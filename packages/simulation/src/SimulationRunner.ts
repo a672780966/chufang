@@ -3,7 +3,8 @@ import {
   DayConfig,
   DEFAULT_DAYS,
   DEFAULT_INGREDIENTS,
-  DEFAULT_RECIPES
+  DEFAULT_RECIPES,
+  SeededRandom
 } from '../../game-core/src/index.js';
 
 export interface SimReport {
@@ -35,6 +36,7 @@ export class SimulationRunner {
     maxSteps: number = 300
   ): { cleared: boolean; blocked: boolean; session: GameSession; steps: number } {
     const session = new GameSession(dayConfig, seed);
+    const botRng = new SeededRandom(`${seed}_bot`);
     let steps = 0;
 
     while (!session.isGameOver && steps < maxSteps) {
@@ -90,14 +92,13 @@ export class SimulationRunner {
       }
 
       if (legalMoves.length === 0) {
-        // No moves available; deadlock detector will trigger or step limit reached
         break;
       }
 
       // Pick move based on strategy
       if (strategy === 'novice') {
-        // Random pick
-        const pick = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+        // Purely deterministic random pick using botRng
+        const pick = legalMoves[botRng.nextInt(0, legalMoves.length - 1)];
         session.placePiece(pick.pieceId, pick.targetId, pick.slotId);
       } else {
         // Best score pick

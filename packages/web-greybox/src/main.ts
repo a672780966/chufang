@@ -397,25 +397,95 @@ class WebGreyboxApp {
     }
   }
 
+  private drawJigsawPath(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    edges: { top: string; bottom: string; left: string; right: string }
+  ) {
+    const tabH = Math.min(w, h) * 0.22;
+    const tabW1 = 0.35;
+    const tabW2 = 0.65;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+
+    // 1. TOP EDGE
+    if (edges.top === 'tab') {
+      ctx.lineTo(x + w * tabW1, y);
+      ctx.bezierCurveTo(x + w * tabW1, y - tabH, x + w * tabW2, y - tabH, x + w * tabW2, y);
+      ctx.lineTo(x + w, y);
+    } else if (edges.top === 'blank') {
+      ctx.lineTo(x + w * tabW1, y);
+      ctx.bezierCurveTo(x + w * tabW1, y + tabH, x + w * tabW2, y + tabH, x + w * tabW2, y);
+      ctx.lineTo(x + w, y);
+    } else {
+      ctx.lineTo(x + w, y);
+    }
+
+    // 2. RIGHT EDGE
+    if (edges.right === 'tab') {
+      ctx.lineTo(x + w, y + h * tabW1);
+      ctx.bezierCurveTo(x + w + tabH, y + h * tabW1, x + w + tabH, y + h * tabW2, x + w, y + h * tabW2);
+      ctx.lineTo(x + w, y + h);
+    } else if (edges.right === 'blank') {
+      ctx.lineTo(x + w, y + h * tabW1);
+      ctx.bezierCurveTo(x + w - tabH, y + h * tabW1, x + w - tabH, y + h * tabW2, x + w, y + h * tabW2);
+      ctx.lineTo(x + w, y + h);
+    } else {
+      ctx.lineTo(x + w, y + h);
+    }
+
+    // 3. BOTTOM EDGE
+    if (edges.bottom === 'tab') {
+      ctx.lineTo(x + w * tabW2, y + h);
+      ctx.bezierCurveTo(x + w * tabW2, y + h + tabH, x + w * tabW1, y + h + tabH, x + w * tabW1, y + h);
+      ctx.lineTo(x, y + h);
+    } else if (edges.bottom === 'blank') {
+      ctx.lineTo(x + w * tabW2, y + h);
+      ctx.bezierCurveTo(x + w * tabW2, y + h - tabH, x + w * tabW1, y + h - tabH, x + w * tabW1, y + h);
+      ctx.lineTo(x, y + h);
+    } else {
+      ctx.lineTo(x, y + h);
+    }
+
+    // 4. LEFT EDGE
+    if (edges.left === 'tab') {
+      ctx.lineTo(x, y + h * tabW2);
+      ctx.bezierCurveTo(x - tabH, y + h * tabW2, x - tabH, y + h * tabW1, x, y + h * tabW1);
+      ctx.lineTo(x, y);
+    } else if (edges.left === 'blank') {
+      ctx.lineTo(x, y + h * tabW2);
+      ctx.bezierCurveTo(x + tabH, y + h * tabW2, x + tabH, y + h * tabW1, x, y + h * tabW1);
+      ctx.lineTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+
+    ctx.closePath();
+  }
+
   private renderTarget(target: IngredientTarget): void {
     const ctx = this.ctx;
     const def = DEFAULT_INGREDIENTS[target.ingredientId];
     if (!def) return;
 
-    // Draw occupied footprint background
+    // Draw occupied footprint silhouette background
     for (const offset of def.footprint) {
       const coord = { col: target.anchor.col + offset.col, row: target.anchor.row + offset.row };
       const s = this.gridToScreen(coord);
 
-      ctx.fillStyle = def.color + '33'; // 20% opacity background
-      ctx.strokeStyle = def.color;
-      ctx.lineWidth = 2;
+      ctx.fillStyle = def.color + '22';
+      ctx.strokeStyle = def.color + '66';
+      ctx.lineWidth = 1.5;
       this.roundRect(ctx, s.x + 2, s.y + 2, s.width - 4, s.height - 4, 8);
       ctx.fill();
       ctx.stroke();
     }
 
-    // Draw puzzle slots inside target
+    // Draw puzzle slots inside target with real jigsaw tabs & blanks
     for (const slot of def.slots) {
       const isPlaced = target.placedSlotIds.includes(slot.slotId);
       const isHovered =
@@ -428,35 +498,43 @@ class WebGreyboxApp {
         row: target.anchor.row + slot.relativeRow
       };
       const s = this.gridToScreen(slotCoord);
+      const pad = 3;
+      const x = s.x + pad;
+      const y = s.y + pad;
+      const w = s.width - pad * 2;
+      const h = s.height - pad * 2;
+
+      const edges = slot.edges || { top: 'flat', bottom: 'flat', left: 'flat', right: 'flat' };
 
       if (isPlaced) {
-        // Placed slot: solid vibrant color + piece label
+        // Placed slot: Vibrant solid piece body with seamless jigsaw contour
         ctx.fillStyle = def.color;
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5;
-        this.roundRect(ctx, s.x + 4, s.y + 4, s.width - 8, s.height - 8, 6);
+        ctx.lineWidth = 2;
+        this.drawJigsawPath(ctx, x, y, w, h, edges);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#ffffff';
+        // Subtle piece gloss highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
         ctx.font = 'bold 11px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(slot.label, s.x + s.width / 2, s.y + s.height / 2);
       } else {
-        // Missing slot: translucent with dashed border
+        // Missing slot: Translucent silhouette hole showing jigsaw interlocking indentation
         ctx.save();
-        ctx.fillStyle = isHovered ? '#ffd16666' : 'rgba(255,255,255,0.4)';
-        ctx.strokeStyle = isHovered ? '#ffb703' : def.color + 'aa';
+        ctx.fillStyle = isHovered ? '#ffd16677' : 'rgba(255,255,255,0.45)';
+        ctx.strokeStyle = isHovered ? '#ffb703' : def.color + '99';
         ctx.lineWidth = isHovered ? 3 : 1.5;
         if (!isHovered) ctx.setLineDash([4, 4]);
 
-        this.roundRect(ctx, s.x + 4, s.y + 4, s.width - 8, s.height - 8, 6);
+        this.drawJigsawPath(ctx, x, y, w, h, edges);
         ctx.fill();
         ctx.stroke();
         ctx.restore();
 
-        ctx.fillStyle = isHovered ? '#fb8500' : '#888888';
+        ctx.fillStyle = isHovered ? '#fb8500' : '#777777';
         ctx.font = isHovered ? 'bold 11px sans-serif' : '10px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -470,6 +548,7 @@ class WebGreyboxApp {
     const def = DEFAULT_INGREDIENTS[piece.ingredientId];
     if (!def) return;
     const slotDef = def.slots.find(s => s.slotId === piece.slotId);
+    const edges = slotDef?.edges || { top: 'flat', bottom: 'flat', left: 'flat', right: 'flat' };
 
     const s = this.gridToScreen(piece.coord);
 
@@ -479,33 +558,41 @@ class WebGreyboxApp {
       visPos = { x: s.x, y: s.y };
       this.pieceVisualPositions.set(piece.instanceId, visPos);
     } else {
-      visPos.x += (s.x - visPos.x) * 0.3;
-      visPos.y += (s.y - visPos.y) * 0.3;
+      visPos.x += (s.x - visPos.x) * 0.35;
+      visPos.y += (s.y - visPos.y) * 0.35;
     }
 
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    this.roundRect(ctx, visPos.x + 4, visPos.y + 6, s.width - 8, s.height - 8, 8);
-    ctx.fill();
+    const pad = 4;
+    const x = visPos.x + pad;
+    const y = visPos.y + pad;
+    const w = s.width - pad * 2;
+    const h = s.height - pad * 2;
 
-    // Body
+    // Drop shadow
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    this.drawJigsawPath(ctx, x + 2, y + 4, w, h, edges);
+    ctx.fill();
+    ctx.restore();
+
+    // Piece body
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = def.color;
     ctx.lineWidth = 2.5;
-    this.roundRect(ctx, visPos.x + 4, visPos.y + 4, s.width - 8, s.height - 8, 8);
+    this.drawJigsawPath(ctx, x, y, w, h, edges);
     ctx.fill();
     ctx.stroke();
 
-    // Emoji watermark & Slot name
-    ctx.font = '16px sans-serif';
+    // Emoji icon watermark
+    ctx.font = '15px sans-serif';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(def.emoji, visPos.x + s.width / 2, visPos.y + 7);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(def.emoji, x + w / 2, y + h / 2 - 4);
 
     ctx.fillStyle = '#333333';
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = 'bold 9px sans-serif';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(slotDef ? slotDef.label : piece.slotId, visPos.x + s.width / 2, visPos.y + s.height - 6);
+    ctx.fillText(slotDef ? slotDef.label : piece.slotId, x + w / 2, y + h - 2);
   }
 
   private renderDraggingPiece(piece: LoosePiece): void {
@@ -513,35 +600,38 @@ class WebGreyboxApp {
     const def = DEFAULT_INGREDIENTS[piece.ingredientId];
     if (!def) return;
     const slotDef = def.slots.find(s => s.slotId === piece.slotId);
+    const edges = slotDef?.edges || { top: 'flat', bottom: 'flat', left: 'flat', right: 'flat' };
 
     const s = this.gridToScreen(piece.coord);
-    const w = s.width * 1.1;
-    const h = s.height * 1.1;
+    const w = (s.width - 8) * 1.15;
+    const h = (s.height - 8) * 1.15;
     const x = this.dragPointerPos.x - w / 2;
     const y = this.dragPointerPos.y - h / 2;
 
     // High shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    this.roundRect(ctx, x + 6, y + 10, w, h, 10);
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    this.drawJigsawPath(ctx, x + 4, y + 8, w, h, edges);
     ctx.fill();
+    ctx.restore();
 
     // Piece Body
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#ffb703';
-    ctx.lineWidth = 3;
-    this.roundRect(ctx, x, y, w, h, 10);
+    ctx.lineWidth = 3.5;
+    this.drawJigsawPath(ctx, x, y, w, h, edges);
     ctx.fill();
     ctx.stroke();
 
     ctx.font = '20px sans-serif';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(def.emoji, x + w / 2, y + 8);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(def.emoji, x + w / 2, y + h / 2 - 5);
 
     ctx.fillStyle = '#fb8500';
     ctx.font = 'bold 11px sans-serif';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(slotDef ? slotDef.label : piece.slotId, x + w / 2, y + h - 8);
+    ctx.fillText(slotDef ? slotDef.label : piece.slotId, x + w / 2, y + h - 2);
   }
 
   private roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
