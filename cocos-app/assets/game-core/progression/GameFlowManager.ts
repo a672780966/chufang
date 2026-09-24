@@ -1,6 +1,6 @@
 import { GamePhase, CampaignState, DayConfig, DayCompletionRecord } from '../model/Types';
 import { GameSession } from '../session/GameSession';
-import { DEFAULT_DAYS, DEFAULT_INGREDIENTS, DEFAULT_RECIPES } from '../data/DefaultData';
+import { DEFAULT_DAYS } from '../data/DefaultData';
 import { SaveSystem } from './SaveSystem';
 import { TutorialDirector, DragTutorialCue } from './TutorialDirector';
 
@@ -10,6 +10,7 @@ export interface GameFlowEvents {
   onTutorialCue?: (cue: DragTutorialCue | null) => void;
   onDayCompleted?: (record: DayCompletionRecord) => void;
   onDayFailed?: (reason: string) => void;
+  onResolvingRequested?: (suggestedDurationMs: number) => void;
 }
 
 export class GameFlowManager {
@@ -17,7 +18,6 @@ export class GameFlowManager {
   private _campaignState: CampaignState;
   private _session: GameSession | null = null;
   private _selectedDay: number = 1;
-  private _resolvingTimeout: any = null;
   private _events: GameFlowEvents = {};
 
   constructor(events: GameFlowEvents = {}) {
@@ -56,17 +56,14 @@ export class GameFlowManager {
    * Enters Main Menu.
    */
   enterMainMenu(): void {
-    if (this._resolvingTimeout) {
-      clearTimeout(this._resolvingTimeout);
-      this._resolvingTimeout = null;
-    }
     this._session = null;
     this._campaignState = SaveSystem.loadCampaignState();
     this.transitionTo('MAIN_MENU');
   }
 
   /**
-   * Launches a day session.
+   * Launches a day session. Transitions phase to DAY_INTRO.
+   * Presentation layer calls beginPlaying() after intro animation finishes.
    */
   startDay(dayNumber: number, seed?: string | number): GameSession {
     if (dayNumber < 1 || dayNumber > 12) {
@@ -79,7 +76,7 @@ export class GameFlowManager {
       throw new Error(`DayConfig not found for Day ${dayNumber}`);
     }
 
-    const sessionSeed = seed ?? `day_${dayNumber}_${Date.now()}`;
+    const sessionSeed = seed ?? `day_${dayNumber}_session`;
     this._session = new GameSession(dayConfig, sessionSeed);
 
     this.transitionTo('DAY_INTRO');
@@ -89,7 +86,7 @@ export class GameFlowManager {
       this.handleResolvingEvent(500);
     });
 
-    this._session.events.on('CASCADE_TRIGGERED', () => {
+    this._session.events.on('CASCADE_STEP', () => {
       this.handleResolvingEvent(650);
     });
 
@@ -97,25 +94,29 @@ export class GameFlowManager {
       this.handleDayWon();
     });
 
-    this._session.events.on('GAME_OVER', (data: any) => {
-      this.handleDayFailed(data.reason || 'BOARD_BLOCKED');
+    this._session.events.on('BOARD_BLOCKED', (data: any) => {
+      this.handleDayFailed(data?.reason || 'BOARD_BLOCKED');
     });
 
     this._events.onSessionStarted?.(this._session);
 
-    // Transition from DAY_INTRO to PLAYING
-    setTimeout(() => {
-      if (this._phase === 'DAY_INTRO') {
-        this.transitionTo('PLAYING');
-        // Check for Day 1 first drag tutorial cue
-        const cue = TutorialDirector.getFirstDragCue(this._session!, this._campaignState);
+    return this._session;
+  }
+
+  /**
+   * Transitions from DAY_INTRO to PLAYING.
+   * Called by presentation layer once ready for interaction.
+   */
+  beginPlaying(): void {
+    if (this._phase === 'DAY_INTRO') {
+      this.transitionTo('PLAYING');
+      if (this._session) {
+        const cue = TutorialDirector.getFirstDragCue(this._session, this._campaignState);
         if (cue) {
           this._events.onTutorialCue?.(cue);
         }
       }
-    }, 300);
-
-    return this._session;
+    }
   }
 
   /**
@@ -138,43 +139,37 @@ export class GameFlowManager {
   }
 
   /**
-   * Puts game into temporary RESOLVING state to let animations/reflow complete peacefully.
+   * Puts game into temporary RESOLVING state to let presentation animations complete.
    */
-  private handleResolvingEvent(durationMs: number): void {
+  private handleResolvingEvent(suggestedDurationMs: number): void {
     if (this._phase === 'DAY_CLEAR' || this._phase === 'DAY_FAILED') return;
-
     this.transitionTo('RESOLVING');
+    this._events.onResolvingRequested?.(suggestedDurationMs);
+  }
 
-    if (this._resolvingTimeout) {
-      clearTimeout(this._resolvingTimeout);
-    }
-
-    this._resolvingTimeout = setTimeout(() => {
-      this._resolvingTimeout = null;
-      if (this._phase === 'RESOLVING') {
-        if (this._session && this._session.revenue >= this._session.dayConfig.businessGoal) {
-          this.handleDayWon();
-        } else {
-          this.transitionTo('PLAYING');
-        }
+  /**
+   * Called by presentation layer after visual resolution animations finish.
+   */
+  finishResolving(): void {
+    if (this._phase === 'RESOLVING') {
+      if (this._session && this._session.revenue >= this._session.dayConfig.businessGoal) {
+        this.handleDayWon();
+      } else {
+        this.transitionTo('PLAYING');
       }
-    }, durationMs);
+    }
   }
 
   private handleDayWon(): void {
-    if (this._resolvingTimeout) {
-      clearTimeout(this._resolvingTimeout);
-      this._resolvingTimeout = null;
-    }
-
     const session = this._session!;
     const record: DayCompletionRecord = {
       dayNumber: this._selectedDay,
+      clearedAt: 0,
       revenueAchieved: session.revenue,
       businessGoal: session.dayConfig.businessGoal,
       ordersCompleted: session.stats.ordersCompleted,
-      maxCascadeStreak: session.stats.cascadeCount,
-      completedAt: Date.now()
+      maxCascadeStreak: session.stats.maxCascadeChain,
+      piecesPlaced: session.stats.piecesPlaced
     };
 
     this._campaignState = SaveSystem.recordDayCompletion(record);
@@ -183,10 +178,6 @@ export class GameFlowManager {
   }
 
   private handleDayFailed(reason: string): void {
-    if (this._resolvingTimeout) {
-      clearTimeout(this._resolvingTimeout);
-      this._resolvingTimeout = null;
-    }
     this.transitionTo('DAY_FAILED');
     this._events.onDayFailed?.(reason);
   }

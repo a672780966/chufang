@@ -6,11 +6,13 @@
   "scripts": {
     "dev": "vite packages/web-greybox",
     "test": "tsx --test packages/game-core/test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "build:core": "tsc --noEmit",
     "sync:core": "node scripts/sync-core.mjs",
     "sim": "tsx packages/simulation/src/SimulationRunner.ts",
     "balance": "tsx packages/simulation/src/BalanceHarness.ts",
-    "playtest": "tsx packages/simulation/src/Stage3PlaytestRunner.ts",
-    "build:core": "tsc --noEmit"
+    "validate:synthetic": "tsx packages/simulation/src/Stage3SyntheticValidator.ts",
+    "playtest": "tsx packages/simulation/src/Stage3SyntheticValidator.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

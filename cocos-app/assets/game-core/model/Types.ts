@@ -37,6 +37,8 @@ export interface PieceSlotDefinition {
   edges: JigsawEdges;
 }
 
+export type IngredientSlot = PieceSlotDefinition;
+
 export type IngredientDifficulty = 'Simple' | 'Normal' | 'Complex';
 
 export interface VisualPalette {
@@ -248,23 +250,49 @@ export type GamePhase =
   | 'PAUSED';
 
 export interface DayCompletionRecord {
+  dayNumber: number;
   clearedAt: number;
-  bestRevenue: number;
-  bestCascade: number;
-  stars: number;
-  piecesPlaced: number;
+  revenueAchieved: number;
+  businessGoal: number;
   ordersCompleted: number;
+  maxCascadeStreak: number;
+  piecesPlaced: number;
+  completedAt?: number;
+  bestRevenue?: number;
+  bestCascade?: number;
+  stars?: number;
 }
 
 export interface PlayerSettings {
   soundEnabled: boolean;
   musicEnabled: boolean;
   hapticsEnabled: boolean;
+  sfxEnabled?: boolean;
+  vibrationEnabled?: boolean;
+  debugOverlayEnabled?: boolean;
 }
 
 export interface CampaignState {
   highestUnlockedDay: number;
   completedDays: Record<number, DayCompletionRecord>;
+  bestRevenueByDay: Record<number, number>;
+  bestCascadeByDay: Record<number, number>;
   tutorialFlags: Record<string, boolean>;
   settings: PlayerSettings;
+}
+
+export interface StoragePort {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export type TelemetrySource = 'synthetic' | 'human';
+
+export interface TelemetryEvent {
+  source: TelemetrySource;
+  eventType: string;
+  timestamp: number;
+  dayNumber: number;
+  payload?: Record<string, any>;
 }

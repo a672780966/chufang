@@ -2,6 +2,8 @@ import { _decorator, Component, Node, EventTouch, Vec3, UITransform, tween, Vec2
 import { GameManager } from '../GameManager';
 import { BoardView } from './BoardView';
 import { LoosePiece, DEFAULT_INGREDIENTS } from '../../game-core/index';
+import { CocosAudioDirector } from './CocosAudioDirector';
+import { CocosTelemetrySink } from './CocosTelemetrySink';
 
 const { ccclass, property } = _decorator;
 
@@ -26,7 +28,6 @@ export class TouchController extends Component {
       this.gameManager = this.getComponent(GameManager) || this.node.scene?.getComponentInChildren(GameManager) || null;
     }
 
-    // Register global touch listener via input to guarantee touch events are reliably caught
     input.on(Input.EventType.TOUCH_START, this.onTouchStart, this);
     input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
     input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);
@@ -40,10 +41,6 @@ export class TouchController extends Component {
     input.off(Input.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
   }
 
-  /**
-   * Converts a screen-space UI touch location to the local coordinate system of BoardView.node.
-   * Strictly uses BoardView.node's UITransform to guarantee 100% coordinate parity with BoardView.gridToLocalPos().
-   */
   private screenToBoardLocal(uiLocation: Vec2): Vec3 {
     if (!this.boardView || !this.boardView.node) {
       return new Vec3(uiLocation.x, uiLocation.y, 0);
@@ -66,7 +63,6 @@ export class TouchController extends Component {
       const piecePos = this.boardView.gridToLocalPos(piece.coord);
       const dist = Vec3.distance(localPos, piecePos);
 
-      // Hit radius based on cell size (approx 50-60 pixels)
       if (dist < 55) {
         const pieceNode = this.boardView.piecesContainer?.getChildByName(`Piece_${piece.instanceId}`);
         if (pieceNode) {
@@ -74,9 +70,13 @@ export class TouchController extends Component {
           this._draggingNode = pieceNode;
           this._originLocalPos.set(pieceNode.position);
 
-          // Raise to top and scale up
           pieceNode.setSiblingIndex(999);
           tween(pieceNode).to(0.08, { scale: new Vec3(1.15, 1.15, 1) }).start();
+          CocosAudioDirector.playPickPiece();
+          CocosTelemetrySink.log('piece_drag', this.gameManager.session.dayConfig.dayNumber, {
+            pieceId: piece.instanceId,
+            targetId: piece.targetInstanceId
+          });
           break;
         }
       }
@@ -101,7 +101,6 @@ export class TouchController extends Component {
 
     // Strict Target-first Instance Binding: find target by targetInstanceId
     const target = session.grid.getTarget(this._draggingPiece.targetInstanceId);
-
     let placed = false;
 
     if (target) {
@@ -109,7 +108,6 @@ export class TouchController extends Component {
       const slotDef = def?.slots.find(s => s.slotId === this._draggingPiece!.slotId);
 
       if (slotDef) {
-        // Calculate slot absolute target position in piecesContainer local space
         const slotAbsCoord = {
           col: target.anchor.col + slotDef.relativeCol,
           row: target.anchor.row + slotDef.relativeRow
@@ -117,9 +115,8 @@ export class TouchController extends Component {
         const slotLocalPos = this.boardView.gridToLocalPos(slotAbsCoord);
         const dist = Vec3.distance(currentPos, slotLocalPos);
 
-        // Snap proximity check
         if (dist <= this._snapRadius) {
-          const res = session.placePiece(
+          const res = this.gameManager.placePiece(
             this._draggingPiece.instanceId,
             target.instanceId,
             slotDef.slotId
@@ -127,13 +124,20 @@ export class TouchController extends Component {
 
           if (res.success) {
             placed = true;
+            CocosAudioDirector.playSnapPiece();
+            CocosTelemetrySink.log('piece_placed', session.dayConfig.dayNumber, {
+              pieceId: this._draggingPiece.instanceId,
+              targetId: target.instanceId,
+              slotId: slotDef.slotId
+            });
           }
         }
       }
     }
 
     if (!placed) {
-      // Rebound smoothly to original grid location
+      CocosAudioDirector.playWrongDrop();
+      CocosTelemetrySink.log('wrong_drop', session.dayConfig.dayNumber);
       const origin = this._originLocalPos.clone();
       const node = this._draggingNode;
       tween(node)

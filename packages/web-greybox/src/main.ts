@@ -3,7 +3,6 @@ import {
   GameSession,
   SaveSystem,
   TutorialDirector,
-  AudioDirector,
   DEFAULT_DAYS,
   DEFAULT_INGREDIENTS,
   DEFAULT_RECIPES,
@@ -12,6 +11,9 @@ import {
   IngredientTarget,
   LoosePiece
 } from '../../game-core/src/index.js';
+import { AudioDirector } from './audio/AudioDirector.js';
+import { WebStorageAdapter } from './storage/WebStorageAdapter.js';
+import { WebTelemetrySink } from './telemetry/WebTelemetrySink.js';
 
 class WebGameApp {
   private flow!: GameFlowManager;
@@ -30,6 +32,7 @@ class WebGameApp {
   private svgImageCache = new Map<string, HTMLImageElement>();
 
   constructor() {
+    SaveSystem.setStorage(new WebStorageAdapter());
     this.initDOM();
     this.initFlow();
     this.startRenderLoop();
@@ -44,10 +47,21 @@ class WebGameApp {
         this.updateTutorialCue(cue);
       },
       onDayCompleted: (record) => {
+        WebTelemetrySink.log('day_clear', record.dayNumber, {
+          revenue: record.revenueAchieved,
+          pieces: record.piecesPlaced,
+          cascades: record.maxCascadeStreak
+        });
         this.showDayCompleteModal(record);
       },
       onDayFailed: (reason) => {
+        WebTelemetrySink.log('day_fail', this.flow.selectedDay, { reason });
         this.showDayFailedModal(reason);
+      },
+      onResolvingRequested: (durationMs) => {
+        setTimeout(() => {
+          this.flow.finishResolving();
+        }, durationMs);
       }
     });
 
@@ -85,8 +99,8 @@ class WebGameApp {
 
     document.getElementById('btn-toggle-sfx')?.addEventListener('click', (e) => {
       const btn = e.target as HTMLButtonElement;
-      const cur = this.flow.campaignState.settings.sfxEnabled;
-      SaveSystem.updateSettings({ sfxEnabled: !cur });
+      const cur = !!this.flow.campaignState.settings.soundEnabled;
+      SaveSystem.updateSettings({ soundEnabled: !cur, sfxEnabled: !cur });
       AudioDirector.setSfxEnabled(!cur);
       btn.textContent = !cur ? '开启' : '关闭';
       btn.style.background = !cur ? '#ea580c' : '#64748b';
@@ -100,11 +114,15 @@ class WebGameApp {
       }
     });
 
+    document.getElementById('btn-export-telemetry')?.addEventListener('click', () => {
+      WebTelemetrySink.downloadJson();
+    });
+
     // In-Game Controls
     document.getElementById('btn-audio')?.addEventListener('click', (e) => {
       const btn = e.target as HTMLButtonElement;
-      const cur = this.flow.campaignState.settings.sfxEnabled;
-      SaveSystem.updateSettings({ sfxEnabled: !cur, musicEnabled: !cur });
+      const cur = !!this.flow.campaignState.settings.soundEnabled;
+      SaveSystem.updateSettings({ soundEnabled: !cur, sfxEnabled: !cur, musicEnabled: !cur });
       AudioDirector.setSfxEnabled(!cur);
       AudioDirector.setBgmEnabled(!cur);
       btn.textContent = !cur ? '🔊' : '🔇';
@@ -222,12 +240,17 @@ class WebGameApp {
     this.wobblePieces.clear();
 
     const session = this.flow.startDay(dayNumber);
+    WebTelemetrySink.log('day_start', dayNumber);
+
+    setTimeout(() => {
+      this.flow.beginPlaying();
+    }, 250);
 
     // Bind session audio cues
     session.events.on('PIECE_PLACED', () => AudioDirector.playSnapPiece());
     session.events.on('INGREDIENT_COMPLETED', (d: any) => AudioDirector.playIngredientComplete(d.target?.ingredientId));
-    session.events.on('CASCADE_TRIGGERED', (d: any) => AudioDirector.playCascade(d.chainLength));
-    session.events.on('ORDER_FULFILLED', () => {
+    session.events.on('CASCADE_STEP', (d: any) => AudioDirector.playCascade(d.chainLength));
+    session.events.on('ORDER_COMPLETED', () => {
       AudioDirector.playOrderComplete();
       AudioDirector.playRevenueGain();
     });
@@ -286,7 +309,7 @@ class WebGameApp {
     // Next Order Hint (Dish only, unlocked Day 7+)
     const nextHint = document.getElementById('next-order-hint');
     const nextLabel = document.getElementById('next-order-label');
-    const nextPreview = session.orderSystem.nextOrderPreview;
+    const nextPreview = session.orderSystem.getNextOrderPreview();
 
     if (nextHint && nextLabel) {
       if (session.dayConfig.dayNumber >= 7 && nextPreview.dishId) {
@@ -469,6 +492,11 @@ class WebGameApp {
           const res = this.flow.placePiece(piece.instanceId, target.instanceId, piece.slotId);
           if (res.success) {
             placed = true;
+            WebTelemetrySink.log('piece_placed', session.dayConfig.dayNumber, {
+              pieceId: piece.instanceId,
+              targetId: target.instanceId,
+              slotId: piece.slotId
+            });
           }
         }
       }
@@ -477,6 +505,7 @@ class WebGameApp {
     if (!placed) {
       // Trigger wobble feedback & smooth return
       AudioDirector.playWrongDrop();
+      WebTelemetrySink.log('wrong_drop', session.dayConfig.dayNumber);
       const originScreen = this.gridToScreen(this.dragOriginCoord!);
       this.wobblePieces.set(piece.instanceId, {
         startTime: performance.now(),

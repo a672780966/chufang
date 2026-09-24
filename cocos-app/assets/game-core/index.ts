@@ -17,6 +17,3 @@ export * from './pipeline/AssetRegistry';
 export * from './progression/SaveSystem';
 export * from './progression/TutorialDirector';
 export * from './progression/GameFlowManager';
-export * from './audio/AudioDirector';
-export * from './telemetry/TelemetryManager';
-export * from './telemetry/PlaytestSimulator';

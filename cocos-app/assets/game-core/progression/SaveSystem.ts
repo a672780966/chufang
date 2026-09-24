@@ -1,4 +1,24 @@
-import { CampaignState, DayCompletionRecord, PlayerSettings } from '../model/Types';
+import { CampaignState, DayCompletionRecord, PlayerSettings, StoragePort } from '../model/Types';
+
+export class MemoryStoragePort implements StoragePort {
+  private _store = new Map<string, string>();
+
+  getItem(key: string): string | null {
+    return this._store.has(key) ? this._store.get(key)! : null;
+  }
+
+  setItem(key: string, value: string): void {
+    this._store.set(key, value);
+  }
+
+  removeItem(key: string): void {
+    this._store.delete(key);
+  }
+
+  clear(): void {
+    this._store.clear();
+  }
+}
 
 export const DEFAULT_CAMPAIGN_STATE: CampaignState = {
   highestUnlockedDay: 1,
@@ -7,7 +27,9 @@ export const DEFAULT_CAMPAIGN_STATE: CampaignState = {
   bestCascadeByDay: {},
   tutorialFlags: {},
   settings: {
+    soundEnabled: true,
     musicEnabled: true,
+    hapticsEnabled: true,
     sfxEnabled: true,
     vibrationEnabled: true,
     debugOverlayEnabled: false
@@ -16,39 +38,25 @@ export const DEFAULT_CAMPAIGN_STATE: CampaignState = {
 
 export class SaveSystem {
   private static _storageKey = 'chufang_campaign_save_v1';
-  private static _memoryStore: string | null = null;
+  private static _storage: StoragePort = new MemoryStoragePort();
 
   /**
-   * Retrieves the current storage provider (localStorage in browser/Cocos, or memory in Node).
+   * Injects the active storage port (e.g. WebStorageAdapter or CocosStorageAdapter).
    */
-  private static getStorage(): { getItem: (k: string) => string | null; setItem: (k: string, v: string) => void; removeItem: (k: string) => void } {
-    // 1. Browser window.localStorage
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return window.localStorage;
-    }
-    // 2. Cocos Creator sys.localStorage
-    if (typeof (globalThis as any).cc !== 'undefined' && (globalThis as any).cc.sys?.localStorage) {
-      return (globalThis as any).cc.sys.localStorage;
-    }
-    // 3. Fallback memory storage
-    return {
-      getItem: (k: string) => (k === this._storageKey ? this._memoryStore : null),
-      setItem: (k: string, v: string) => {
-        if (k === this._storageKey) this._memoryStore = v;
-      },
-      removeItem: (k: string) => {
-        if (k === this._storageKey) this._memoryStore = null;
-      }
-    };
+  static setStorage(storage: StoragePort): void {
+    this._storage = storage;
+  }
+
+  static getStorage(): StoragePort {
+    return this._storage;
   }
 
   /**
-   * Loads campaign state, returning defaults if no save exists or corrupt.
+   * Loads campaign state, returning defaults if no save exists or corrupted.
    */
   static loadCampaignState(): CampaignState {
     try {
-      const storage = this.getStorage();
-      const raw = storage.getItem(this._storageKey);
+      const raw = this._storage.getItem(this._storageKey);
       if (!raw) {
         return JSON.parse(JSON.stringify(DEFAULT_CAMPAIGN_STATE));
       }
@@ -56,6 +64,10 @@ export class SaveSystem {
       return {
         ...DEFAULT_CAMPAIGN_STATE,
         ...parsed,
+        bestRevenueByDay: parsed.bestRevenueByDay || {},
+        bestCascadeByDay: parsed.bestCascadeByDay || {},
+        completedDays: parsed.completedDays || {},
+        tutorialFlags: parsed.tutorialFlags || {},
         settings: {
           ...DEFAULT_CAMPAIGN_STATE.settings,
           ...(parsed.settings || {})
@@ -71,19 +83,17 @@ export class SaveSystem {
    */
   static saveCampaignState(state: CampaignState): void {
     try {
-      const storage = this.getStorage();
-      storage.setItem(this._storageKey, JSON.stringify(state));
-    } catch (err) {
-      console.warn('Failed to save campaign state to storage:', err);
+      this._storage.setItem(this._storageKey, JSON.stringify(state));
+    } catch {
+      // In-memory or storage full fallback
     }
   }
 
   /**
-   * Resets save state to pristine initial state (Debug / User reset).
+   * Resets save state to pristine initial state.
    */
   static resetCampaignState(): CampaignState {
-    const storage = this.getStorage();
-    storage.removeItem(this._storageKey);
+    this._storage.removeItem(this._storageKey);
     const state = JSON.parse(JSON.stringify(DEFAULT_CAMPAIGN_STATE));
     this.saveCampaignState(state);
     return state;

@@ -208,11 +208,15 @@ export class ReceiptPrinterView extends Component {
     }
 
     if (this.nextOrderLabel) {
-      const preview = this._session.orderSystem.getNextOrderPreview();
-      if (preview && preview.dishName) {
-        this.nextOrderLabel.string = `下一单预告: ${preview.emoji || '🍽️'} ${preview.dishName}`;
+      if (this._session.dayConfig.dayNumber >= 7) {
+        const preview = this._session.orderSystem.getNextOrderPreview();
+        if (preview && preview.dishName) {
+          this.nextOrderLabel.string = `下一单预告: ${preview.emoji || '🍽️'} ${preview.dishName}`;
+        } else {
+          this.nextOrderLabel.string = '营业目标达成在即！';
+        }
       } else {
-        this.nextOrderLabel.string = '营业目标达成在即！';
+        this.nextOrderLabel.string = '下一单预告: 🔒 第 7 天解锁';
       }
     }
   }

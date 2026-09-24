@@ -113,6 +113,10 @@ export class GameSession {
     return this._recipes;
   }
 
+  get nextOrderPreview(): NextOrderPreview {
+    return this.orderSystem.getNextOrderPreview();
+  }
+
   /**
    * Initializes starting targets and loose pieces on the board.
    * All objects strictly enter via the top Spawn Zone and settle downward via DiscreteGravity.

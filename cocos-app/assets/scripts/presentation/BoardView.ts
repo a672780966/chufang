@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Vec3, tween, UITransform, Graphics, Label, Color } from 'cc';
+import { _decorator, Component, Node, Vec3, tween, UITransform, Graphics, Label, Color, UIOpacity } from 'cc';
 import {
   GameSession,
   GridCoord,
@@ -6,7 +6,10 @@ import {
   LoosePiece,
   CoreEventMap,
   DEFAULT_INGREDIENTS,
-  IngredientDefinition
+  IngredientDefinition,
+  PuzzleGeometry,
+  JigsawEdgeType,
+  DragTutorialCue
 } from '../../game-core/index';
 
 const { ccclass, property } = _decorator;
@@ -19,9 +22,13 @@ export class BoardView extends Component {
   @property(Node)
   piecesContainer: Node | null = null;
 
+  @property(Node)
+  tutorialContainer: Node | null = null;
+
   private _session!: GameSession;
   private _cellWidth: number = 72;
   private _cellHeight: number = 72;
+  private _activeTutorialCue: DragTutorialCue | null = null;
 
   init(session: GameSession) {
     this._session = session;
@@ -60,6 +67,24 @@ export class BoardView extends Component {
     }
   }
 
+  /**
+   * Translates PuzzleGeometry Bezier commands into Cocos Creator Graphics path commands.
+   * Inverts Y to match Cocos 2D Cartesian (+Y upward) coordinate system.
+   */
+  private drawBezierPath(g: Graphics, commands: ReturnType<typeof PuzzleGeometry.generateSlotPathCommands>): void {
+    for (const cmd of commands) {
+      if (cmd.type === 'M') {
+        g.moveTo(cmd.x, -cmd.y);
+      } else if (cmd.type === 'L') {
+        g.lineTo(cmd.x, -cmd.y);
+      } else if (cmd.type === 'C') {
+        g.bezierCurveTo(cmd.cp1x!, -cmd.cp1y!, cmd.cp2x!, -cmd.cp2y!, cmd.x, -cmd.y);
+      } else if (cmd.type === 'Z') {
+        g.close();
+      }
+    }
+  }
+
   createTargetNode(target: IngredientTarget): Node {
     const def = DEFAULT_INGREDIENTS[target.ingredientId];
     const node = new Node(`Target_${target.instanceId}`);
@@ -85,72 +110,65 @@ export class BoardView extends Component {
     g.clear();
 
     const ingDef = def || DEFAULT_INGREDIENTS[target.ingredientId];
-    const baseColor = ingDef?.color ? Color.fromHEX(new Color(), ingDef.color) : new Color(200, 160, 100);
+    if (!ingDef) return;
 
-    // Draw each slot within the target footprint
-    if (ingDef) {
-      for (const slot of ingDef.slots) {
-        const slotOffsetX = slot.relativeCol * this._cellWidth;
-        const slotOffsetY = slot.relativeRow * this._cellHeight;
-        const isFilled = target.placedSlotIds.includes(slot.slotId);
+    const baseColor = ingDef.color ? Color.fromHEX(new Color(), ingDef.color) : new Color(200, 160, 100);
+    const halfW = this._cellWidth / 2;
+    const halfH = this._cellHeight / 2;
 
-        const pad = 4;
-        const w = this._cellWidth - pad * 2;
-        const h = this._cellHeight - pad * 2;
-        const x = slotOffsetX - this._cellWidth / 2 + pad;
-        const y = slotOffsetY - this._cellHeight / 2 + pad;
+    // Draw each jigsaw slot inside the target footprint
+    for (const slot of ingDef.slots) {
+      const isFilled = target.placedSlotIds.includes(slot.slotId);
+      const isTutorialTarget = this._activeTutorialCue &&
+        this._activeTutorialCue.targetInstanceId === target.instanceId &&
+        this._activeTutorialCue.slotId === slot.slotId;
 
-        if (isFilled) {
-          // Solid ingredient color for completed slot
-          g.fillColor = baseColor;
-          g.strokeColor = new Color(255, 255, 255, 200);
-          g.lineWidth = 2;
-          g.roundRect(x, y, w, h, 8);
-          g.fill();
-          g.stroke();
+      // Slot local anchor position relative to target bottom-left
+      const slotCenterX = slot.relativeCol * this._cellWidth;
+      const slotCenterY = slot.relativeRow * this._cellHeight;
 
-          // Slot checkmark label
-          const slotLabelNode = new Node(`SlotLabel_${slot.slotId}`);
-          slotLabelNode.setPosition(new Vec3(slotOffsetX, slotOffsetY, 0));
-          const lbl = slotLabelNode.addComponent(Label);
-          lbl.string = '✓';
-          lbl.fontSize = 22;
-          lbl.lineHeight = 24;
-          lbl.color = Color.WHITE;
-          targetNode.addChild(slotLabelNode);
-        } else {
-          // Hollow / semi-transparent receptacle for missing slot
-          g.fillColor = new Color(30, 34, 45, 180);
-          g.strokeColor = new Color(baseColor.r, baseColor.g, baseColor.b, 150);
-          g.lineWidth = 1.5;
-          g.roundRect(x, y, w, h, 8);
-          g.fill();
-          g.stroke();
+      // Slot bounds centered at (slotCenterX, -slotCenterY in SVG coords)
+      const slotBounds = {
+        x: slotCenterX - halfW + 2,
+        y: -slotCenterY - halfH + 2,
+        width: this._cellWidth - 4,
+        height: this._cellHeight - 4
+      };
 
-          // Slot name label
-          const slotLabelNode = new Node(`SlotLabel_${slot.slotId}`);
-          slotLabelNode.setPosition(new Vec3(slotOffsetX, slotOffsetY, 0));
-          const lbl = slotLabelNode.addComponent(Label);
-          lbl.string = slot.label || slot.slotId;
-          lbl.fontSize = 13;
-          lbl.lineHeight = 15;
-          lbl.color = new Color(220, 220, 230, 200);
-          targetNode.addChild(slotLabelNode);
-        }
+      const pathCommands = PuzzleGeometry.generateSlotPathCommands(slotBounds, slot.edges);
+
+      if (isFilled) {
+        // Completed slot: Rich authentic ingredient color with crisp light border
+        g.fillColor = baseColor;
+        g.strokeColor = new Color(255, 255, 255, 230);
+        g.lineWidth = 2.5;
+        this.drawBezierPath(g, pathCommands);
+        g.fill();
+        g.stroke();
+      } else {
+        // Missing slot: Translucent silhouette receptacle
+        g.fillColor = new Color(22, 26, 36, 175);
+        g.strokeColor = isTutorialTarget
+          ? new Color(245, 158, 11, 240) // Pulsing tutorial amber
+          : new Color(baseColor.r, baseColor.g, baseColor.b, 140);
+        g.lineWidth = isTutorialTarget ? 3.5 : 1.8;
+        this.drawBezierPath(g, pathCommands);
+        g.fill();
+        g.stroke();
       }
-
-      // Title label: emoji + name + progress
-      const titleNode = new Node('TitleLabel');
-      const centerX = ((ingDef.width - 1) * this._cellWidth) / 2;
-      const centerY = ((ingDef.height - 1) * this._cellHeight) / 2;
-      titleNode.setPosition(new Vec3(centerX, centerY + (ingDef.height * this._cellHeight) / 2 + 10, 0));
-      const titleLbl = titleNode.addComponent(Label);
-      titleLbl.string = `${ingDef.emoji} ${ingDef.name} (${target.placedSlotIds.length}/${ingDef.slots.length})`;
-      titleLbl.fontSize = 14;
-      titleLbl.lineHeight = 16;
-      titleLbl.color = Color.WHITE;
-      targetNode.addChild(titleNode);
     }
+
+    // Title label: Ingredient Name + Completion progress (e.g. "番茄 2/4")
+    const titleNode = new Node('TitleLabel');
+    const centerX = ((ingDef.width - 1) * this._cellWidth) / 2;
+    const centerY = ((ingDef.height - 1) * this._cellHeight) / 2 + (this._cellHeight * 0.5) + 12;
+    titleNode.setPosition(new Vec3(centerX, centerY, 0));
+    const titleLbl = titleNode.addComponent(Label);
+    titleLbl.string = `${ingDef.name} (${target.placedSlotIds.length}/${ingDef.slots.length})`;
+    titleLbl.fontSize = 14;
+    titleLbl.lineHeight = 16;
+    titleLbl.color = new Color(240, 240, 245);
+    targetNode.addChild(titleNode);
   }
 
   createPieceNode(piece: LoosePiece): Node {
@@ -161,34 +179,55 @@ export class BoardView extends Component {
     const uiTransform = node.addComponent(UITransform);
     uiTransform.setContentSize(this._cellWidth, this._cellHeight);
 
-    // Visible Graphics: rounded jigsaw tile
+    // Visible Graphics: Authentic jigsaw Bezier tabs & blanks
     const g = node.addComponent(Graphics);
-    const pad = 4;
-    const w = this._cellWidth - pad * 2;
-    const h = this._cellHeight - pad * 2;
-    const x = -w / 2;
-    const y = -h / 2;
+    const slotDef = def?.slots.find(s => s.slotId === piece.slotId);
 
     const baseColor = def?.color ? Color.fromHEX(new Color(), def.color) : new Color(220, 180, 110);
+    const halfW = this._cellWidth / 2;
+    const halfH = this._cellHeight / 2;
+
+    const bounds = {
+      x: -halfW + 3,
+      y: -halfH + 3,
+      width: this._cellWidth - 6,
+      height: this._cellHeight - 6
+    };
+
+    const edges: { top: JigsawEdgeType; right: JigsawEdgeType; bottom: JigsawEdgeType; left: JigsawEdgeType } =
+      slotDef?.edges || { top: 'flat', right: 'flat', bottom: 'flat', left: 'flat' };
+
+    const commands = PuzzleGeometry.generateSlotPathCommands(bounds, edges);
+
+    // 1. Subtle drop shadow contour
+    g.strokeColor = new Color(0, 0, 0, 70);
+    g.lineWidth = 4;
+    this.drawBezierPath(g, commands);
+    g.stroke();
+
+    // 2. Main body fill & crisp outline
     g.fillColor = baseColor;
-    g.strokeColor = Color.WHITE;
+    g.strokeColor = new Color(255, 255, 255, 240);
     g.lineWidth = 2.5;
-    g.roundRect(x, y, w, h, 10);
+    this.drawBezierPath(g, commands);
     g.fill();
     g.stroke();
 
-    // Piece Label (Emoji + Slot name)
-    const labelNode = new Node('PieceLabel');
-    const lbl = labelNode.addComponent(Label);
-    const slotDef = def?.slots.find(s => s.slotId === piece.slotId);
-    lbl.string = `${def?.emoji || '🧩'}\n${slotDef?.label || piece.slotId}`;
-    lbl.fontSize = 13;
-    lbl.lineHeight = 16;
-    lbl.color = Color.WHITE;
-    node.addChild(labelNode);
-
     this.piecesContainer?.addChild(node);
     return node;
+  }
+
+  setTutorialCue(cue: DragTutorialCue | null): void {
+    this._activeTutorialCue = cue;
+    // Re-render targets to highlight cue target
+    if (this._session) {
+      for (const target of this._session.grid.getAllTargets()) {
+        const targetNode = this.targetsContainer?.getChildByName(`Target_${target.instanceId}`);
+        if (targetNode) {
+          this.drawTargetVisual(targetNode, target);
+        }
+      }
+    }
   }
 
   onTargetSpawned(payload: CoreEventMap['TARGET_SPAWNED']) {
@@ -197,7 +236,7 @@ export class BoardView extends Component {
     const toPos = this.gridToLocalPos(payload.toAnchor);
     node.setPosition(fromPos);
     tween(node)
-      .to(0.25, { position: toPos }, { easing: 'quadOut' })
+      .to(0.24, { position: toPos }, { easing: 'quadOut' })
       .start();
   }
 
@@ -220,12 +259,16 @@ export class BoardView extends Component {
         .start();
     }
 
-    // Refresh target visual so the newly placed slot is rendered as filled
     const target = this._session.grid.getTarget(payload.targetInstanceId);
     if (target) {
       const targetNode = this.targetsContainer?.getChildByName(`Target_${payload.targetInstanceId}`);
       if (targetNode) {
         this.drawTargetVisual(targetNode, target);
+        // Subtle placement pop
+        tween(targetNode)
+          .to(0.06, { scale: new Vec3(1.05, 1.05, 1) })
+          .to(0.1, { scale: new Vec3(1, 1, 1) })
+          .start();
       }
     }
   }
@@ -234,8 +277,8 @@ export class BoardView extends Component {
     const targetNode = this.targetsContainer?.getChildByName(`Target_${payload.target.instanceId}`);
     if (targetNode) {
       tween(targetNode)
-        .to(0.12, { scale: new Vec3(1.2, 1.2, 1) })
-        .to(0.2, { scale: new Vec3(0, 0, 1) })
+        .to(0.14, { scale: new Vec3(1.18, 1.18, 1) })
+        .to(0.18, { scale: new Vec3(0, 0, 1) })
         .call(() => targetNode.destroy())
         .start();
     }
