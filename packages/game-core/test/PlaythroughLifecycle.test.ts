@@ -48,8 +48,8 @@ describe('End-to-End Playthrough & Cocos Event Contract Lifecycle', () => {
 
       let placed = false;
       for (const piece of loose) {
-        const target = targets.find(t => t.instanceId === piece.targetInstanceId);
-        if (target && target.missingSlotIds.includes(piece.slotId)) {
+        const target = targets.find(t => t.ingredientId === piece.ingredientId && t.missingSlotIds.includes(piece.slotId));
+        if (target) {
           const res = session.placePiece(piece.instanceId, target.instanceId, piece.slotId);
           if (res.success) {
             placed = true;

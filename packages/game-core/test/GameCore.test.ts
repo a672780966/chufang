@@ -268,5 +268,26 @@ describe('Rigorous Deadlock Detection (PRD 3.1 BOARD_BLOCKED)', () => {
     assert.strictEqual(check.hasLegalTargetSpawn, false);
     assert.strictEqual(check.isDeadlocked, true, 'Board must be strictly identified as deadlocked (BOARD_BLOCKED)');
   });
+
+  it('should enforce identical candidate pool between DeadlockDetector and FlowDirector', () => {
+    const grid = new BoardGrid();
+    const candidates = DeadlockDetector.getLegalTargetSpawnCandidates(
+      grid,
+      DEFAULT_DAYS[0].availableRecipeIds,
+      DEFAULT_RECIPES,
+      DEFAULT_INGREDIENTS
+    );
+
+    assert.ok(candidates.length > 0, 'Must find valid candidate targets for Day 1');
+    for (const c of candidates) {
+      assert.ok(
+        DEFAULT_DAYS[0].availableRecipeIds.some(rid =>
+          DEFAULT_RECIPES[rid].requirements.some(req => req.ingredientId === c.id)
+        ),
+        `Candidate ${c.id} must be required by at least one available recipe`
+      );
+    }
+  });
 });
+
 

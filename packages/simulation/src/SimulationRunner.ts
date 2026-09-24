@@ -70,49 +70,51 @@ export class SimulationRunner {
       // Find all valid legal placements
       const legalMoves: Array<{ pieceId: string; targetId: string; slotId: string; score: number }> = [];
 
+      const activeTargets = session.grid.getAllTargets();
       for (const piece of loosePieces) {
-        const target = session.grid.getTarget(piece.targetInstanceId);
-        if (target && target.missingSlotIds.includes(piece.slotId)) {
-          let score = 10;
+        for (const target of activeTargets) {
+          if (piece.ingredientId === target.ingredientId && target.missingSlotIds.includes(piece.slotId)) {
+            let score = 10;
 
-          if (strategy === 'targeted' || strategy === 'master') {
-            // Prioritize current order need
-            if (state.currentOrder) {
-              const item = state.currentOrder.items.find(
-                (i: any) => i.ingredientId === target.ingredientId
-              );
-              if (item && item.reserved < item.needed) {
-                score += 50;
+            if (strategy === 'targeted' || strategy === 'master') {
+              // Prioritize current order need
+              if (state.currentOrder) {
+                const item = state.currentOrder.items.find(
+                  (i: any) => i.ingredientId === target.ingredientId
+                );
+                if (item && item.reserved < item.needed) {
+                  score += 50;
+                }
+              }
+
+              // Prioritize near completion (fewest missing pieces)
+              score += (10 - target.missingSlotIds.length) * 5;
+            }
+
+            if (strategy === 'master') {
+              // Check next order hint for preparation (deduced from dishId recipe)
+              const dishId = state.nextOrderPreview?.dishId;
+              if (dishId && DEFAULT_RECIPES[dishId]) {
+                const reqs = DEFAULT_RECIPES[dishId].requirements;
+                if (reqs.some((r: any) => r.ingredientId === target.ingredientId)) {
+                  score += 25;
+                }
+              }
+
+              // Penalize overstocking inventory
+              const currentStock = state.inventory[target.ingredientId] || 0;
+              if (currentStock >= 2) {
+                score -= 30;
               }
             }
 
-            // Prioritize near completion (fewest missing pieces)
-            score += (10 - target.missingSlotIds.length) * 5;
+            legalMoves.push({
+              pieceId: piece.instanceId,
+              targetId: target.instanceId,
+              slotId: piece.slotId,
+              score
+            });
           }
-
-          if (strategy === 'master') {
-            // Check next order hint for preparation (deduced from dishId recipe)
-            const dishId = state.nextOrderPreview?.dishId;
-            if (dishId && DEFAULT_RECIPES[dishId]) {
-              const reqs = DEFAULT_RECIPES[dishId].requirements;
-              if (reqs.some((r: any) => r.ingredientId === target.ingredientId)) {
-                score += 25;
-              }
-            }
-
-            // Penalize overstocking inventory
-            const currentStock = state.inventory[target.ingredientId] || 0;
-            if (currentStock >= 2) {
-              score -= 30;
-            }
-          }
-
-          legalMoves.push({
-            pieceId: piece.instanceId,
-            targetId: target.instanceId,
-            slotId: piece.slotId,
-            score
-          });
         }
       }
 

@@ -12,6 +12,7 @@ import {
 import { SeededRandom } from '../random/SeededRandom.js';
 import { BoardGrid } from '../board/BoardGrid.js';
 import { PrepInventory } from '../inventory/PrepInventory.js';
+import { DeadlockDetector } from '../detector/DeadlockDetector.js';
 
 export class FlowDirector {
   private _rng: SeededRandom;
@@ -23,18 +24,17 @@ export class FlowDirector {
     dayConfig: DayConfig,
     ingredients: Record<string, IngredientDefinition>,
     recipes: Record<string, RecipeDefinition>,
-    daySeed: string | number
+    seed: string | number
   ) {
     this._dayConfig = dayConfig;
     this._ingredients = ingredients;
     this._recipes = recipes;
-    this._rng = new SeededRandom(`${daySeed}_director`);
+    this._rng = new SeededRandom(seed);
   }
 
   /**
-   * Stage A: Target Selector
-   * Evaluates which ingredient definition should be spawned next on the board.
-   * Strictly filters candidates to only those that can legally fit into the top Spawn Zone!
+   * Deterministically selects the next ingredient target to spawn.
+   * Strictly aligns 100% with DeadlockDetector's legal target candidates!
    */
   selectNextTargetIngredient(
     grid: BoardGrid,
@@ -45,28 +45,14 @@ export class FlowDirector {
     const activeTargets = grid.getAllTargets();
     const activeIngredientIds = new Set(activeTargets.map(t => t.ingredientId));
 
-    // Get all candidate ingredients used in the day's available recipes
-    const candidateSet = new Set<string>();
-    for (const recipeId of this._dayConfig.availableRecipeIds) {
-      const recipe = this._recipes[recipeId];
-      if (!recipe) continue;
-      for (const req of recipe.requirements) {
-        candidateSet.add(req.ingredientId);
-      }
-    }
-
-    if (candidateSet.size === 0) return null;
-
     // CRITICAL: Strictly filter to candidates that can legally spawn in the top Spawn Zone!
-    const validDefCandidates: IngredientDefinition[] = [];
-    for (const ingredientId of candidateSet) {
-      const def = this._ingredients[ingredientId];
-      if (!def) continue;
-      const spawnAnchors = grid.findSpawnAnchorsForFootprint(def.footprint);
-      if (spawnAnchors.length > 0) {
-        validDefCandidates.push(def);
-      }
-    }
+    // Shares exact candidate derivation with DeadlockDetector!
+    const validDefCandidates = DeadlockDetector.getLegalTargetSpawnCandidates(
+      grid,
+      this._dayConfig.availableRecipeIds,
+      this._recipes,
+      this._ingredients
+    );
 
     if (validDefCandidates.length === 0) return null;
 
@@ -146,37 +132,40 @@ export class FlowDirector {
   }
 
   /**
-   * Stage B: Piece Scheduler
-   * Chooses which missing piece of which active target should be released into the loose piece pool.
-   * Crucial: Only chooses slots that have neither been placed nor already spawned on the board!
+   * Chooses which loose piece should be released into the loose piece pool.
+   * Priority:
+   * 1. Primary candidates: unspawned missing slots of active targets on board (weighted by current/next orders and release plan).
+   * 2. Secondary candidates: advance pieces for upcoming order fact, duplicate slots, or recipe items to maintain pressure.
    */
   selectNextLoosePiece(
     grid: BoardGrid,
     inventory: PrepInventory,
     currentOrder: Order | null,
     nextOrderFact: Order | null
-  ): { target: IngredientTarget; slotId: string } | null {
+  ): { ingredientId: string; slotId: string; target?: IngredientTarget } | null {
     const activeTargets = grid.getAllTargets();
-    if (activeTargets.length === 0) return null;
 
     // Track which (targetInstanceId, slotId) pairs are currently on board as loose pieces
     const spawnedSlotsByTarget = new Map<string, Set<string>>();
     for (const p of grid.getAllLoosePieces()) {
-      let set = spawnedSlotsByTarget.get(p.targetInstanceId);
-      if (!set) {
-        set = new Set();
-        spawnedSlotsByTarget.set(p.targetInstanceId, set);
+      if (p.targetInstanceId) {
+        let set = spawnedSlotsByTarget.get(p.targetInstanceId);
+        if (!set) {
+          set = new Set();
+          spawnedSlotsByTarget.set(p.targetInstanceId, set);
+        }
+        set.add(p.slotId);
       }
-      set.add(p.slotId);
     }
 
     interface PieceCandidate {
-      target: IngredientTarget;
+      ingredientId: string;
       slotId: string;
+      target?: IngredientTarget;
       weight: number;
     }
 
-    const candidates: PieceCandidate[] = [];
+    const primaryCandidates: PieceCandidate[] = [];
 
     for (const target of activeTargets) {
       const spawnedSet = spawnedSlotsByTarget.get(target.instanceId);
@@ -231,28 +220,74 @@ export class FlowDirector {
         }
 
         if (pieceWeight > 0) {
-          candidates.push({
-            target,
+          primaryCandidates.push({
+            ingredientId: target.ingredientId,
             slotId,
+            target,
             weight: pieceWeight
           });
         }
       }
     }
 
-    if (candidates.length === 0) {
-      // Starvation fallback: if all were withheld, take any available unspawned slot
-      for (const target of activeTargets) {
-        const spawnedSet = spawnedSlotsByTarget.get(target.instanceId);
-        const availableMissing = target.missingSlotIds.filter(s => !spawnedSet || !spawnedSet.has(s));
-        if (availableMissing.length > 0) {
-          return { target, slotId: availableMissing[0] };
-        }
-      }
-      return null;
+    if (primaryCandidates.length > 0) {
+      const picked = this._rng.weightedPick(primaryCandidates.map(c => ({ item: c, weight: c.weight })));
+      return picked ? { ingredientId: picked.ingredientId, slotId: picked.slotId, target: picked.target } : null;
     }
 
-    const picked = this._rng.weightedPick(candidates.map(c => ({ item: c, weight: c.weight })));
-    return picked ? { target: picked.target, slotId: picked.slotId } : null;
+    // Secondary candidates: when all primary missing slots are already spawned or withheld
+    const secondaryCandidates: PieceCandidate[] = [];
+
+    // 1. Advance pieces for next order fact (essential for advance prep & spatial pressure!)
+    if (nextOrderFact && nextOrderFact.items) {
+      for (const item of nextOrderFact.items) {
+        const def = this._ingredients[item.ingredientId];
+        if (def) {
+          for (const slot of def.slots) {
+            secondaryCandidates.push({
+              ingredientId: item.ingredientId,
+              slotId: slot.slotId,
+              weight: 25
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Duplicate slots of active targets
+    for (const target of activeTargets) {
+      const def = this._ingredients[target.ingredientId];
+      if (!def) continue;
+      for (const slot of def.slots) {
+        secondaryCandidates.push({
+          ingredientId: target.ingredientId,
+          slotId: slot.slotId,
+          target,
+          weight: 15
+        });
+      }
+    }
+
+    // 3. General pieces from day recipes
+    for (const recipeId of this._dayConfig.availableRecipeIds) {
+      const recipe = this._recipes[recipeId];
+      if (!recipe) continue;
+      for (const req of recipe.requirements) {
+        const def = this._ingredients[req.ingredientId];
+        if (def) {
+          for (const slot of def.slots) {
+            secondaryCandidates.push({
+              ingredientId: req.ingredientId,
+              slotId: slot.slotId,
+              weight: 10
+            });
+          }
+        }
+      }
+    }
+
+    if (secondaryCandidates.length === 0) return null;
+    const picked = this._rng.weightedPick(secondaryCandidates.map(c => ({ item: c, weight: c.weight })));
+    return picked ? { ingredientId: picked.ingredientId, slotId: picked.slotId, target: picked.target } : null;
   }
 }

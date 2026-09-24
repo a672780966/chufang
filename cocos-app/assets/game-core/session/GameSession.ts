@@ -116,6 +116,9 @@ export class GameSession {
       const spawned = this.trySpawnNextLoosePiece();
       if (!spawned) break;
     }
+
+    // 3. Ensure board has at least one legal placement if possible
+    this.ensurePlayableMove();
   }
 
   /**
@@ -210,13 +213,13 @@ export class GameSession {
     }
 
     const chosenCol = candidateCols[this._rng.nextInt(0, candidateCols.length - 1)];
-    const pieceId = `piece_${selected.target.ingredientId}_${this._pieceCounter++}`;
+    const pieceId = `piece_${selected.ingredientId}_${this._pieceCounter++}`;
     const initialCoord = { col: chosenCol, row: topSpawnRow };
 
     const piece: LoosePiece = {
       instanceId: pieceId,
-      ingredientId: selected.target.ingredientId,
-      targetInstanceId: selected.target.instanceId,
+      ingredientId: selected.ingredientId,
+      targetInstanceId: selected.target?.instanceId || '',
       slotId: selected.slotId,
       coord: initialCoord
     };
@@ -262,8 +265,8 @@ export class GameSession {
       return { success: false, reason: 'TARGET_NOT_FOUND' };
     }
 
-    // Strict validation: Must match the target and missing slot
-    if (piece.targetInstanceId !== targetInstanceId || piece.slotId !== slotId) {
+    // Strict validation: Must match the target ingredient and missing slot
+    if (piece.ingredientId !== target.ingredientId || piece.slotId !== slotId) {
       return { success: false, reason: 'MISMATCH' };
     }
 
@@ -312,10 +315,37 @@ export class GameSession {
         this.trySpawnNextLoosePiece();
       }
 
+      // Escalating pressure: if lingering >= 6 moves without clearing, drop another piece every 2 moves!
+      if (this._consecutiveNonClearPlacements >= 6 && this._consecutiveNonClearPlacements % 2 === 0) {
+        this.trySpawnNextLoosePiece();
+      }
+
+      this.ensurePlayableMove();
       this.checkDeadlockAndDanger();
     }
 
     return { success: true };
+  }
+
+  /**
+   * Ensures that the board has at least one valid legal piece placement if active targets exist.
+   * If no loose pieces on the board match any active target's missing slots, attempts to spawn
+   * an essential loose piece from the top spawn zone. If the top spawn zone is blocked, the spawn
+   * fails, which naturally triggers deadlock detection in checkDeadlockAndDanger().
+   */
+  private ensurePlayableMove(): void {
+    const hasLegal = (): boolean => {
+      const targets = this.grid.getAllTargets();
+      const loosePieces = this.grid.getAllLoosePieces();
+      return targets.some(t =>
+        loosePieces.some(p => p.ingredientId === t.ingredientId && t.missingSlotIds.includes(p.slotId))
+      );
+    };
+
+    while (!hasLegal() && this.grid.getAllTargets().length > 0) {
+      const spawned = this.trySpawnNextLoosePiece();
+      if (!spawned) break;
+    }
   }
 
   /**
@@ -397,6 +427,9 @@ export class GameSession {
       if (!spawned) break;
     }
 
+    // Guarantee that at least one valid move exists or detect deadlock
+    this.ensurePlayableMove();
+
     // Final check for deadlocks
     this.checkDeadlockAndDanger();
   }
@@ -406,7 +439,9 @@ export class GameSession {
     const check = DeadlockDetector.evaluate(
       this.grid,
       this._ingredients,
-      this.dayConfig.targetIngredientCount
+      this.dayConfig.targetIngredientCount,
+      this.dayConfig.availableRecipeIds,
+      this._recipes
     );
 
     if (check.isDanger) {

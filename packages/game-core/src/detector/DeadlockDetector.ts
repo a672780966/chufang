@@ -1,5 +1,5 @@
 import { BoardGrid } from '../board/BoardGrid.js';
-import { IngredientDefinition } from '../model/Types.js';
+import { IngredientDefinition, RecipeDefinition } from '../model/Types.js';
 
 export interface DeadlockCheckResult {
   isDeadlocked: boolean;
@@ -15,21 +15,52 @@ export interface DeadlockCheckResult {
 
 export class DeadlockDetector {
   /**
+   * Derives the exact set of legal target spawn candidates strictly available in the top Spawn Zone.
+   * Shared 100% symmetrically between FlowDirector and DeadlockDetector!
+   */
+  static getLegalTargetSpawnCandidates(
+    grid: BoardGrid,
+    availableRecipeIds: string[],
+    recipes: Record<string, RecipeDefinition>,
+    ingredients: Record<string, IngredientDefinition>
+  ): IngredientDefinition[] {
+    const candidateSet = new Set<string>();
+    for (const recipeId of availableRecipeIds) {
+      const recipe = recipes[recipeId];
+      if (!recipe) continue;
+      for (const req of recipe.requirements) {
+        candidateSet.add(req.ingredientId);
+      }
+    }
+
+    const valid: IngredientDefinition[] = [];
+    for (const ingredientId of candidateSet) {
+      const def = ingredients[ingredientId];
+      if (!def) continue;
+      const spawnAnchors = grid.findSpawnAnchorsForFootprint(def.footprint);
+      if (spawnAnchors.length > 0) {
+        valid.push(def);
+      }
+    }
+    return valid;
+  }
+
+  /**
    * Deterministically evaluates whether the board has reached an unrecoverable deadlock (NoLegalBoardContinuation).
    *
-   * Rigorous mathematical condition:
-   * Only triggers deadlock when:
-   * 1. No target is ready for clear (hasPendingClear === false)
-   * 2. No target can be completed by placing current on-board loose pieces (hasCompletableTargetOnBoard === false)
-   * 3. No missing piece can spawn at top (hasSpawnableMissingPiece === false)
-   * 4. No new target can legally spawn (hasLegalTargetSpawn === false)
-   *
-   * As long as the player can complete at least one target to release space, it is NEVER a deadlock!
+   * PRD 3.1 败局只有一种：棋盘彻底堵死（Board Blocked）
+   * 1. 棋盘没有任何已完成待消除的目标 (!hasPendingClear)
+   * 2. 当前棋盘上没有任何一个散块可以合法拼入任何现有目标 (!hasLegalPiecePlacement)
+   * 3. 上方 Spawn Zone 完全无法生成新的合法散块 (!hasSpawnableMissingPiece)
+   * 4. 上方 Spawn Zone 完全无法生成新的合法目标 (!hasLegalTargetSpawn)
+   * 结论：玩家陷入零合法操作且无法被动触发任何清除的状态。
    */
   static evaluate(
     grid: BoardGrid,
     ingredients: Record<string, IngredientDefinition>,
-    targetIngredientQuota: number
+    targetIngredientQuota: number,
+    availableRecipeIds?: string[],
+    recipes?: Record<string, RecipeDefinition>
   ): DeadlockCheckResult {
     const targets = grid.getAllTargets();
     const loosePieces = grid.getAllLoosePieces();
@@ -37,56 +68,72 @@ export class DeadlockDetector {
     // 1. Check pending clear
     const hasPendingClear = targets.some(t => t.missingSlotIds.length === 0);
 
-    // 2. Track which slots are currently present on board as loose pieces
-    const looseSlotsByTarget = new Map<string, Set<string>>();
+    // 2. Track pieces by ingredient and slot on board
+    // A loose piece can legally be placed into ANY target of matching ingredient needing that slot!
     let hasLegalPiecePlacement = false;
+    const piecesByIngredient = new Map<string, Set<string>>();
 
     for (const p of loosePieces) {
-      let set = looseSlotsByTarget.get(p.targetInstanceId);
+      let set = piecesByIngredient.get(p.ingredientId);
       if (!set) {
         set = new Set();
-        looseSlotsByTarget.set(p.targetInstanceId, set);
+        piecesByIngredient.set(p.ingredientId, set);
       }
       set.add(p.slotId);
 
-      const target = grid.getTarget(p.targetInstanceId);
-      if (target && target.missingSlotIds.includes(p.slotId)) {
-        hasLegalPiecePlacement = true;
-      }
-    }
-
-    // 3. Can ANY target be completed using exclusively the loose pieces already on the board?
-    const hasCompletableTargetOnBoard = targets.some(t => {
-      const looseSet = looseSlotsByTarget.get(t.instanceId);
-      if (!looseSet) return false;
-      return t.missingSlotIds.every(slotId => looseSet.has(slotId));
-    });
-
-    // 4. Check spawnable missing pieces (must have unspawned missing slots AND open top cell)
-    let hasSpawnableMissingPiece = false;
-    const hasAnyUnspawnedMissingSlots = targets.some(t => {
-      const spawned = looseSlotsByTarget.get(t.instanceId);
-      return t.missingSlotIds.some(s => !spawned || !spawned.has(s));
-    });
-
-    if (hasAnyUnspawnedMissingSlots) {
-      const topRow = grid.totalRows - 1;
-      for (let c = 0; c < grid.columns; c++) {
-        if (grid.isCellEmpty({ col: c, row: topRow })) {
-          hasSpawnableMissingPiece = true;
+      for (const t of targets) {
+        if (p.ingredientId === t.ingredientId && t.missingSlotIds.includes(p.slotId)) {
+          hasLegalPiecePlacement = true;
           break;
         }
       }
     }
 
-    // 5. Check legal target spawn (strictly uses top Spawn Zone)
+    // 3. Can ANY target be completed using exclusively the loose pieces already on the board?
+    const hasCompletableTargetOnBoard = targets.some(t => {
+      const availableSet = piecesByIngredient.get(t.ingredientId);
+      if (!availableSet) return false;
+      return t.missingSlotIds.every(slotId => availableSet.has(slotId));
+    });
+
+    // 4. Check spawnable missing pieces (must have available slots/recipes AND open cell at top spawn row)
+    let hasSpawnableMissingPiece = false;
+    const topRow = grid.totalRows - 1;
+    let hasOpenTopCell = false;
+    for (let c = 0; c < grid.columns; c++) {
+      if (grid.isCellEmpty({ col: c, row: topRow })) {
+        hasOpenTopCell = true;
+        break;
+      }
+    }
+
+    if (hasOpenTopCell) {
+      // If there are unspawned missing slots for active targets, or available recipe items
+      const hasAnyUnspawnedMissingSlots = targets.some(t => {
+        const spawned = piecesByIngredient.get(t.ingredientId);
+        return t.missingSlotIds.some(s => !spawned || !spawned.has(s));
+      });
+      hasSpawnableMissingPiece = hasAnyUnspawnedMissingSlots || targets.length > 0;
+    }
+
+    // 5. Check legal target spawn (strictly uses top Spawn Zone candidate filter)
     let hasLegalTargetSpawn = false;
     if (targets.length < targetIngredientQuota) {
-      for (const def of Object.values(ingredients)) {
-        const validAnchors = grid.findSpawnAnchorsForFootprint(def.footprint);
-        if (validAnchors.length > 0) {
-          hasLegalTargetSpawn = true;
-          break;
+      if (availableRecipeIds && recipes) {
+        const legalCandidates = DeadlockDetector.getLegalTargetSpawnCandidates(
+          grid,
+          availableRecipeIds,
+          recipes,
+          ingredients
+        );
+        hasLegalTargetSpawn = legalCandidates.length > 0;
+      } else {
+        for (const def of Object.values(ingredients)) {
+          const validAnchors = grid.findSpawnAnchorsForFootprint(def.footprint);
+          if (validAnchors.length > 0) {
+            hasLegalTargetSpawn = true;
+            break;
+          }
         }
       }
     }
