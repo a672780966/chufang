@@ -232,62 +232,13 @@ export class FlowDirector {
 
     if (primaryCandidates.length > 0) {
       const picked = this._rng.weightedPick(primaryCandidates.map(c => ({ item: c, weight: c.weight })));
-      return picked ? { ingredientId: picked.ingredientId, slotId: picked.slotId, target: picked.target } : null;
+      return picked && picked.target
+        ? { ingredientId: picked.ingredientId, slotId: picked.slotId, target: picked.target }
+        : null;
     }
 
-    // Secondary candidates: when all primary missing slots are already spawned or withheld
-    const secondaryCandidates: PieceCandidate[] = [];
-
-    // 1. Advance pieces for next order fact (essential for advance prep & spatial pressure!)
-    if (nextOrderFact && nextOrderFact.items) {
-      for (const item of nextOrderFact.items) {
-        const def = this._ingredients[item.ingredientId];
-        if (def) {
-          for (const slot of def.slots) {
-            secondaryCandidates.push({
-              ingredientId: item.ingredientId,
-              slotId: slot.slotId,
-              weight: 25
-            });
-          }
-        }
-      }
-    }
-
-    // 2. Duplicate slots of active targets
-    for (const target of activeTargets) {
-      const def = this._ingredients[target.ingredientId];
-      if (!def) continue;
-      for (const slot of def.slots) {
-        secondaryCandidates.push({
-          ingredientId: target.ingredientId,
-          slotId: slot.slotId,
-          target,
-          weight: 15
-        });
-      }
-    }
-
-    // 3. General pieces from day recipes
-    for (const recipeId of this._dayConfig.availableRecipeIds) {
-      const recipe = this._recipes[recipeId];
-      if (!recipe) continue;
-      for (const req of recipe.requirements) {
-        const def = this._ingredients[req.ingredientId];
-        if (def) {
-          for (const slot of def.slots) {
-            secondaryCandidates.push({
-              ingredientId: req.ingredientId,
-              slotId: slot.slotId,
-              weight: 10
-            });
-          }
-        }
-      }
-    }
-
-    if (secondaryCandidates.length === 0) return null;
-    const picked = this._rng.weightedPick(secondaryCandidates.map(c => ({ item: c, weight: c.weight })));
-    return picked ? { ingredientId: picked.ingredientId, slotId: picked.slotId, target: picked.target } : null;
+    // Target-first Instance Binding: If all active targets have their missing slots already spawned
+    // (or temporarily withheld by Closure ReleasePlan), NO orphan or duplicate pieces may be created.
+    return null;
   }
 }

@@ -6,7 +6,8 @@ import {
   LoosePiece,
   GameStats,
   NextOrderPreview,
-  GridCoord
+  GridCoord,
+  DEFAULT_PRESSURE_PROFILE
 } from '../model/Types.js';
 import { EventEmitter, CoreEventMap } from '../model/Events.js';
 import { BoardGrid } from '../board/BoardGrid.js';
@@ -212,6 +213,8 @@ export class GameSession {
       return false;
     }
 
+    if (!selected.target) return false;
+
     const chosenCol = candidateCols[this._rng.nextInt(0, candidateCols.length - 1)];
     const pieceId = `piece_${selected.ingredientId}_${this._pieceCounter++}`;
     const initialCoord = { col: chosenCol, row: topSpawnRow };
@@ -219,7 +222,7 @@ export class GameSession {
     const piece: LoosePiece = {
       instanceId: pieceId,
       ingredientId: selected.ingredientId,
-      targetInstanceId: selected.target?.instanceId || '',
+      targetInstanceId: selected.target.instanceId,
       slotId: selected.slotId,
       coord: initialCoord
     };
@@ -249,6 +252,7 @@ export class GameSession {
 
   /**
    * Player Action: Places a loose piece into an ingredient target slot.
+   * Strictly enforces Target-first Instance Binding: piece must belong to targetInstanceId.
    */
   placePiece(pieceInstanceId: string, targetInstanceId: string, slotId: string): { success: boolean; reason?: string } {
     if (this._isGameOver) {
@@ -265,8 +269,8 @@ export class GameSession {
       return { success: false, reason: 'TARGET_NOT_FOUND' };
     }
 
-    // Strict validation: Must match the target ingredient and missing slot
-    if (piece.ingredientId !== target.ingredientId || piece.slotId !== slotId) {
+    // Strict Target-first Instance Binding validation: Must match the bound target instance and slot
+    if (piece.targetInstanceId !== targetInstanceId || piece.slotId !== slotId) {
       return { success: false, reason: 'MISMATCH' };
     }
 
@@ -304,20 +308,35 @@ export class GameSession {
       this.handleIngredientCompleted(target);
     } else {
       this._consecutiveNonClearPlacements++;
+      const profile = this.dayConfig.pressureProfile || DEFAULT_PRESSURE_PROFILE;
 
-      // Action-driven spatial pressure:
-      // Base inflow: 1 piece enters from top
-      this.trySpawnNextLoosePiece();
-
-      // Pacing momentum: Every 3 non-completing placements, an extra piece drops into the board!
-      // This causes loose pieces to steadily accumulate towards danger if player lingers without clearing.
-      if (this._consecutiveNonClearPlacements % 3 === 0) {
+      // Base inflow from DayConfig.pressureProfile
+      for (let i = 0; i < profile.baseInflowPerPlacement; i++) {
         this.trySpawnNextLoosePiece();
       }
 
-      // Escalating pressure: if lingering >= 6 moves without clearing, drop another piece every 2 moves!
-      if (this._consecutiveNonClearPlacements >= 6 && this._consecutiveNonClearPlacements % 2 === 0) {
-        this.trySpawnNextLoosePiece();
+      // Check danger state: if in danger and pauseBonusOnDanger is true, suppress bonus drops
+      // to create a recoverable near-dead state!
+      const inDanger = this.isBoardInDanger();
+
+      if (!inDanger || !profile.pauseBonusOnDanger) {
+        if (
+          profile.escalationThreshold > 0 &&
+          this._consecutiveNonClearPlacements >= profile.escalationThreshold &&
+          profile.escalationInterval > 0 &&
+          this._consecutiveNonClearPlacements % profile.escalationInterval === 0
+        ) {
+          for (let i = 0; i < profile.escalationAmount; i++) {
+            this.trySpawnNextLoosePiece();
+          }
+        } else if (
+          profile.bonusInterval > 0 &&
+          this._consecutiveNonClearPlacements % profile.bonusInterval === 0
+        ) {
+          for (let i = 0; i < profile.bonusAmount; i++) {
+            this.trySpawnNextLoosePiece();
+          }
+        }
       }
 
       this.ensurePlayableMove();
@@ -325,6 +344,15 @@ export class GameSession {
     }
 
     return { success: true };
+  }
+
+  /**
+   * Checks whether the board currently meets BOARD_DANGER thresholds.
+   */
+  isBoardInDanger(): boolean {
+    const topRowOccupancy = this.grid.getTopRowOccupancyRatio();
+    const maxStackHeight = this.grid.getMaxStackHeight();
+    return maxStackHeight >= this.grid.rows - 3 || topRowOccupancy >= 0.20;
   }
 
   /**
@@ -338,7 +366,7 @@ export class GameSession {
       const targets = this.grid.getAllTargets();
       const loosePieces = this.grid.getAllLoosePieces();
       return targets.some(t =>
-        loosePieces.some(p => p.ingredientId === t.ingredientId && t.missingSlotIds.includes(p.slotId))
+        loosePieces.some(p => p.targetInstanceId === t.instanceId && t.missingSlotIds.includes(p.slotId))
       );
     };
 

@@ -106,6 +106,33 @@ export interface Order {
   isFulfilled: boolean;
 }
 
+export interface PressureProfile {
+  /** Base loose pieces spawned into board per non-clearing placement (normally 1) */
+  baseInflowPerPlacement: number;
+  /** Interval of consecutive non-clearing placements that triggers bonus drop (e.g. 3) */
+  bonusInterval: number;
+  /** Number of bonus loose pieces to drop at bonusInterval (e.g. 1) */
+  bonusAmount: number;
+  /** Threshold of consecutive non-clearing placements to trigger escalation (e.g. 6) */
+  escalationThreshold: number;
+  /** Interval during escalation (e.g. 2) */
+  escalationInterval: number;
+  /** Number of loose pieces to drop during escalation (e.g. 1) */
+  escalationAmount: number;
+  /** If true, pause bonus drops when board is in BOARD_DANGER, retaining only base inflow */
+  pauseBonusOnDanger: boolean;
+}
+
+export const DEFAULT_PRESSURE_PROFILE: PressureProfile = {
+  baseInflowPerPlacement: 1,
+  bonusInterval: 3,
+  bonusAmount: 1,
+  escalationThreshold: 6,
+  escalationInterval: 2,
+  escalationAmount: 1,
+  pauseBonusOnDanger: true
+};
+
 export interface DayConfig {
   dayNumber: number;
   businessGoal: number;
@@ -117,6 +144,7 @@ export interface DayConfig {
   loosePieceComfortMin: number;
   loosePieceComfortMax: number;
   boardProfile?: BoardProfile;
+  pressureProfile?: PressureProfile;
 }
 
 export type NextOrderPreviewMode = 'NONE' | 'DISH_ONLY' | 'FULL_RECIPE';

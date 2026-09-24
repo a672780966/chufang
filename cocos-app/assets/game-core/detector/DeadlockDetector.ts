@@ -68,35 +68,34 @@ export class DeadlockDetector {
     // 1. Check pending clear
     const hasPendingClear = targets.some(t => t.missingSlotIds.length === 0);
 
-    // 2. Track pieces by ingredient and slot on board
-    // A loose piece can legally be placed into ANY target of matching ingredient needing that slot!
+    // 2. Track pieces by targetInstanceId and slotId on board
+    // Target-first Instance Binding: a piece can ONLY be placed into its bound target instance!
     let hasLegalPiecePlacement = false;
-    const piecesByIngredient = new Map<string, Set<string>>();
+    const piecesByTarget = new Map<string, Set<string>>();
 
     for (const p of loosePieces) {
-      let set = piecesByIngredient.get(p.ingredientId);
+      if (!p.targetInstanceId) continue;
+      let set = piecesByTarget.get(p.targetInstanceId);
       if (!set) {
         set = new Set();
-        piecesByIngredient.set(p.ingredientId, set);
+        piecesByTarget.set(p.targetInstanceId, set);
       }
       set.add(p.slotId);
 
-      for (const t of targets) {
-        if (p.ingredientId === t.ingredientId && t.missingSlotIds.includes(p.slotId)) {
-          hasLegalPiecePlacement = true;
-          break;
-        }
+      const target = grid.getTarget(p.targetInstanceId);
+      if (target && target.missingSlotIds.includes(p.slotId)) {
+        hasLegalPiecePlacement = true;
       }
     }
 
     // 3. Can ANY target be completed using exclusively the loose pieces already on the board?
     const hasCompletableTargetOnBoard = targets.some(t => {
-      const availableSet = piecesByIngredient.get(t.ingredientId);
+      const availableSet = piecesByTarget.get(t.instanceId);
       if (!availableSet) return false;
       return t.missingSlotIds.every(slotId => availableSet.has(slotId));
     });
 
-    // 4. Check spawnable missing pieces (must have available slots/recipes AND open cell at top spawn row)
+    // 4. Check spawnable missing pieces (must have unspawned missing slots for active targets AND open cell at top spawn row)
     let hasSpawnableMissingPiece = false;
     const topRow = grid.totalRows - 1;
     let hasOpenTopCell = false;
@@ -108,12 +107,11 @@ export class DeadlockDetector {
     }
 
     if (hasOpenTopCell) {
-      // If there are unspawned missing slots for active targets, or available recipe items
       const hasAnyUnspawnedMissingSlots = targets.some(t => {
-        const spawned = piecesByIngredient.get(t.ingredientId);
+        const spawned = piecesByTarget.get(t.instanceId);
         return t.missingSlotIds.some(s => !spawned || !spawned.has(s));
       });
-      hasSpawnableMissingPiece = hasAnyUnspawnedMissingSlots || targets.length > 0;
+      hasSpawnableMissingPiece = hasAnyUnspawnedMissingSlots;
     }
 
     // 5. Check legal target spawn (strictly uses top Spawn Zone candidate filter)

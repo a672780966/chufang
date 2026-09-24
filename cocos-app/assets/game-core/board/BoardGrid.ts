@@ -254,4 +254,19 @@ export class BoardGrid {
     }
     return maxHeight;
   }
+
+  /**
+   * Returns the total number of grid cells currently occupied by targets or pieces.
+   */
+  getOccupiedCellCount(): number {
+    let count = 0;
+    for (let c = 0; c < this.columns; c++) {
+      for (let r = 0; r < this.totalRows; r++) {
+        if (this._cells[c][r].type !== 'empty') {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
 }

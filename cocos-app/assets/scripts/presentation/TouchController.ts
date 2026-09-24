@@ -1,7 +1,7 @@
-import { _decorator, Component, Node, EventTouch, Vec3, UITransform, tween, Vec2 } from 'cc';
+import { _decorator, Component, Node, EventTouch, Vec3, UITransform, tween, Vec2, input, Input } from 'cc';
 import { GameManager } from '../GameManager.js';
 import { BoardView } from './BoardView.js';
-import { LoosePiece, IngredientTarget, DEFAULT_INGREDIENTS } from '../../game-core/index.js';
+import { LoosePiece, DEFAULT_INGREDIENTS } from '../../game-core/index.js';
 
 const { ccclass, property } = _decorator;
 
@@ -16,27 +16,36 @@ export class TouchController extends Component {
   private _draggingPiece: LoosePiece | null = null;
   private _draggingNode: Node | null = null;
   private _originLocalPos: Vec3 = new Vec3();
-  private _snapRadius: number = 90;
+  private _snapRadius: number = 95;
 
   onLoad() {
-    this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this);
-    this.node.on(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
-    this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
-    this.node.on(Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
+    // Register global touch listener via input to guarantee touch events are reliably caught
+    input.on(Input.EventType.TOUCH_START, this.onTouchStart, this);
+    input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
+    input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);
+    input.on(Input.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
   }
 
   onDestroy() {
-    this.node.off(Node.EventType.TOUCH_START, this.onTouchStart, this);
-    this.node.off(Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
-    this.node.off(Node.EventType.TOUCH_END, this.onTouchEnd, this);
-    this.node.off(Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
+    input.off(Input.EventType.TOUCH_START, this.onTouchStart, this);
+    input.off(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
+    input.off(Input.EventType.TOUCH_END, this.onTouchEnd, this);
+    input.off(Input.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
   }
 
+  /**
+   * Converts a screen-space UI touch location to the local coordinate system of piecesContainer / BoardView.
+   */
   private screenToBoardLocal(uiLocation: Vec2): Vec3 {
-    const uiTransform = this.node.getComponent(UITransform);
-    if (!uiTransform) return new Vec3(uiLocation.x, uiLocation.y, 0);
-    const local = uiTransform.convertToNodeSpaceAR(new Vec3(uiLocation.x, uiLocation.y, 0));
-    return local;
+    const targetNode = this.boardView?.piecesContainer || this.boardView?.node;
+    if (!targetNode) {
+      return new Vec3(uiLocation.x, uiLocation.y, 0);
+    }
+    const uiTransform = targetNode.getComponent(UITransform);
+    if (!uiTransform) {
+      return new Vec3(uiLocation.x, uiLocation.y, 0);
+    }
+    return uiTransform.convertToNodeSpaceAR(new Vec3(uiLocation.x, uiLocation.y, 0));
   }
 
   private onTouchStart(event: EventTouch) {
@@ -50,8 +59,8 @@ export class TouchController extends Component {
       const piecePos = this.boardView.gridToLocalPos(piece.coord);
       const dist = Vec3.distance(localPos, piecePos);
 
-      // Hit radius based on cell size
-      if (dist < 45) {
+      // Hit radius based on cell size (approx 50-60 pixels)
+      if (dist < 55) {
         const pieceNode = this.boardView.piecesContainer?.getChildByName(`Piece_${piece.instanceId}`);
         if (pieceNode) {
           this._draggingPiece = piece;
@@ -60,7 +69,7 @@ export class TouchController extends Component {
 
           // Raise to top and scale up
           pieceNode.setSiblingIndex(999);
-          tween(pieceNode).to(0.1, { scale: new Vec3(1.15, 1.15, 1) }).start();
+          tween(pieceNode).to(0.08, { scale: new Vec3(1.15, 1.15, 1) }).start();
           break;
         }
       }
@@ -82,6 +91,8 @@ export class TouchController extends Component {
 
     const currentPos = this._draggingNode.position;
     const session = this.gameManager.session;
+
+    // Strict Target-first Instance Binding: find target by targetInstanceId
     const target = session.grid.getTarget(this._draggingPiece.targetInstanceId);
 
     let placed = false;
@@ -91,7 +102,7 @@ export class TouchController extends Component {
       const slotDef = def?.slots.find(s => s.slotId === this._draggingPiece!.slotId);
 
       if (slotDef) {
-        // Calculate slot absolute target position
+        // Calculate slot absolute target position in piecesContainer local space
         const slotAbsCoord = {
           col: target.anchor.col + slotDef.relativeCol,
           row: target.anchor.row + slotDef.relativeRow

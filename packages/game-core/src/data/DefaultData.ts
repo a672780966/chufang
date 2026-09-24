@@ -1,4 +1,4 @@
-import { IngredientDefinition, RecipeDefinition, DayConfig } from '../model/Types.js';
+import { IngredientDefinition, RecipeDefinition, DayConfig, DEFAULT_PRESSURE_PROFILE } from '../model/Types.js';
 
 export const DEFAULT_INGREDIENTS: Record<string, IngredientDefinition> = {
   bread: {
@@ -682,7 +682,8 @@ export const DEFAULT_DAYS: DayConfig[] = [
     recipeWeights: { salad: 3, sandwich: 3 },
     targetIngredientCount: 3,
     loosePieceComfortMin: 5,
-    loosePieceComfortMax: 8
+    loosePieceComfortMax: 8,
+    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE }
   },
   {
     dayNumber: 2,
@@ -691,7 +692,8 @@ export const DEFAULT_DAYS: DayConfig[] = [
     recipeWeights: { salad: 2, sandwich: 3, burger: 2, fries_basket: 2 },
     targetIngredientCount: 4,
     loosePieceComfortMin: 6,
-    loosePieceComfortMax: 9
+    loosePieceComfortMax: 9,
+    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE }
   },
   {
     dayNumber: 3,
@@ -700,7 +702,8 @@ export const DEFAULT_DAYS: DayConfig[] = [
     recipeWeights: { sandwich: 2, burger: 3, chicken_burger: 2, beef_noodle: 3, fried_rice: 2 },
     targetIngredientCount: 4,
     loosePieceComfortMin: 6,
-    loosePieceComfortMax: 9
+    loosePieceComfortMax: 9,
+    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE }
   },
   {
     dayNumber: 4,
@@ -725,6 +728,7 @@ export const DEFAULT_DAYS: DayConfig[] = [
     },
     targetIngredientCount: 4,
     loosePieceComfortMin: 6,
-    loosePieceComfortMax: 9
+    loosePieceComfortMax: 9,
+    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE }
   }
 ];
