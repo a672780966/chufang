@@ -7,9 +7,12 @@ import {
   DEFAULT_INGREDIENTS,
   DEFAULT_RECIPES,
   PuzzleCutter,
+  PuzzleGeometry,
+  BezierCommand,
   GridCoord,
   IngredientTarget,
-  LoosePiece
+  LoosePiece,
+  DragTutorialCue
 } from '../../game-core/src/index.js';
 import { AudioDirector } from './audio/AudioDirector.js';
 import { WebStorageAdapter } from './storage/WebStorageAdapter.js';
@@ -27,6 +30,7 @@ class WebGameApp {
   private wobblePieces = new Map<string, { startTime: number; startX: number; startY: number }>();
   private pieceVisualPositions = new Map<string, { x: number; y: number }>();
   private targetVisualAnchors = new Map<string, { x: number; y: number }>();
+  private currentTutorialCue: DragTutorialCue | null = null;
 
   // SVG Image Cache for 60fps canvas blitting
   private svgImageCache = new Map<string, HTMLImageElement>();
@@ -36,6 +40,18 @@ class WebGameApp {
     this.initFlow();
     this.initDOM();
     this.startRenderLoop();
+
+    // Support direct launch via URL query parameter ?day=1..12
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const directDay = urlParams.get('day');
+      if (directDay) {
+        const d = parseInt(directDay, 10);
+        if (d >= 1 && d <= 12) {
+          this.startDay(d);
+        }
+      }
+    } catch {}
   }
 
   private initFlow(): void {
@@ -44,6 +60,7 @@ class WebGameApp {
         this.handlePhaseTransition(phase, prev);
       },
       onTutorialCue: (cue) => {
+        this.currentTutorialCue = cue;
         this.updateTutorialCue(cue);
       },
       onDayCompleted: (record) => {
@@ -174,11 +191,16 @@ class WebGameApp {
     const wrapper = document.getElementById('board-wrapper');
     if (!wrapper) return;
     const rect = wrapper.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
     const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
-    this.ctx.resetTransform();
-    this.ctx.scale(dpr, dpr);
+    const targetW = Math.round(rect.width * dpr);
+    const targetH = Math.round(rect.height * dpr);
+    if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
+      this.canvas.width = targetW;
+      this.canvas.height = targetH;
+      this.ctx.resetTransform();
+      this.ctx.scale(dpr, dpr);
+    }
   }
 
   private handlePhaseTransition(phase: string, _prev: string): void {
@@ -194,6 +216,7 @@ class WebGameApp {
     } else {
       menuView.classList.add('view-hidden');
       gameView.classList.remove('view-hidden');
+      this.resizeCanvas();
       this.updateHUD();
     }
   }
@@ -241,6 +264,8 @@ class WebGameApp {
     this.targetVisualAnchors.clear();
     this.draggingPiece = null;
     this.wobblePieces.clear();
+    this.currentTutorialCue = null;
+    this.resizeCanvas();
 
     const session = this.flow.startDay(dayNumber);
     WebTelemetrySink.log('day_start', dayNumber);
@@ -328,14 +353,19 @@ class WebGameApp {
     if (tray) {
       tray.innerHTML = '';
       const stock = session.inventory.getAllAvailable();
+      let hasAny = false;
       for (const [id, count] of Object.entries(stock)) {
         if (count > 0) {
+          hasAny = true;
           const ing = DEFAULT_INGREDIENTS[id];
           const chip = document.createElement('div');
           chip.className = 'inv-chip';
           chip.textContent = `${ing?.emoji || '🍱'} ×${count}`;
           tray.appendChild(chip);
         }
+      }
+      if (!hasAny) {
+        tray.innerHTML = `<span style="font-size:11px; color:#94a3b8; font-weight:500;">备料台 (空)</span>`;
       }
     }
 
@@ -357,7 +387,8 @@ class WebGameApp {
     }
   }
 
-  private updateTutorialCue(cue: any): void {
+  private updateTutorialCue(cue: DragTutorialCue | null): void {
+    this.currentTutorialCue = cue;
     const indicator = document.getElementById('tutorial-indicator');
     if (!indicator) return;
 
@@ -366,11 +397,12 @@ class WebGameApp {
       return;
     }
 
-    // Position indicator over the candidate loose piece
+    // Position indicator over candidate loose piece
     const screenPos = this.gridToScreen(cue.fromCoord);
+    const cellSize = this.getCellSize();
     indicator.style.display = 'block';
-    indicator.style.left = `${screenPos.x + 10}px`;
-    indicator.style.top = `${screenPos.y - 30}px`;
+    indicator.style.left = `${screenPos.x + cellSize / 2 - 16}px`;
+    indicator.style.top = `${screenPos.y + cellSize - 6}px`;
   }
 
   private showDayCompleteModal(record: any): void {
@@ -387,48 +419,75 @@ class WebGameApp {
     modal.style.display = 'flex';
   }
 
-  // --- Coordinate Transformation & Rendering ---
+  // --- Coordinate Transformation & Rendering Geometry ---
+  private getBoardOrigin(): { originX: number; originY: number; cellSize: number } {
+    const session = this.flow?.session;
+    const wrapper = document.getElementById('board-wrapper');
+    const rect = wrapper ? wrapper.getBoundingClientRect() : { width: 400, height: 600 };
+    const cols = session?.grid.columns || 8;
+    const rows = session?.grid.rows || 12;
+    const padding = 10;
+    const availW = Math.max(100, (rect.width > 0 ? rect.width : 400) - padding * 2);
+    const availH = Math.max(100, (rect.height > 0 ? rect.height : 600) - padding * 2);
+    const cellSize = Math.min(availW / cols, availH / rows);
+    const originX = ((rect.width > 0 ? rect.width : 400) - cols * cellSize) / 2;
+    // Vertically center board inside wrapper: row 0 is bottom, row rows-1 is top
+    const originY = ((rect.height > 0 ? rect.height : 600) + rows * cellSize) / 2 - cellSize;
+    return { originX, originY, cellSize };
+  }
+
   private getCellSize(): number {
-    const session = this.flow.session;
-    if (!session) return 40;
-    const wrapper = document.getElementById('board-wrapper')!;
-    const rect = wrapper.getBoundingClientRect();
-    const cellW = rect.width / session.grid.columns;
-    const cellH = rect.height / session.grid.rows;
-    return Math.min(cellW, cellH);
+    return this.getBoardOrigin().cellSize;
   }
 
   private gridToScreen(coord: GridCoord): { x: number; y: number } {
-    const session = this.flow.session;
-    if (!session) return { x: 0, y: 0 };
-    const cellSize = this.getCellSize();
-    const wrapper = document.getElementById('board-wrapper')!;
-    const rect = wrapper.getBoundingClientRect();
-
-    const originX = (rect.width - session.grid.columns * cellSize) / 2;
-    const originY = rect.height - cellSize;
-
+    const { originX, originY, cellSize } = this.getBoardOrigin();
     const x = originX + coord.col * cellSize;
     const y = originY - coord.row * cellSize;
     return { x, y };
   }
 
   private screenToGrid(x: number, y: number): GridCoord {
-    const session = this.flow.session;
-    if (!session) return { col: 0, row: 0 };
-    const cellSize = this.getCellSize();
-    const wrapper = document.getElementById('board-wrapper')!;
-    const rect = wrapper.getBoundingClientRect();
-
-    const originX = (rect.width - session.grid.columns * cellSize) / 2;
-    const originY = rect.height - cellSize;
-
+    const { originX, originY, cellSize } = this.getBoardOrigin();
     const col = Math.floor((x - originX) / cellSize);
-    const row = Math.floor((originY - y + cellSize) / cellSize);
+    const row = Math.floor(((originY + cellSize) - y) / cellSize);
     return { col, row };
   }
 
-  // --- SVG Image Cached Loading ---
+  /**
+   * Directly translates PuzzleGeometry Bezier commands into Canvas 2D path commands.
+   * Runs natively at 60 FPS with zero async image latency.
+   */
+  private drawBezierPath(commands: BezierCommand[]): void {
+    this.ctx.beginPath();
+    for (const cmd of commands) {
+      if (cmd.type === 'M') {
+        this.ctx.moveTo(cmd.x, cmd.y);
+      } else if (cmd.type === 'L') {
+        this.ctx.lineTo(cmd.x, cmd.y);
+      } else if (cmd.type === 'C') {
+        this.ctx.bezierCurveTo(cmd.cp1x!, cmd.cp1y!, cmd.cp2x!, cmd.cp2y!, cmd.x, cmd.y);
+      } else if (cmd.type === 'Z') {
+        this.ctx.closePath();
+      }
+    }
+  }
+
+  private roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  // --- SVG Image Cached Loading (Optional texture overlay) ---
   private getOrCreateSvgImage(cacheKey: string, svgString: string): HTMLImageElement {
     let img = this.svgImageCache.get(cacheKey);
     if (!img) {
@@ -450,16 +509,31 @@ class WebGameApp {
     const coord = this.screenToGrid(x, y);
     const loose = this.flow.session.grid.getAllLoosePieces();
 
-    // Check hit on loose piece
+    // Check hit on loose piece: exact coord match first, then proximity radius <= 1.15
+    let matchedPiece: LoosePiece | null = null;
     for (const piece of loose) {
       if (piece.coord.col === coord.col && piece.coord.row === coord.row) {
-        this.draggingPiece = piece;
-        this.dragPointerPos = { x, y };
-        this.dragOriginCoord = { ...piece.coord };
-        AudioDirector.playPickPiece();
-        this.canvas.setPointerCapture(e.pointerId);
+        matchedPiece = piece;
         break;
       }
+    }
+    if (!matchedPiece) {
+      let bestDist = 1.15;
+      for (const piece of loose) {
+        const d = Math.hypot(piece.coord.col - coord.col, piece.coord.row - coord.row);
+        if (d < bestDist) {
+          bestDist = d;
+          matchedPiece = piece;
+        }
+      }
+    }
+
+    if (matchedPiece) {
+      this.draggingPiece = matchedPiece;
+      this.dragPointerPos = { x, y };
+      this.dragOriginCoord = { ...matchedPiece.coord };
+      AudioDirector.playPickPiece();
+      this.canvas.setPointerCapture(e.pointerId);
     }
   }
 
@@ -490,8 +564,9 @@ class WebGameApp {
         const slotAbsCol = target.anchor.col + slot.relativeCol;
         const slotAbsRow = target.anchor.row + slot.relativeRow;
 
-        // Tolerant snap radius of ~1.2 cells
-        if (Math.abs(coord.col - slotAbsCol) <= 1 && Math.abs(coord.row - slotAbsRow) <= 1) {
+        // Tolerant snap radius: distance in grid coords <= 1.35
+        const dist = Math.hypot(coord.col - slotAbsCol, coord.row - slotAbsRow);
+        if (dist <= 1.35) {
           const res = this.flow.placePiece(piece.instanceId, target.instanceId, piece.slotId);
           if (res.success) {
             placed = true;
@@ -500,6 +575,7 @@ class WebGameApp {
               targetId: target.instanceId,
               slotId: piece.slotId
             });
+            this.updateTutorialCue(null);
           }
         }
       }
@@ -509,7 +585,6 @@ class WebGameApp {
       // Trigger wobble feedback & smooth return
       AudioDirector.playWrongDrop();
       WebTelemetrySink.log('wrong_drop', session.dayConfig.dayNumber);
-      const originScreen = this.gridToScreen(this.dragOriginCoord!);
       this.wobblePieces.set(piece.instanceId, {
         startTime: performance.now(),
         startX: this.dragPointerPos.x,
@@ -535,49 +610,186 @@ class WebGameApp {
   }
 
   private render(): void {
+    this.resizeCanvas();
     const rect = this.canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
     this.ctx.clearRect(0, 0, rect.width, rect.height);
 
     const session = this.flow.session;
     if (!session || this.flow.phase === 'MAIN_MENU') return;
 
-    const cellSize = this.getCellSize();
+    const { originX, originY, cellSize } = this.getBoardOrigin();
+    const cols = session.grid.columns;
+    const rows = session.grid.rows;
 
-    // 1. Draw Incomplete & Placed Targets (using PuzzleCutter authentic presentation)
+    // 1. Board Background Plate (Kitchen Counter)
+    const boardW = cols * cellSize;
+    const boardH = rows * cellSize;
+    const boardX = originX;
+    const boardY = originY - (rows - 1) * cellSize;
+
+    this.ctx.save();
+    // Soft board container fill
+    this.ctx.fillStyle = '#f8fafc';
+    this.roundRect(this.ctx, boardX, boardY, boardW, boardH, 12);
+    this.ctx.fill();
+
+    // Subtle cell grid
+    this.ctx.strokeStyle = 'rgba(203, 213, 225, 0.45)';
+    this.ctx.lineWidth = 1;
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        const cellPos = this.gridToScreen({ col: c, row: r });
+        this.ctx.strokeRect(cellPos.x + 1, cellPos.y + 1, cellSize - 2, cellSize - 2);
+      }
+    }
+
+    // Top Danger Zone boundary (row 10-11)
+    const dangerZonePos = this.gridToScreen({ col: 0, row: 10 });
+    const isDanger = session.isBoardInDanger();
+    if (isDanger) {
+      this.ctx.fillStyle = 'rgba(234, 88, 12, 0.12)';
+      this.ctx.fillRect(boardX, dangerZonePos.y, boardW, cellSize * 2);
+    }
+    this.ctx.setLineDash([6, 4]);
+    this.ctx.strokeStyle = isDanger ? '#ea580c' : 'rgba(226, 232, 240, 0.9)';
+    this.ctx.lineWidth = isDanger ? 2 : 1;
+    this.ctx.beginPath();
+    this.ctx.moveTo(boardX, dangerZonePos.y + cellSize);
+    this.ctx.lineTo(boardX + boardW, dangerZonePos.y + cellSize);
+    this.ctx.stroke();
+    this.ctx.setLineDash([]);
+
+    // Board Outer Border
+    this.ctx.strokeStyle = isDanger ? '#ea580c' : '#cbd5e1';
+    this.ctx.lineWidth = 2;
+    this.roundRect(this.ctx, boardX, boardY, boardW, boardH, 12);
+    this.ctx.stroke();
+    this.ctx.restore();
+
+    // 2. Targets (Plates and Jigsaw Sockets)
     for (const target of session.grid.getAllTargets()) {
       const def = session.ingredients[target.ingredientId];
       if (!def) continue;
 
-      const screenPos = this.gridToScreen({
-        col: target.anchor.col,
-        row: target.anchor.row + def.height - 1
-      });
+      const targetX = originX + target.anchor.col * cellSize;
+      const targetY = originY - (target.anchor.row + def.height - 1) * cellSize;
+      const targetW = def.width * cellSize;
+      const targetH = def.height * cellSize;
 
-      const targetSvg = PuzzleCutter.generateTargetSvg(
-        def,
-        target.missingSlotIds,
-        target.placedSlotIds,
-        def.width * cellSize
-      );
-      const cacheKey = `target_${target.ingredientId}_${target.placedSlotIds.join('_')}_${def.width * cellSize}`;
-      const img = this.getOrCreateSvgImage(cacheKey, targetSvg);
+      // Target background plate
+      this.ctx.save();
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+      this.ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
+      this.ctx.shadowBlur = 8;
+      this.ctx.shadowOffsetY = 2;
+      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, 8);
+      this.ctx.fill();
+      this.ctx.restore();
 
-      if (img.complete && img.naturalWidth > 0) {
-        this.ctx.drawImage(
-          img,
-          screenPos.x,
-          screenPos.y,
-          def.width * cellSize,
-          def.height * cellSize
-        );
+      this.ctx.save();
+      this.ctx.strokeStyle = '#e2e8f0';
+      this.ctx.lineWidth = 1.5;
+      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, 8);
+      this.ctx.stroke();
+      this.ctx.restore();
+
+      // Draw each slot in target
+      const baseColor = def.color || '#ea580c';
+      for (const slot of def.slots) {
+        const isPlaced = target.placedSlotIds.includes(slot.slotId);
+        const isTutorialTarget = this.currentTutorialCue?.targetInstanceId === target.instanceId &&
+          this.currentTutorialCue?.slotId === slot.slotId;
+
+        const slotCol = target.anchor.col + slot.relativeCol;
+        const slotRow = target.anchor.row + slot.relativeRow;
+        const slotPos = this.gridToScreen({ col: slotCol, row: slotRow });
+
+        const slotBounds = {
+          x: slotPos.x + 3,
+          y: slotPos.y + 3,
+          width: cellSize - 6,
+          height: cellSize - 6
+        };
+
+        const pathCommands = PuzzleGeometry.generateSlotPathCommands(slotBounds, slot.edges);
+
+        if (isPlaced) {
+          // Completed slot: Authentic ingredient color + crisp white border
+          this.ctx.save();
+          this.ctx.fillStyle = baseColor;
+          this.drawBezierPath(pathCommands);
+          this.ctx.fill();
+
+          this.ctx.strokeStyle = '#ffffff';
+          this.ctx.lineWidth = 2.5;
+          this.ctx.stroke();
+
+          // Ingredient center icon
+          this.ctx.font = `${Math.round(cellSize * 0.4)}px sans-serif`;
+          this.ctx.textAlign = 'center';
+          this.ctx.textBaseline = 'middle';
+          this.ctx.fillText(def.emoji || '🍱', slotPos.x + cellSize / 2, slotPos.y + cellSize / 2);
+          this.ctx.restore();
+        } else {
+          // Missing slot: Recessed socket with dashed border
+          this.ctx.save();
+          this.ctx.fillStyle = isTutorialTarget ? 'rgba(254, 243, 199, 0.85)' : 'rgba(226, 232, 240, 0.65)';
+          this.drawBezierPath(pathCommands);
+          this.ctx.fill();
+
+          this.ctx.setLineDash(isTutorialTarget ? [6, 4] : [4, 4]);
+          this.ctx.strokeStyle = isTutorialTarget ? '#f59e0b' : '#94a3b8';
+          this.ctx.lineWidth = isTutorialTarget ? 3.5 : 1.8;
+          this.ctx.stroke();
+          this.ctx.setLineDash([]);
+
+          // Slot name/label
+          this.ctx.fillStyle = isTutorialTarget ? '#b45309' : '#94a3b8';
+          this.ctx.font = `bold ${Math.max(10, Math.round(cellSize * 0.22))}px sans-serif`;
+          this.ctx.textAlign = 'center';
+          this.ctx.textBaseline = 'middle';
+          this.ctx.fillText(slot.label || slot.slotId, slotPos.x + cellSize / 2, slotPos.y + cellSize / 2);
+          this.ctx.restore();
+        }
       }
+
+      // Target Header Label Badge
+      const labelText = `${def.emoji} ${def.name} (${target.placedSlotIds.length}/${def.slots.length})`;
+      this.ctx.save();
+      this.ctx.font = `bold ${Math.max(10, Math.round(cellSize * 0.22))}px sans-serif`;
+      const textW = this.ctx.measureText(labelText).width;
+      const badgeW = textW + 12;
+      const badgeH = 16;
+      const badgeX = targetX + (targetW - badgeW) / 2;
+      const badgeY = targetY - badgeH - 2;
+
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      this.ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+      this.ctx.shadowBlur = 4;
+      this.ctx.shadowOffsetY = 1;
+      this.roundRect(this.ctx, badgeX, badgeY, badgeW, badgeH, 6);
+      this.ctx.fill();
+
+      this.ctx.shadowColor = 'transparent';
+      this.ctx.strokeStyle = '#cbd5e1';
+      this.ctx.lineWidth = 1;
+      this.roundRect(this.ctx, badgeX, badgeY, badgeW, badgeH, 6);
+      this.ctx.stroke();
+
+      this.ctx.fillStyle = '#334155';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(labelText, targetX + targetW / 2, badgeY + badgeH / 2);
+      this.ctx.restore();
     }
 
-    // 2. Draw Loose Pieces (using authentic jigsaw tab/blank piece assets)
+    // 3. Loose Pieces (Resting & Wobbling)
     const now = performance.now();
     for (const piece of session.grid.getAllLoosePieces()) {
       if (this.draggingPiece && this.draggingPiece.instanceId === piece.instanceId) {
-        continue; // Render dragging piece on top layer
+        continue; // Render dragged piece on top layer
       }
 
       const def = session.ingredients[piece.ingredientId];
@@ -607,38 +819,110 @@ class WebGameApp {
         drawY = screenPos.y;
       }
 
-      const pieceAsset = PuzzleCutter.generateLoosePieceAsset(def, piece.slotId, cellSize);
-      const cacheKey = `piece_${def.id}_${piece.slotId}_${cellSize}`;
-      const img = this.getOrCreateSvgImage(cacheKey, pieceAsset.svgContent);
+      const slotDef = def.slots.find(s => s.slotId === piece.slotId);
+      const pieceBounds = {
+        x: drawX + 3,
+        y: drawY + 3,
+        width: cellSize - 6,
+        height: cellSize - 6
+      };
+      const edges = slotDef?.edges || { top: 'flat', right: 'flat', bottom: 'flat', left: 'flat' };
+      const pathCommands = PuzzleGeometry.generateSlotPathCommands(pieceBounds, edges);
 
-      if (img.complete && img.naturalWidth > 0) {
-        this.ctx.drawImage(img, drawX, drawY, cellSize, cellSize);
-      }
+      // Drop shadow
+      this.ctx.save();
+      this.ctx.shadowColor = 'rgba(0, 0, 0, 0.22)';
+      this.ctx.shadowBlur = 6;
+      this.ctx.shadowOffsetY = 3;
+
+      // Piece Fill
+      this.ctx.fillStyle = def.color || '#f97316';
+      this.drawBezierPath(pathCommands);
+      this.ctx.fill();
+      this.ctx.restore();
+
+      // Piece Outline & Crisp Interlocking Seam
+      this.ctx.save();
+      this.ctx.strokeStyle = '#ffffff';
+      this.ctx.lineWidth = 2.5;
+      this.drawBezierPath(pathCommands);
+      this.ctx.stroke();
+
+      // Inner Highlight stroke
+      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+      this.ctx.lineWidth = 1;
+      this.ctx.stroke();
+
+      // Piece Content: Emoji & Slot Tag
+      this.ctx.font = `${Math.round(cellSize * 0.36)}px sans-serif`;
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(def.emoji || '🍱', drawX + cellSize / 2, drawY + cellSize / 2 - 4);
+
+      const label = slotDef?.label || piece.slotId;
+      this.ctx.font = `bold ${Math.max(8, Math.round(cellSize * 0.17))}px sans-serif`;
+      const lblW = this.ctx.measureText(label).width;
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      this.roundRect(this.ctx, drawX + cellSize / 2 - lblW / 2 - 4, drawY + cellSize / 2 + cellSize * 0.14, lblW + 8, 13, 4);
+      this.ctx.fill();
+
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(label, drawX + cellSize / 2, drawY + cellSize / 2 + cellSize * 0.14 + 6.5);
+      this.ctx.restore();
     }
 
-    // 3. Draw Dragging Piece (with 1.10x scale, raised shadow, centered under finger)
+    // 4. Dragging Piece (Topmost Layer: 1.15x scale, floating drop shadow)
     if (this.draggingPiece) {
       const def = session.ingredients[this.draggingPiece.ingredientId];
       if (def) {
-        const pieceAsset = PuzzleCutter.generateLoosePieceAsset(def, this.draggingPiece.slotId, cellSize * 1.1);
-        const cacheKey = `piece_drag_${def.id}_${this.draggingPiece.slotId}_${cellSize * 1.1}`;
-        const img = this.getOrCreateSvgImage(cacheKey, pieceAsset.svgContent);
+        const slotDef = def.slots.find(s => s.slotId === this.draggingPiece!.slotId);
+        const dragScale = 1.15;
+        const dragSize = cellSize * dragScale;
+        const dragX = this.dragPointerPos.x - dragSize / 2;
+        const dragY = this.dragPointerPos.y - dragSize / 2;
 
-        if (img.complete && img.naturalWidth > 0) {
-          const size = cellSize * 1.1;
-          this.ctx.save();
-          this.ctx.shadowColor = 'rgba(0,0,0,0.35)';
-          this.ctx.shadowBlur = 16;
-          this.ctx.shadowOffsetY = 8;
-          this.ctx.drawImage(
-            img,
-            this.dragPointerPos.x - size / 2,
-            this.dragPointerPos.y - size / 2,
-            size,
-            size
-          );
-          this.ctx.restore();
-        }
+        const pieceBounds = {
+          x: dragX + 3,
+          y: dragY + 3,
+          width: dragSize - 6,
+          height: dragSize - 6
+        };
+        const edges = slotDef?.edges || { top: 'flat', right: 'flat', bottom: 'flat', left: 'flat' };
+        const pathCommands = PuzzleGeometry.generateSlotPathCommands(pieceBounds, edges);
+
+        this.ctx.save();
+        this.ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+        this.ctx.shadowBlur = 18;
+        this.ctx.shadowOffsetY = 10;
+
+        this.ctx.fillStyle = def.color || '#f97316';
+        this.drawBezierPath(pathCommands);
+        this.ctx.fill();
+        this.ctx.restore();
+
+        this.ctx.save();
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 3.5;
+        this.drawBezierPath(pathCommands);
+        this.ctx.stroke();
+
+        this.ctx.font = `${Math.round(dragSize * 0.38)}px sans-serif`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(def.emoji || '🍱', dragX + dragSize / 2, dragY + dragSize / 2 - 5);
+
+        const dragLabel = slotDef?.label || this.draggingPiece.slotId;
+        this.ctx.font = `bold ${Math.max(10, Math.round(dragSize * 0.18))}px sans-serif`;
+        const dragLblW = this.ctx.measureText(dragLabel).width;
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        this.roundRect(this.ctx, dragX + dragSize / 2 - dragLblW / 2 - 5, dragY + dragSize / 2 + dragSize * 0.14, dragLblW + 10, 14, 5);
+        this.ctx.fill();
+
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(dragLabel, dragX + dragSize / 2, dragY + dragSize / 2 + dragSize * 0.14 + 7);
+        this.ctx.restore();
       }
     }
   }
