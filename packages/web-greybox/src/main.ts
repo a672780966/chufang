@@ -33,8 +33,8 @@ class WebGameApp {
 
   constructor() {
     SaveSystem.setStorage(new WebStorageAdapter());
-    this.initDOM();
     this.initFlow();
+    this.initDOM();
     this.startRenderLoop();
   }
 
@@ -182,8 +182,10 @@ class WebGameApp {
   }
 
   private handlePhaseTransition(phase: string, _prev: string): void {
-    const menuView = document.getElementById('view-menu')!;
-    const gameView = document.getElementById('view-game')!;
+    if (!this.flow) return;
+    const menuView = document.getElementById('view-menu');
+    const gameView = document.getElementById('view-game');
+    if (!menuView || !gameView) return;
 
     if (phase === 'MAIN_MENU') {
       menuView.classList.remove('view-hidden');
@@ -197,6 +199,7 @@ class WebGameApp {
   }
 
   private renderMenuDayGrid(): void {
+    if (!this.flow) return;
     const grid = document.getElementById('menu-day-grid');
     if (!grid) return;
     grid.innerHTML = '';
@@ -642,6 +645,17 @@ class WebGameApp {
 }
 
 // Boot application
-window.addEventListener('DOMContentLoaded', () => {
-  new WebGameApp();
-});
+function boot(): void {
+  try {
+    new WebGameApp();
+    console.log('[WebGameApp] Game initialized successfully.');
+  } catch (err) {
+    console.error('[WebGameApp] Boot failed:', err);
+  }
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}

@@ -14,7 +14,7 @@ export interface GameFlowEvents {
 }
 
 export class GameFlowManager {
-  private _phase: GamePhase = 'BOOT';
+  private _phase: GamePhase = 'MAIN_MENU';
   private _campaignState: CampaignState;
   private _session: GameSession | null = null;
   private _selectedDay: number = 1;
@@ -23,7 +23,6 @@ export class GameFlowManager {
   constructor(events: GameFlowEvents = {}) {
     this._events = events;
     this._campaignState = SaveSystem.loadCampaignState();
-    this.transitionTo('MAIN_MENU');
   }
 
   get phase(): GamePhase {
