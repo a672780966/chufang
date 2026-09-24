@@ -14,7 +14,7 @@ export const DEFAULT_BOARD_PROFILE: BoardProfile = {
   id: 'standard_8x12',
   columns: 8,
   rows: 12,
-  spawnBufferRows: 3 // Rows 12, 13, 14 reserved for top Spawn Zone
+  spawnBufferRows: 4 // Rows 12, 13, 14, 15 reserved for top Spawn Zone to accommodate Complex ingredients
 };
 
 export type ReleaseCategory = 'early' | 'normal' | 'closure';
@@ -37,11 +37,26 @@ export interface PieceSlotDefinition {
   edges: JigsawEdges;
 }
 
+export type IngredientDifficulty = 'Simple' | 'Normal' | 'Complex';
+
+export interface VisualPalette {
+  primary: string;
+  secondary: string;
+  accent: string;
+  stroke: string;
+  shadow: string;
+}
+
 export interface IngredientDefinition {
   id: string;
   name: string;
+  displayName?: string;
   emoji: string;
   color: string;
+  sourceAsset?: string;
+  difficultyClass?: IngredientDifficulty;
+  unlockDay?: number;
+  visualPalette?: VisualPalette;
   /** Bounding box width and height */
   width: number;
   height: number;
@@ -220,4 +235,36 @@ export interface GameStats {
   cascadeEventsCount: number;
   totalSettlingSteps: number;
   deadlockChecks: number;
+}
+
+export type GamePhase =
+  | 'BOOT'
+  | 'MAIN_MENU'
+  | 'DAY_INTRO'
+  | 'PLAYING'
+  | 'RESOLVING'
+  | 'DAY_CLEAR'
+  | 'DAY_FAILED'
+  | 'PAUSED';
+
+export interface DayCompletionRecord {
+  clearedAt: number;
+  bestRevenue: number;
+  bestCascade: number;
+  stars: number;
+  piecesPlaced: number;
+  ordersCompleted: number;
+}
+
+export interface PlayerSettings {
+  soundEnabled: boolean;
+  musicEnabled: boolean;
+  hapticsEnabled: boolean;
+}
+
+export interface CampaignState {
+  highestUnlockedDay: number;
+  completedDays: Record<number, DayCompletionRecord>;
+  tutorialFlags: Record<string, boolean>;
+  settings: PlayerSettings;
 }

@@ -101,6 +101,18 @@ export class GameSession {
     return this._isGameOver;
   }
 
+  get revenue(): number {
+    return this.orderSystem.totalRevenue;
+  }
+
+  get ingredients(): Record<string, IngredientDefinition> {
+    return this._ingredients;
+  }
+
+  get recipes(): Record<string, RecipeDefinition> {
+    return this._recipes;
+  }
+
   /**
    * Initializes starting targets and loose pieces on the board.
    * All objects strictly enter via the top Spawn Zone and settle downward via DiscreteGravity.

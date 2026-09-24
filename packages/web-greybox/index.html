@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>食材拼图 × 外卖营业 V1.0 灰盒</title>
+  <title>食材拼图 × 外卖营业 - V1.0</title>
   <style>
     * {
       box-sizing: border-box;
@@ -14,8 +14,8 @@
       touch-action: none;
     }
     body {
-      background-color: #1e1e24;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #12131a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -29,30 +29,168 @@
       max-width: 480px;
       height: 100vh;
       max-height: 960px;
-      background: #f8f6f0;
+      background: #faf8f5;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-      border-radius: 12px;
+      box-shadow: 0 16px 50px rgba(0,0,0,0.6);
+      border-radius: 16px;
       overflow: hidden;
     }
 
-    /* --- Receipt Printer Header --- */
+    /* Views */
+    .view-screen {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      position: absolute;
+      top: 0;
+      left: 0;
+      background: #faf8f5;
+      transition: opacity 0.25s ease;
+    }
+    .view-hidden {
+      display: none !important;
+    }
+
+    /* --- Main Menu View --- */
+    #view-menu {
+      align-items: center;
+      justify-content: space-between;
+      padding: 40px 24px 28px;
+      background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+    }
+    .menu-header {
+      text-align: center;
+      margin-top: 16px;
+    }
+    .menu-logo-badge {
+      display: inline-block;
+      font-size: 54px;
+      margin-bottom: 8px;
+      filter: drop-shadow(0 6px 12px rgba(234, 88, 12, 0.25));
+    }
+    .menu-title {
+      font-size: 28px;
+      font-weight: 800;
+      color: #7c2d12;
+      letter-spacing: 1px;
+    }
+    .menu-subtitle {
+      font-size: 14px;
+      color: #9a3412;
+      margin-top: 6px;
+      font-weight: 500;
+    }
+    .menu-actions {
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .btn-main {
+      background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+      color: #fff;
+      border: none;
+      padding: 16px;
+      border-radius: 28px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(194, 65, 12, 0.35);
+      transition: transform 0.1s ease, filter 0.1s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-main:active {
+      transform: scale(0.97);
+      filter: brightness(0.92);
+    }
+    .btn-secondary {
+      background: #ffffff;
+      color: #9a3412;
+      border: 2px solid #fdba74;
+      padding: 12px;
+      border-radius: 24px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    /* Day Select Section */
+    .day-select-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(8px);
+      border-radius: 16px;
+      padding: 16px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+    }
+    .day-select-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #9a3412;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .day-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .day-tile {
+      background: #fff;
+      border: 1.5px solid #fed7aa;
+      border-radius: 10px;
+      padding: 8px 4px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: #7c2d12;
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.1s ease;
+    }
+    .day-tile:active {
+      transform: scale(0.94);
+    }
+    .day-tile.locked {
+      background: #f3f4f6;
+      border-color: #e5e7eb;
+      color: #9ca3af;
+      cursor: not-allowed;
+    }
+    .day-tile.completed {
+      border-color: #22c55e;
+      background: #f0fdf4;
+      color: #166534;
+    }
+
+    /* --- Game HUD & Printer Header --- */
     #printer-header {
-      background: #2b2d42;
-      padding: 8px 12px 4px;
+      background: #1e293b;
+      padding: 10px 14px 6px;
       color: #fff;
       display: flex;
       flex-direction: column;
       position: relative;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
       z-index: 10;
     }
     .printer-slit {
-      background: #111;
-      height: 5px;
-      border-radius: 3px;
-      margin-bottom: 4px;
+      background: #0f172a;
+      height: 4px;
+      border-radius: 2px;
+      margin-bottom: 6px;
     }
     .printer-controls {
       display: flex;
@@ -60,37 +198,46 @@
       align-items: center;
       font-size: 13px;
     }
+    .day-pill {
+      background: rgba(255,255,255,0.15);
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
     .revenue-badge {
-      font-weight: bold;
-      color: #ffd166;
+      font-weight: 800;
+      color: #facc15;
+      font-size: 14px;
     }
     .goal-progress-bar {
       width: 100%;
-      height: 4px;
+      height: 6px;
       background: rgba(255,255,255,0.2);
-      border-radius: 2px;
-      margin-top: 4px;
+      border-radius: 3px;
+      margin-top: 6px;
       overflow: hidden;
     }
     .goal-progress-fill {
       height: 100%;
       width: 0%;
-      background: #06d6a0;
-      transition: width 0.3s ease;
+      background: #10b981;
+      border-radius: 3px;
+      transition: width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     /* Hanging Receipt Paper */
     #receipt-paper {
       background: #ffffff;
       padding: 8px 14px;
-      margin: 0 12px;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+      margin: 0 14px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
       border-bottom-left-radius: 4px;
       border-bottom-right-radius: 4px;
       position: relative;
       font-size: 12px;
       z-index: 9;
-      transition: transform 0.25s ease, opacity 0.25s ease;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
     }
     #receipt-paper::after {
       content: "";
@@ -99,87 +246,100 @@
       left: 0;
       width: 100%;
       height: 6px;
-      background: radial-gradient(circle, transparent, transparent 50%, #ffffff 50%, #ffffff 100%);
-      background-size: 12px 12px;
+      background: radial-gradient(circle, transparent 4px, #fff 5px);
+      background-size: 10px 10px;
     }
     .receipt-top {
       display: flex;
       justify-content: space-between;
-      font-weight: bold;
-      border-bottom: 1px dashed #ccc;
+      align-items: center;
+      font-weight: 800;
+      font-size: 14px;
+      border-bottom: 1px dashed #cbd5e1;
       padding-bottom: 4px;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
     }
     .receipt-checklist {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: 4px 10px;
       font-size: 11px;
     }
-    .check-item {
+    .receipt-item {
       display: flex;
       align-items: center;
       gap: 3px;
-      padding: 2px 6px;
-      border-radius: 4px;
-      background: #f0f0f0;
+      color: #64748b;
     }
-    .check-item.done {
-      background: #e8f5e9;
-      color: #2e7d32;
-      font-weight: bold;
+    .receipt-item.satisfied {
+      color: #0f172a;
+      font-weight: 600;
+    }
+    .receipt-item.satisfied::before {
+      content: "✅";
+      font-size: 10px;
+    }
+    .receipt-item.unmet::before {
+      content: "⬜";
+      font-size: 10px;
     }
     .next-order-hint {
-      margin-top: 4px;
+      margin-top: 6px;
+      padding-top: 4px;
+      border-top: 1px dashed #e2e8f0;
       font-size: 11px;
-      color: #888;
+      color: #64748b;
       display: flex;
       align-items: center;
       gap: 4px;
+      font-weight: 600;
+    }
+    .next-order-tag {
+      background: #f1f5f9;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 10px;
+      color: #475569;
     }
 
-    /* Cascade Banner */
-    #cascade-banner {
-      position: absolute;
-      top: 130px;
-      left: 50%;
-      transform: translateX(-50%) scale(0);
-      background: #ef476f;
-      color: #fff;
-      padding: 6px 18px;
-      border-radius: 20px;
-      font-weight: 900;
-      font-size: 16px;
-      box-shadow: 0 4px 15px rgba(239,71,111,0.5);
-      z-index: 30;
-      pointer-events: none;
-      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-    #cascade-banner.show {
-      transform: translateX(-50%) scale(1.1);
-    }
-
-    /* Warning banner */
+    /* Banners & Cues */
     #danger-banner {
-      display: none;
-      background: #ffd166;
-      color: #8d4f00;
-      padding: 4px 8px;
-      text-align: center;
+      background: #ea580c;
+      color: #fff;
       font-size: 11px;
       font-weight: bold;
-      z-index: 15;
+      text-align: center;
+      padding: 3px;
+      display: none;
+      z-index: 8;
+      animation: pulse 1s infinite alternate;
+    }
+    #cascade-banner {
+      background: linear-gradient(90deg, #ec4899, #f59e0b);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      padding: 4px;
+      display: none;
+      z-index: 8;
+      box-shadow: 0 4px 10px rgba(236, 72, 153, 0.3);
+    }
+    @keyframes pulse {
+      from { opacity: 0.85; }
+      to { opacity: 1; filter: brightness(1.2); }
     }
 
-    /* --- Core Board Area --- */
+    /* Core Board Canvas */
     #board-wrapper {
       flex: 1;
       position: relative;
-      margin: 6px;
-      border-radius: 8px;
-      background: #ede8dc;
+      margin: 6px 12px;
+      background: #ffffff;
+      border-radius: 12px;
+      border: 2px solid #e2e8f0;
       overflow: hidden;
-      box-shadow: inset 0 2px 8px rgba(0,0,0,0.06);
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.04);
     }
     #board-canvas {
       position: absolute;
@@ -187,16 +347,33 @@
       left: 0;
       width: 100%;
       height: 100%;
-      display: block;
     }
 
-    /* --- Bottom Bar --- */
+    /* Tutorial Visual Indicator */
+    #tutorial-indicator {
+      position: absolute;
+      pointer-events: none;
+      z-index: 20;
+      display: none;
+    }
+    .tutorial-finger {
+      font-size: 32px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+      animation: float-guide 1.2s infinite ease-in-out;
+    }
+    @keyframes float-guide {
+      0% { transform: translate(0, 0); }
+      50% { transform: translate(8px, -14px); }
+      100% { transform: translate(0, 0); }
+    }
+
+    /* Bottom Bar */
     #bottom-bar {
       height: 48px;
-      background: #2b2d42;
+      background: #1e293b;
       display: flex;
-      align-items: center;
       justify-content: space-between;
+      align-items: center;
       padding: 0 12px;
       color: #fff;
       font-size: 12px;
@@ -224,22 +401,23 @@
       border: none;
       color: #fff;
       padding: 4px 8px;
-      border-radius: 4px;
+      border-radius: 6px;
       cursor: pointer;
       font-size: 12px;
+      font-weight: 600;
     }
     .sys-btn:active {
       background: rgba(255,255,255,0.4);
     }
 
-    /* Overlay Modals */
+    /* Modals */
     .modal-overlay {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.65);
       display: flex;
       justify-content: center;
       align-items: center;
@@ -249,96 +427,178 @@
     .modal-card {
       background: #fff;
       padding: 24px;
-      border-radius: 16px;
+      border-radius: 20px;
       text-align: center;
       max-width: 320px;
-      width: 85%;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      width: 86%;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.3);
     }
     .modal-card h2 {
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       font-size: 22px;
+      color: #0f172a;
     }
     .modal-card p {
       font-size: 14px;
-      color: #666;
+      color: #64748b;
       margin-bottom: 16px;
       line-height: 1.5;
     }
     .action-btn {
-      background: #06d6a0;
+      background: #ea580c;
       color: #fff;
       border: none;
-      padding: 10px 24px;
-      border-radius: 20px;
+      padding: 12px 28px;
+      border-radius: 24px;
       font-size: 15px;
       font-weight: bold;
       cursor: pointer;
+      box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35);
+      width: 100%;
+    }
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 14px;
+      font-weight: 600;
+      color: #334155;
     }
   </style>
 </head>
 <body>
   <div id="game-container">
-    <!-- Receipt Printer & Header -->
-    <div id="printer-header">
-      <div class="printer-slit"></div>
-      <div class="printer-controls">
-        <span id="day-title">DAY 01</span>
-        <span class="revenue-badge" id="revenue-display">¥0 / ¥400</span>
+    <!-- VIEW: MAIN MENU -->
+    <div class="view-screen" id="view-menu">
+      <div class="menu-header">
+        <div class="menu-logo-badge">🍱</div>
+        <h1 class="menu-title">食材拼图 × 外卖营业</h1>
+        <p class="menu-subtitle">Jigsaw Drop × Food Takeaway</p>
       </div>
-      <div class="goal-progress-bar">
-        <div class="goal-progress-fill" id="goal-progress-fill"></div>
+
+      <div class="day-select-card">
+        <div class="day-select-title">选择营业日 (DAY 1 ~ 12)</div>
+        <div class="day-grid" id="menu-day-grid">
+          <!-- Populated dynamically: Day 1 ~ 12 tiles -->
+        </div>
+      </div>
+
+      <div class="menu-actions">
+        <button class="btn-main" id="btn-menu-continue">
+          <span>🚀</span>
+          <span id="btn-continue-label">开始营业 (DAY 1)</span>
+        </button>
+        <button class="btn-secondary" id="btn-menu-settings">
+          <span>⚙️ 游戏设置</span>
+        </button>
       </div>
     </div>
 
-    <!-- Hanging Receipt Paper -->
-    <div id="receipt-paper">
-      <div class="receipt-top">
-        <span id="order-id-dish">#0832 田园沙拉</span>
-        <span id="order-revenue" style="color: #e63946;">¥70</span>
+    <!-- VIEW: GAME PLAYING -->
+    <div class="view-screen view-hidden" id="view-game">
+      <!-- Receipt Printer & Header -->
+      <div id="printer-header">
+        <div class="printer-slit"></div>
+        <div class="printer-controls">
+          <span class="day-pill" id="day-title">DAY 01</span>
+          <span class="revenue-badge" id="revenue-display">¥0 / ¥200</span>
+        </div>
+        <div class="goal-progress-bar">
+          <div class="goal-progress-fill" id="goal-progress-fill"></div>
+        </div>
       </div>
-      <div class="receipt-checklist" id="receipt-checklist">
-        <!-- Checklist items populated dynamically -->
+
+      <!-- Hanging Receipt Paper -->
+      <div id="receipt-paper">
+        <div class="receipt-top">
+          <span id="order-id-dish">#0832 田园沙拉</span>
+          <span id="order-revenue" style="color: #e63946;">¥70</span>
+        </div>
+        <div class="receipt-checklist" id="receipt-checklist">
+          <!-- Populated dynamically -->
+        </div>
+        <div class="next-order-hint" id="next-order-hint">
+          <span class="next-order-tag">NEXT</span>
+          <span id="next-order-label">🥗 田园沙拉</span>
+        </div>
       </div>
-      <div class="next-order-hint" id="next-order-hint">
-        下一单: 🥪 经典三明治
+
+      <div id="danger-banner">⚠️ 棋盘空间告急！请尽快拼合食材释放大块空间！</div>
+      <div id="cascade-banner">⚡ 连续出餐 ×2! 订单急速打印</div>
+
+      <!-- Core Board Canvas -->
+      <div id="board-wrapper">
+        <canvas id="board-canvas"></canvas>
+        <div id="tutorial-indicator">
+          <div class="tutorial-finger">👆</div>
+        </div>
+      </div>
+
+      <!-- Bottom Bar -->
+      <div id="bottom-bar">
+        <div class="inventory-tray" id="inventory-tray"></div>
+        <div style="display: flex; gap: 6px;">
+          <button class="sys-btn" id="btn-audio">🔊</button>
+          <button class="sys-btn" id="btn-pause">暂停</button>
+        </div>
       </div>
     </div>
 
-    <div id="danger-banner">⚠️ 棋盘空间告急！请尽快拼合食材腾出空间！</div>
-    <div id="cascade-banner">⚡ CASCADE x2! +10%</div>
-
-    <!-- 88% Core Board Canvas -->
-    <div id="board-wrapper">
-      <canvas id="board-canvas"></canvas>
-    </div>
-
-    <!-- Bottom Bar (PrepInventory + Controls) -->
-    <div id="bottom-bar">
-      <div class="inventory-tray" id="inventory-tray">
-        <!-- e.g. 🍞 x1, 🥚 x2 -->
-      </div>
-      <div style="display: flex; gap: 6px;">
-        <button class="sys-btn" id="btn-audio">🔊</button>
-        <button class="sys-btn" id="btn-restart">重来</button>
-      </div>
-    </div>
-
-    <!-- Victory Modal -->
+    <!-- Victory Modal (Day Complete) -->
     <div class="modal-overlay" id="modal-victory">
       <div class="modal-card">
-        <h2>🎉 营业目标达成！</h2>
-        <p id="victory-summary">今日营业额达标，订单全部按时交付！</p>
-        <button class="action-btn" id="btn-next-day">进入下一天</button>
+        <h2>🎉 DAY COMPLETE!</h2>
+        <p id="victory-summary">营业额达标！外卖订单全部准时送达。</p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button class="action-btn" id="btn-next-day">进入下一天 ➔</button>
+          <button class="btn-secondary" id="btn-victory-menu" style="width: 100%;">返回主菜单</button>
+        </div>
       </div>
     </div>
 
-    <!-- Game Over Modal -->
+    <!-- Game Over Modal (Board Blocked) -->
     <div class="modal-overlay" id="modal-failed">
       <div class="modal-card">
-        <h2 style="color: #e63946;">🚫 棋盘阻塞</h2>
-        <p>棋盘没有空间容纳新碎片，且无合法拼图解可腾出空间。</p>
-        <button class="action-btn" id="btn-retry" style="background: #e63946;">重新开始</button>
+        <h2 style="color: #dc2626;">🚫 棋盘阻塞</h2>
+        <p>顶部生成区已满，且场上散落碎片无法形成有效消除。</p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button class="action-btn" id="btn-retry" style="background: #dc2626;">重新挑战</button>
+          <button class="btn-secondary" id="btn-failed-menu" style="width: 100%;">返回主菜单</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="modal-settings">
+      <div class="modal-card">
+        <h2>⚙️ 游戏设置</h2>
+        <div class="setting-row">
+          <span>🎵 背景音乐</span>
+          <button class="sys-btn" id="btn-toggle-bgm" style="background: #ea580c; color: #fff;">开启</button>
+        </div>
+        <div class="setting-row">
+          <span>🔊 游戏音效</span>
+          <button class="sys-btn" id="btn-toggle-sfx" style="background: #ea580c; color: #fff;">开启</button>
+        </div>
+        <div class="setting-row" style="margin-top: 10px;">
+          <span>🔄 游戏进度</span>
+          <button class="sys-btn" id="btn-reset-save" style="background: #64748b; color: #fff;">重置存档</button>
+        </div>
+        <button class="action-btn" id="btn-close-settings" style="margin-top: 16px;">完成</button>
+      </div>
+    </div>
+
+    <!-- Pause Modal -->
+    <div class="modal-overlay" id="modal-pause">
+      <div class="modal-card">
+        <h2>⏸️ 游戏暂停</h2>
+        <p>厨房暂停接单，进度已自动保留。</p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button class="action-btn" id="btn-resume">继续营业</button>
+          <button class="btn-secondary" id="btn-pause-menu" style="width: 100%;">返回主菜单</button>
+        </div>
       </div>
     </div>
   </div>

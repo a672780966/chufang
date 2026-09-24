@@ -1,35 +1,57 @@
 import {
+  GameFlowManager,
   GameSession,
+  SaveSystem,
+  TutorialDirector,
+  AudioDirector,
   DEFAULT_DAYS,
   DEFAULT_INGREDIENTS,
+  DEFAULT_RECIPES,
+  PuzzleCutter,
   GridCoord,
   IngredientTarget,
   LoosePiece
 } from '../../game-core/src/index.js';
-import { AudioDirector } from './AudioDirector.js';
 
-class WebGreyboxApp {
-  private session!: GameSession;
-  private audio = new AudioDirector();
-  private currentDayIndex: number = 0;
+class WebGameApp {
+  private flow!: GameFlowManager;
   private canvas!: HTMLCanvasElement;
   private ctx!: CanvasRenderingContext2D;
 
-  // Dragging state
+  // Render & Touch State
   private draggingPiece: LoosePiece | null = null;
   private dragPointerPos: { x: number; y: number } = { x: 0, y: 0 };
   private dragOriginCoord: GridCoord | null = null;
-
-  // Animations & Visual effects
+  private wobblePieces = new Map<string, { startTime: number; startX: number; startY: number }>();
   private pieceVisualPositions = new Map<string, { x: number; y: number }>();
   private targetVisualAnchors = new Map<string, { x: number; y: number }>();
-  private activeHoverSlot: { targetId: string; slotId: string } | null = null;
+
+  // SVG Image Cache for 60fps canvas blitting
+  private svgImageCache = new Map<string, HTMLImageElement>();
 
   constructor() {
     this.initDOM();
-    this.initSession();
-    this.initEvents();
+    this.initFlow();
     this.startRenderLoop();
+  }
+
+  private initFlow(): void {
+    this.flow = new GameFlowManager({
+      onPhaseChanged: (phase, prev) => {
+        this.handlePhaseTransition(phase, prev);
+      },
+      onTutorialCue: (cue) => {
+        this.updateTutorialCue(cue);
+      },
+      onDayCompleted: (record) => {
+        this.showDayCompleteModal(record);
+      },
+      onDayFailed: (reason) => {
+        this.showDayFailedModal(reason);
+      }
+    });
+
+    this.renderMenuDayGrid();
   }
 
   private initDOM(): void {
@@ -38,31 +60,101 @@ class WebGreyboxApp {
     this.resizeCanvas();
     window.addEventListener('resize', () => this.resizeCanvas());
 
-    // Controls
+    // Navigation & Menu Buttons
+    document.getElementById('btn-menu-continue')?.addEventListener('click', () => {
+      const highest = this.flow.campaignState.highestUnlockedDay;
+      this.startDay(highest);
+    });
+
+    document.getElementById('btn-menu-settings')?.addEventListener('click', () => {
+      (document.getElementById('modal-settings') as HTMLElement).style.display = 'flex';
+    });
+
+    document.getElementById('btn-close-settings')?.addEventListener('click', () => {
+      (document.getElementById('modal-settings') as HTMLElement).style.display = 'none';
+    });
+
+    document.getElementById('btn-toggle-bgm')?.addEventListener('click', (e) => {
+      const btn = e.target as HTMLButtonElement;
+      const cur = this.flow.campaignState.settings.musicEnabled;
+      SaveSystem.updateSettings({ musicEnabled: !cur });
+      AudioDirector.setBgmEnabled(!cur);
+      btn.textContent = !cur ? '开启' : '关闭';
+      btn.style.background = !cur ? '#ea580c' : '#64748b';
+    });
+
+    document.getElementById('btn-toggle-sfx')?.addEventListener('click', (e) => {
+      const btn = e.target as HTMLButtonElement;
+      const cur = this.flow.campaignState.settings.sfxEnabled;
+      SaveSystem.updateSettings({ sfxEnabled: !cur });
+      AudioDirector.setSfxEnabled(!cur);
+      btn.textContent = !cur ? '开启' : '关闭';
+      btn.style.background = !cur ? '#ea580c' : '#64748b';
+    });
+
+    document.getElementById('btn-reset-save')?.addEventListener('click', () => {
+      if (confirm('确认重置全部通关进度吗？')) {
+        SaveSystem.resetCampaignState();
+        this.renderMenuDayGrid();
+        (document.getElementById('modal-settings') as HTMLElement).style.display = 'none';
+      }
+    });
+
+    // In-Game Controls
     document.getElementById('btn-audio')?.addEventListener('click', (e) => {
       const btn = e.target as HTMLButtonElement;
-      const isMuted = this.audio.toggleMute();
-      btn.textContent = isMuted ? '🔇' : '🔊';
+      const cur = this.flow.campaignState.settings.sfxEnabled;
+      SaveSystem.updateSettings({ sfxEnabled: !cur, musicEnabled: !cur });
+      AudioDirector.setSfxEnabled(!cur);
+      AudioDirector.setBgmEnabled(!cur);
+      btn.textContent = !cur ? '🔊' : '🔇';
     });
 
-    document.getElementById('btn-restart')?.addEventListener('click', () => {
-      this.initSession();
+    document.getElementById('btn-pause')?.addEventListener('click', () => {
+      this.flow.pauseGame();
+      (document.getElementById('modal-pause') as HTMLElement).style.display = 'flex';
     });
 
-    document.getElementById('btn-retry')?.addEventListener('click', () => {
+    document.getElementById('btn-resume')?.addEventListener('click', () => {
+      (document.getElementById('modal-pause') as HTMLElement).style.display = 'none';
+      this.flow.resumeGame();
+    });
+
+    document.getElementById('btn-pause-menu')?.addEventListener('click', () => {
+      (document.getElementById('modal-pause') as HTMLElement).style.display = 'none';
+      this.flow.enterMainMenu();
+    });
+
+    document.getElementById('btn-victory-menu')?.addEventListener('click', () => {
+      (document.getElementById('modal-victory') as HTMLElement).style.display = 'none';
+      this.flow.enterMainMenu();
+    });
+
+    document.getElementById('btn-failed-menu')?.addEventListener('click', () => {
       (document.getElementById('modal-failed') as HTMLElement).style.display = 'none';
-      this.initSession();
+      this.flow.enterMainMenu();
     });
 
     document.getElementById('btn-next-day')?.addEventListener('click', () => {
       (document.getElementById('modal-victory') as HTMLElement).style.display = 'none';
-      this.currentDayIndex = (this.currentDayIndex + 1) % DEFAULT_DAYS.length;
-      this.initSession();
+      this.flow.advanceToNextDay();
     });
+
+    document.getElementById('btn-retry')?.addEventListener('click', () => {
+      (document.getElementById('modal-failed') as HTMLElement).style.display = 'none';
+      this.flow.restartCurrentDay();
+    });
+
+    // Pointer Interaction on Board Canvas
+    this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+    this.canvas.addEventListener('pointermove', (e) => this.onPointerMove(e));
+    this.canvas.addEventListener('pointerup', (e) => this.onPointerUp(e));
+    this.canvas.addEventListener('pointercancel', (e) => this.onPointerUp(e));
   }
 
   private resizeCanvas(): void {
-    const wrapper = document.getElementById('board-wrapper')!;
+    const wrapper = document.getElementById('board-wrapper');
+    if (!wrapper) return;
     const rect = wrapper.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     this.canvas.width = rect.width * dpr;
@@ -71,275 +163,337 @@ class WebGreyboxApp {
     this.ctx.scale(dpr, dpr);
   }
 
-  private initSession(): void {
-    const dayConfig = DEFAULT_DAYS[this.currentDayIndex];
-    const seed = Date.now();
-    this.session = new GameSession(dayConfig, seed);
+  private handlePhaseTransition(phase: string, _prev: string): void {
+    const menuView = document.getElementById('view-menu')!;
+    const gameView = document.getElementById('view-game')!;
 
-    // Audio initial unlock
-    this.audio.playReceiptPrint();
+    if (phase === 'MAIN_MENU') {
+      menuView.classList.remove('view-hidden');
+      gameView.classList.add('view-hidden');
+      this.renderMenuDayGrid();
+    } else {
+      menuView.classList.add('view-hidden');
+      gameView.classList.remove('view-hidden');
+      this.updateHUD();
+    }
+  }
 
+  private renderMenuDayGrid(): void {
+    const grid = document.getElementById('menu-day-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const highest = this.flow.campaignState.highestUnlockedDay;
+    const continueLabel = document.getElementById('btn-continue-label');
+    if (continueLabel) {
+      continueLabel.textContent = `开始营业 (DAY ${highest})`;
+    }
+
+    for (let day = 1; day <= 12; day++) {
+      const tile = document.createElement('div');
+      tile.className = 'day-tile';
+      const isCompleted = !!this.flow.campaignState.completedDays[day];
+      const isLocked = day > highest;
+
+      if (isCompleted) {
+        tile.classList.add('completed');
+        tile.innerHTML = `<div>D${day}</div><div style="font-size:10px;">✓</div>`;
+      } else if (isLocked) {
+        tile.classList.add('locked');
+        tile.innerHTML = `<div>D${day}</div><div style="font-size:10px;">🔒</div>`;
+      } else {
+        tile.innerHTML = `<div>D${day}</div><div style="font-size:10px; color:#ea580c;">GO</div>`;
+      }
+
+      if (!isLocked) {
+        tile.addEventListener('click', () => {
+          this.startDay(day);
+        });
+      }
+
+      grid.appendChild(tile);
+    }
+  }
+
+  private startDay(dayNumber: number): void {
     this.pieceVisualPositions.clear();
     this.targetVisualAnchors.clear();
     this.draggingPiece = null;
+    this.wobblePieces.clear();
 
-    this.bindSessionEvents();
+    const session = this.flow.startDay(dayNumber);
+
+    // Bind session audio cues
+    session.events.on('PIECE_PLACED', () => AudioDirector.playSnapPiece());
+    session.events.on('INGREDIENT_COMPLETED', (d: any) => AudioDirector.playIngredientComplete(d.target?.ingredientId));
+    session.events.on('CASCADE_TRIGGERED', (d: any) => AudioDirector.playCascade(d.chainLength));
+    session.events.on('ORDER_FULFILLED', () => {
+      AudioDirector.playOrderComplete();
+      AudioDirector.playRevenueGain();
+    });
+    session.events.on('BOARD_SETTLED', () => AudioDirector.playBoardSettling());
+    session.events.on('BOARD_DANGER', () => AudioDirector.playDanger());
+    session.events.on('DAY_CLEARED', () => AudioDirector.playDayClear());
+
+    AudioDirector.playReceiptPrint();
+    if (this.flow.campaignState.settings.musicEnabled) {
+      AudioDirector.startBgm();
+    }
+
     this.updateHUD();
   }
 
-  private bindSessionEvents(): void {
-    const events = this.session.events;
-
-    events.on('PIECE_SPAWNED', (p) => {
-      // Spawn animation from top
-      const screenPos = this.gridToScreen(p.fromCoord);
-      this.pieceVisualPositions.set(p.piece.instanceId, { ...screenPos });
-      this.updateHUD();
-    });
-
-    events.on('PIECE_PLACED', () => {
-      this.audio.playPieceSnap();
-      this.updateHUD();
-    });
-
-    events.on('INGREDIENT_COMPLETED', () => {
-      this.audio.playIngredientComplete();
-      this.updateHUD();
-    });
-
-    events.on('ORDER_CREATED', () => {
-      this.audio.playReceiptPrint();
-      this.updateHUD();
-    });
-
-    events.on('ORDER_COMPLETED', () => {
-      this.audio.playReceiptTear();
-      this.updateHUD();
-    });
-
-    events.on('CASCADE_STEP', (payload) => {
-      this.audio.playCascadeDing(payload.chainIndex);
-      this.showCascadeBanner(payload.chainIndex, payload.multiplier);
-      this.updateHUD();
-    });
-
-    events.on('BOARD_DANGER', (payload) => {
-      const banner = document.getElementById('danger-banner')!;
-      banner.style.display = 'block';
-      banner.textContent = `⚠️ 棋盘空间告急！顶部占用 ${(payload.topRowOccupancy * 100).toFixed(0)}%！`;
-    });
-
-    events.on('DAY_CLEARED', (payload) => {
-      this.audio.playDayClear();
-      const modal = document.getElementById('modal-victory')!;
-      const summary = document.getElementById('victory-summary')!;
-      summary.innerHTML = `DAY ${payload.dayNumber} 胜利达成！<br>最终营业额: <b>¥${payload.totalRevenue}</b> / 目标 ¥${payload.businessGoal}<br>完成订单: <b>${payload.ordersCompleted}</b> 单<br>最大连锁: <b>x${this.session.stats.maxCascadeChain}</b>`;
-      modal.style.display = 'flex';
-    });
-
-    events.on('DAY_FAILED', (payload) => {
-      const modal = document.getElementById('modal-failed')!;
-      modal.style.display = 'flex';
-    });
-  }
-
-  private showCascadeBanner(chainIndex: number, multiplier: number): void {
-    const banner = document.getElementById('cascade-banner')!;
-    banner.textContent = `⚡ CASCADE x${chainIndex}! +${Math.round((multiplier - 1) * 100)}% 收入`;
-    banner.classList.add('show');
-    setTimeout(() => {
-      banner.classList.remove('show');
-    }, 1200);
-  }
-
   private updateHUD(): void {
-    const state = this.session.getState();
+    const session = this.flow.session;
+    if (!session) return;
 
-    // Day title & revenue
-    document.getElementById('day-title')!.textContent = `DAY 0${state.dayNumber}`;
-    document.getElementById('revenue-display')!.textContent = `¥${state.currentRevenue} / ¥${state.businessGoal}`;
+    // Header Day & Revenue
+    const dayTitle = document.getElementById('day-title');
+    if (dayTitle) dayTitle.textContent = `DAY ${String(session.dayConfig.dayNumber).padStart(2, '0')}`;
 
-    // Progress bar
-    const pct = Math.min(100, Math.round((state.currentRevenue / state.businessGoal) * 100));
-    document.getElementById('goal-progress-fill')!.style.width = `${pct}%`;
+    const revDisplay = document.getElementById('revenue-display');
+    if (revDisplay) revDisplay.textContent = `¥${session.revenue} / ¥${session.dayConfig.businessGoal}`;
 
-    // Order receipt
-    const currentOrder = state.currentOrder;
-    if (currentOrder) {
-      document.getElementById('order-id-dish')!.textContent = `${currentOrder.orderId} ${currentOrder.emoji} ${currentOrder.dishName}`;
-      document.getElementById('order-revenue')!.textContent = `¥${currentOrder.baseRevenue}`;
+    const fill = document.getElementById('goal-progress-fill');
+    if (fill) {
+      const pct = Math.min(100, (session.revenue / session.dayConfig.businessGoal) * 100);
+      fill.style.width = `${pct}%`;
+    }
 
-      const checklistEl = document.getElementById('receipt-checklist')!;
-      checklistEl.innerHTML = '';
-      for (const item of currentOrder.items) {
-        const def = DEFAULT_INGREDIENTS[item.ingredientId];
-        const isDone = item.reserved >= item.needed;
-        const div = document.createElement('div');
-        div.className = `check-item ${isDone ? 'done' : ''}`;
-        div.textContent = `${isDone ? '✓' : '□'} ${def ? def.name : item.ingredientId}`;
-        checklistEl.appendChild(div);
+    // Receipt Order Info
+    const order = session.orderSystem.currentOrder;
+    const orderIdDish = document.getElementById('order-id-dish');
+    const orderRevenue = document.getElementById('order-revenue');
+    const checklist = document.getElementById('receipt-checklist');
+
+    if (order) {
+      if (orderIdDish) orderIdDish.textContent = `${order.orderId} ${order.emoji} ${order.dishName}`;
+      if (orderRevenue) orderRevenue.textContent = `¥${order.baseRevenue}`;
+
+      if (checklist) {
+        checklist.innerHTML = '';
+        for (const item of order.items) {
+          const ing = DEFAULT_INGREDIENTS[item.ingredientId];
+          const div = document.createElement('div');
+          const isSatisfied = item.reserved >= item.needed;
+          div.className = `receipt-item ${isSatisfied ? 'satisfied' : 'unmet'}`;
+          div.textContent = `${ing?.name || item.ingredientId}`;
+          checklist.appendChild(div);
+        }
       }
     }
 
-    // Next order hint
-    const nextHint = state.nextOrderPreview;
-    const nextHintEl = document.getElementById('next-order-hint')!;
-    if (nextHint && nextHint.mode !== 'NONE' && nextHint.dishName) {
-      nextHintEl.textContent = `下一单: ${nextHint.emoji || '🍽️'} ${nextHint.dishName}`;
-    } else {
-      nextHintEl.textContent = '下一单: 准备中...';
+    // Next Order Hint (Dish only, unlocked Day 7+)
+    const nextHint = document.getElementById('next-order-hint');
+    const nextLabel = document.getElementById('next-order-label');
+    const nextPreview = session.orderSystem.nextOrderPreview;
+
+    if (nextHint && nextLabel) {
+      if (session.dayConfig.dayNumber >= 7 && nextPreview.dishId) {
+        nextHint.style.display = 'flex';
+        nextLabel.textContent = `${nextPreview.emoji} ${nextPreview.dishName}`;
+      } else {
+        nextHint.style.display = 'none';
+      }
     }
 
-    // Inventory tray chips
-    const trayEl = document.getElementById('inventory-tray')!;
-    trayEl.innerHTML = '';
-    const invEntries = Object.entries(state.inventory);
-    if (invEntries.length === 0) {
-      trayEl.innerHTML = '<span style="color:#888; font-size:11px;">备料库存: 空</span>';
-    } else {
-      for (const [ingId, count] of invEntries) {
-        if (count <= 0) continue;
-        const def = DEFAULT_INGREDIENTS[ingId];
-        const chip = document.createElement('div');
-        chip.className = 'inv-chip';
-        chip.textContent = `${def ? def.emoji : '📦'} ${def ? def.name : ingId} x${count}`;
-        trayEl.appendChild(chip);
+    // Inventory Tray
+    const tray = document.getElementById('inventory-tray');
+    if (tray) {
+      tray.innerHTML = '';
+      const stock = session.inventory.getAllAvailable();
+      for (const [id, count] of Object.entries(stock)) {
+        if (count > 0) {
+          const ing = DEFAULT_INGREDIENTS[id];
+          const chip = document.createElement('div');
+          chip.className = 'inv-chip';
+          chip.textContent = `${ing?.emoji || '🍱'} ×${count}`;
+          tray.appendChild(chip);
+        }
+      }
+    }
+
+    // Danger banner
+    const dangerBanner = document.getElementById('danger-banner');
+    if (dangerBanner) {
+      dangerBanner.style.display = session.isBoardInDanger() ? 'block' : 'none';
+    }
+
+    // Cascade banner
+    const cascadeBanner = document.getElementById('cascade-banner');
+    if (cascadeBanner) {
+      if (session.stats.cascadeEventsCount > 0) {
+        cascadeBanner.style.display = 'block';
+        cascadeBanner.textContent = `⚡ 连续出餐 ×${session.stats.maxCascadeChain}! 厨房运转中`;
+      } else {
+        cascadeBanner.style.display = 'none';
       }
     }
   }
 
-  /**
-   * Transforms board grid coord into canvas pixel coords.
-   * Note: Row 0 is at bottom, Row (rows-1) is at top.
-   */
-  private gridToScreen(coord: GridCoord): { x: number; y: number; width: number; height: number } {
+  private updateTutorialCue(cue: any): void {
+    const indicator = document.getElementById('tutorial-indicator');
+    if (!indicator) return;
+
+    if (!cue) {
+      indicator.style.display = 'none';
+      return;
+    }
+
+    // Position indicator over the candidate loose piece
+    const screenPos = this.gridToScreen(cue.fromCoord);
+    indicator.style.display = 'block';
+    indicator.style.left = `${screenPos.x + 10}px`;
+    indicator.style.top = `${screenPos.y - 30}px`;
+  }
+
+  private showDayCompleteModal(record: any): void {
+    const modal = document.getElementById('modal-victory') as HTMLElement;
+    const summary = document.getElementById('victory-summary');
+    if (summary) {
+      summary.innerHTML = `<strong>DAY ${record.dayNumber} 完成！</strong><br>营业额: ¥${record.revenueAchieved} / ¥${record.businessGoal}<br>完成订单: ${record.ordersCompleted} 单 | 连续出餐最高 ×${record.maxCascadeStreak}`;
+    }
+    modal.style.display = 'flex';
+  }
+
+  private showDayFailedModal(reason: string): void {
+    const modal = document.getElementById('modal-failed') as HTMLElement;
+    modal.style.display = 'flex';
+  }
+
+  // --- Coordinate Transformation & Rendering ---
+  private getCellSize(): number {
+    const session = this.flow.session;
+    if (!session) return 40;
     const wrapper = document.getElementById('board-wrapper')!;
     const rect = wrapper.getBoundingClientRect();
-    const cols = this.session.grid.columns;
-    const rows = this.session.grid.rows; // Playable rows visible on screen
+    const cellW = rect.width / session.grid.columns;
+    const cellH = rect.height / session.grid.rows;
+    return Math.min(cellW, cellH);
+  }
 
-    const cellWidth = rect.width / cols;
-    const cellHeight = rect.height / rows;
+  private gridToScreen(coord: GridCoord): { x: number; y: number } {
+    const session = this.flow.session;
+    if (!session) return { x: 0, y: 0 };
+    const cellSize = this.getCellSize();
+    const wrapper = document.getElementById('board-wrapper')!;
+    const rect = wrapper.getBoundingClientRect();
 
-    const x = coord.col * cellWidth;
-    // Invert row so row 0 is at the bottom
-    const y = rect.height - (coord.row + 1) * cellHeight;
+    const originX = (rect.width - session.grid.columns * cellSize) / 2;
+    const originY = rect.height - cellSize;
 
-    return { x, y, width: cellWidth, height: cellHeight };
+    const x = originX + coord.col * cellSize;
+    const y = originY - coord.row * cellSize;
+    return { x, y };
   }
 
   private screenToGrid(x: number, y: number): GridCoord {
+    const session = this.flow.session;
+    if (!session) return { col: 0, row: 0 };
+    const cellSize = this.getCellSize();
     const wrapper = document.getElementById('board-wrapper')!;
     const rect = wrapper.getBoundingClientRect();
-    const cols = this.session.grid.columns;
-    const rows = this.session.grid.rows;
 
-    const cellWidth = rect.width / cols;
-    const cellHeight = rect.height / rows;
+    const originX = (rect.width - session.grid.columns * cellSize) / 2;
+    const originY = rect.height - cellSize;
 
-    const col = Math.floor(x / cellWidth);
-    const row = Math.floor((rect.height - y) / cellHeight);
-
+    const col = Math.floor((x - originX) / cellSize);
+    const row = Math.floor((originY - y + cellSize) / cellSize);
     return { col, row };
   }
 
-  private initEvents(): void {
-    const getPos = (e: MouseEvent | TouchEvent) => {
-      const rect = this.canvas.getBoundingClientRect();
-      if ('touches' in e && e.touches.length > 0) {
-        return {
-          x: e.touches[0].clientX - rect.left,
-          y: e.touches[0].clientY - rect.top
-        };
+  // --- SVG Image Cached Loading ---
+  private getOrCreateSvgImage(cacheKey: string, svgString: string): HTMLImageElement {
+    let img = this.svgImageCache.get(cacheKey);
+    if (!img) {
+      img = new Image();
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      img.src = URL.createObjectURL(blob);
+      this.svgImageCache.set(cacheKey, img);
+    }
+    return img;
+  }
+
+  // --- Touch & Pointer Handling ---
+  private onPointerDown(e: PointerEvent): void {
+    if (this.flow.isInputLocked || !this.flow.session) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const coord = this.screenToGrid(x, y);
+    const loose = this.flow.session.grid.getAllLoosePieces();
+
+    // Check hit on loose piece
+    for (const piece of loose) {
+      if (piece.coord.col === coord.col && piece.coord.row === coord.row) {
+        this.draggingPiece = piece;
+        this.dragPointerPos = { x, y };
+        this.dragOriginCoord = { ...piece.coord };
+        AudioDirector.playPickPiece();
+        this.canvas.setPointerCapture(e.pointerId);
+        break;
       }
-      const me = e as MouseEvent;
-      return {
-        x: me.clientX - rect.left,
-        y: me.clientY - rect.top
-      };
-    };
+    }
+  }
 
-    const onPointerDown = (e: MouseEvent | TouchEvent) => {
-      if (this.session.isGameOver) return;
-      const pos = getPos(e);
-      const coord = this.screenToGrid(pos.x, pos.y);
+  private onPointerMove(e: PointerEvent): void {
+    if (!this.draggingPiece) return;
+    const rect = this.canvas.getBoundingClientRect();
+    this.dragPointerPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
 
-      // Hit test loose pieces
-      const loosePieces = this.session.grid.getAllLoosePieces();
-      for (const piece of loosePieces) {
-        if (piece.coord.col === coord.col && piece.coord.row === coord.row) {
-          this.draggingPiece = piece;
-          this.dragPointerPos = pos;
-          this.dragOriginCoord = { ...piece.coord };
-          break;
-        }
-      }
-    };
+  private onPointerUp(e: PointerEvent): void {
+    if (!this.draggingPiece || !this.flow.session) {
+      this.draggingPiece = null;
+      return;
+    }
 
-    const onPointerMove = (e: MouseEvent | TouchEvent) => {
-      if (!this.draggingPiece) return;
-      this.dragPointerPos = getPos(e);
+    const session = this.flow.session;
+    const piece = this.draggingPiece;
+    const coord = this.screenToGrid(this.dragPointerPos.x, this.dragPointerPos.y);
 
-      // Check slot magnetism
-      this.activeHoverSlot = null;
-      const target = this.session.grid.getTarget(this.draggingPiece.targetInstanceId);
-      if (target) {
-        const def = DEFAULT_INGREDIENTS[target.ingredientId];
-        const slotDef = def?.slots.find(s => s.slotId === this.draggingPiece!.slotId);
-        if (slotDef) {
-          const slotAbsCoord = {
-            col: target.anchor.col + slotDef.relativeCol,
-            row: target.anchor.row + slotDef.relativeRow
-          };
-          const slotScreen = this.gridToScreen(slotAbsCoord);
-          const dist = Math.hypot(
-            this.dragPointerPos.x - (slotScreen.x + slotScreen.width / 2),
-            this.dragPointerPos.y - (slotScreen.y + slotScreen.height / 2)
-          );
+    // Look for matching target at or near dropped coordinate
+    const target = session.grid.getAllTargets().find(t => t.instanceId === piece.targetInstanceId);
 
-          if (dist < slotScreen.width * 1.5) {
-            this.activeHoverSlot = {
-              targetId: target.instanceId,
-              slotId: this.draggingPiece.slotId
-            };
+    let placed = false;
+    if (target && target.missingSlotIds.includes(piece.slotId)) {
+      const def = session.ingredients[target.ingredientId];
+      const slot = def?.slots.find(s => s.slotId === piece.slotId);
+      if (slot) {
+        const slotAbsCol = target.anchor.col + slot.relativeCol;
+        const slotAbsRow = target.anchor.row + slot.relativeRow;
+
+        // Tolerant snap radius of ~1.2 cells
+        if (Math.abs(coord.col - slotAbsCol) <= 1 && Math.abs(coord.row - slotAbsRow) <= 1) {
+          const res = this.flow.placePiece(piece.instanceId, target.instanceId, piece.slotId);
+          if (res.success) {
+            placed = true;
           }
         }
       }
-    };
+    }
 
-    const onPointerUp = () => {
-      if (!this.draggingPiece) return;
+    if (!placed) {
+      // Trigger wobble feedback & smooth return
+      AudioDirector.playWrongDrop();
+      const originScreen = this.gridToScreen(this.dragOriginCoord!);
+      this.wobblePieces.set(piece.instanceId, {
+        startTime: performance.now(),
+        startX: this.dragPointerPos.x,
+        startY: this.dragPointerPos.y
+      });
+    }
 
-      const piece = this.draggingPiece;
-      this.draggingPiece = null;
-
-      if (this.activeHoverSlot) {
-        // Place piece into target slot!
-        const result = this.session.placePiece(
-          piece.instanceId,
-          this.activeHoverSlot.targetId,
-          this.activeHoverSlot.slotId
-        );
-
-        if (!result.success) {
-          this.audio.playPieceBounce();
-        }
-      } else {
-        this.audio.playPieceBounce();
-      }
-
-      this.activeHoverSlot = null;
-    };
-
-    this.canvas.addEventListener('mousedown', onPointerDown);
-    window.addEventListener('mousemove', onPointerMove);
-    window.addEventListener('mouseup', onPointerUp);
-
-    this.canvas.addEventListener('touchstart', onPointerDown, { passive: false });
-    window.addEventListener('touchmove', onPointerMove, { passive: false });
-    window.addEventListener('touchend', onPointerUp);
+    this.draggingPiece = null;
+    this.dragOriginCoord = null;
+    try {
+      this.canvas.releasePointerCapture(e.pointerId);
+    } catch {}
+    this.updateHUD();
   }
 
+  // --- Render Loop (60 FPS) ---
   private startRenderLoop(): void {
     const loop = () => {
       this.render();
@@ -349,304 +503,116 @@ class WebGreyboxApp {
   }
 
   private render(): void {
-    const ctx = this.ctx;
-    const wrapper = document.getElementById('board-wrapper')!;
-    const rect = wrapper.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height;
+    const rect = this.canvas.getBoundingClientRect();
+    this.ctx.clearRect(0, 0, rect.width, rect.height);
 
-    ctx.clearRect(0, 0, w, h);
+    const session = this.flow.session;
+    if (!session || this.flow.phase === 'MAIN_MENU') return;
 
-    // 1. Draw subtle grid background
-    const cols = this.session.grid.columns;
-    const rows = this.session.grid.rows;
-    const cellW = w / cols;
-    const cellH = h / rows;
+    const cellSize = this.getCellSize();
 
-    ctx.strokeStyle = '#e0dbcf';
-    ctx.lineWidth = 1;
-    for (let c = 0; c <= cols; c++) {
-      ctx.beginPath();
-      ctx.moveTo(c * cellW, 0);
-      ctx.lineTo(c * cellW, h);
-      ctx.stroke();
+    // 1. Draw Incomplete & Placed Targets (using PuzzleCutter authentic presentation)
+    for (const target of session.grid.getAllTargets()) {
+      const def = session.ingredients[target.ingredientId];
+      if (!def) continue;
+
+      const screenPos = this.gridToScreen({
+        col: target.anchor.col,
+        row: target.anchor.row + def.height - 1
+      });
+
+      const targetSvg = PuzzleCutter.generateTargetSvg(
+        def,
+        target.missingSlotIds,
+        target.placedSlotIds,
+        def.width * cellSize
+      );
+      const cacheKey = `target_${target.ingredientId}_${target.placedSlotIds.join('_')}_${def.width * cellSize}`;
+      const img = this.getOrCreateSvgImage(cacheKey, targetSvg);
+
+      if (img.complete && img.naturalWidth > 0) {
+        this.ctx.drawImage(
+          img,
+          screenPos.x,
+          screenPos.y,
+          def.width * cellSize,
+          def.height * cellSize
+        );
+      }
     }
-    for (let r = 0; r <= rows; r++) {
-      ctx.beginPath();
-      ctx.moveTo(0, r * cellH);
-      ctx.lineTo(w, r * cellH);
-      ctx.stroke();
-    }
 
-    // 2. Draw Ingredient Targets
-    for (const target of this.session.grid.getAllTargets()) {
-      this.renderTarget(target);
-    }
-
-    // 3. Draw Loose Pieces (except currently dragged one)
-    for (const piece of this.session.grid.getAllLoosePieces()) {
+    // 2. Draw Loose Pieces (using authentic jigsaw tab/blank piece assets)
+    const now = performance.now();
+    for (const piece of session.grid.getAllLoosePieces()) {
       if (this.draggingPiece && this.draggingPiece.instanceId === piece.instanceId) {
-        continue;
+        continue; // Render dragging piece on top layer
       }
-      this.renderLoosePiece(piece);
-    }
 
-    // 4. Draw currently dragging piece on top
-    if (this.draggingPiece) {
-      this.renderDraggingPiece(this.draggingPiece);
-    }
-  }
+      const def = session.ingredients[piece.ingredientId];
+      if (!def) continue;
 
-  private drawJigsawPath(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    edges: { top: string; bottom: string; left: string; right: string }
-  ) {
-    const tabH = Math.min(w, h) * 0.22;
-    const tabW1 = 0.35;
-    const tabW2 = 0.65;
+      let drawX = 0;
+      let drawY = 0;
 
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-
-    // 1. TOP EDGE
-    if (edges.top === 'tab') {
-      ctx.lineTo(x + w * tabW1, y);
-      ctx.bezierCurveTo(x + w * tabW1, y - tabH, x + w * tabW2, y - tabH, x + w * tabW2, y);
-      ctx.lineTo(x + w, y);
-    } else if (edges.top === 'blank') {
-      ctx.lineTo(x + w * tabW1, y);
-      ctx.bezierCurveTo(x + w * tabW1, y + tabH, x + w * tabW2, y + tabH, x + w * tabW2, y);
-      ctx.lineTo(x + w, y);
-    } else {
-      ctx.lineTo(x + w, y);
-    }
-
-    // 2. RIGHT EDGE
-    if (edges.right === 'tab') {
-      ctx.lineTo(x + w, y + h * tabW1);
-      ctx.bezierCurveTo(x + w + tabH, y + h * tabW1, x + w + tabH, y + h * tabW2, x + w, y + h * tabW2);
-      ctx.lineTo(x + w, y + h);
-    } else if (edges.right === 'blank') {
-      ctx.lineTo(x + w, y + h * tabW1);
-      ctx.bezierCurveTo(x + w - tabH, y + h * tabW1, x + w - tabH, y + h * tabW2, x + w, y + h * tabW2);
-      ctx.lineTo(x + w, y + h);
-    } else {
-      ctx.lineTo(x + w, y + h);
-    }
-
-    // 3. BOTTOM EDGE
-    if (edges.bottom === 'tab') {
-      ctx.lineTo(x + w * tabW2, y + h);
-      ctx.bezierCurveTo(x + w * tabW2, y + h + tabH, x + w * tabW1, y + h + tabH, x + w * tabW1, y + h);
-      ctx.lineTo(x, y + h);
-    } else if (edges.bottom === 'blank') {
-      ctx.lineTo(x + w * tabW2, y + h);
-      ctx.bezierCurveTo(x + w * tabW2, y + h - tabH, x + w * tabW1, y + h - tabH, x + w * tabW1, y + h);
-      ctx.lineTo(x, y + h);
-    } else {
-      ctx.lineTo(x, y + h);
-    }
-
-    // 4. LEFT EDGE
-    if (edges.left === 'tab') {
-      ctx.lineTo(x, y + h * tabW2);
-      ctx.bezierCurveTo(x - tabH, y + h * tabW2, x - tabH, y + h * tabW1, x, y + h * tabW1);
-      ctx.lineTo(x, y);
-    } else if (edges.left === 'blank') {
-      ctx.lineTo(x, y + h * tabW2);
-      ctx.bezierCurveTo(x + tabH, y + h * tabW2, x + tabH, y + h * tabW1, x, y + h * tabW1);
-      ctx.lineTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
-
-    ctx.closePath();
-  }
-
-  private renderTarget(target: IngredientTarget): void {
-    const ctx = this.ctx;
-    const def = DEFAULT_INGREDIENTS[target.ingredientId];
-    if (!def) return;
-
-    // Draw occupied footprint silhouette background
-    for (const offset of def.footprint) {
-      const coord = { col: target.anchor.col + offset.col, row: target.anchor.row + offset.row };
-      const s = this.gridToScreen(coord);
-
-      ctx.fillStyle = def.color + '22';
-      ctx.strokeStyle = def.color + '66';
-      ctx.lineWidth = 1.5;
-      this.roundRect(ctx, s.x + 2, s.y + 2, s.width - 4, s.height - 4, 8);
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    // Draw puzzle slots inside target with real jigsaw tabs & blanks
-    for (const slot of def.slots) {
-      const isPlaced = target.placedSlotIds.includes(slot.slotId);
-      const isHovered =
-        this.activeHoverSlot &&
-        this.activeHoverSlot.targetId === target.instanceId &&
-        this.activeHoverSlot.slotId === slot.slotId;
-
-      const slotCoord = {
-        col: target.anchor.col + slot.relativeCol,
-        row: target.anchor.row + slot.relativeRow
-      };
-      const s = this.gridToScreen(slotCoord);
-      const pad = 3;
-      const x = s.x + pad;
-      const y = s.y + pad;
-      const w = s.width - pad * 2;
-      const h = s.height - pad * 2;
-
-      const edges = slot.edges || { top: 'flat', bottom: 'flat', left: 'flat', right: 'flat' };
-
-      if (isPlaced) {
-        // Placed slot: Vibrant solid piece body with seamless jigsaw contour
-        ctx.fillStyle = def.color;
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        this.drawJigsawPath(ctx, x, y, w, h, edges);
-        ctx.fill();
-        ctx.stroke();
-
-        // Subtle piece gloss highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(slot.label, s.x + s.width / 2, s.y + s.height / 2);
+      // Handle wrong drop wobble
+      const wobble = this.wobblePieces.get(piece.instanceId);
+      if (wobble) {
+        const elapsed = now - wobble.startTime;
+        const targetScreen = this.gridToScreen(piece.coord);
+        if (elapsed < 300) {
+          const t = elapsed / 300;
+          const wobbleOffset = Math.sin(t * Math.PI * 4) * (1 - t) * 12;
+          drawX = wobble.startX + (targetScreen.x - wobble.startX) * t + wobbleOffset;
+          drawY = wobble.startY + (targetScreen.y - wobble.startY) * t;
+        } else {
+          this.wobblePieces.delete(piece.instanceId);
+          drawX = targetScreen.x;
+          drawY = targetScreen.y;
+        }
       } else {
-        // Missing slot: Translucent silhouette hole showing jigsaw interlocking indentation
-        ctx.save();
-        ctx.fillStyle = isHovered ? '#ffd16677' : 'rgba(255,255,255,0.45)';
-        ctx.strokeStyle = isHovered ? '#ffb703' : def.color + '99';
-        ctx.lineWidth = isHovered ? 3 : 1.5;
-        if (!isHovered) ctx.setLineDash([4, 4]);
+        const screenPos = this.gridToScreen(piece.coord);
+        drawX = screenPos.x;
+        drawY = screenPos.y;
+      }
 
-        this.drawJigsawPath(ctx, x, y, w, h, edges);
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
+      const pieceAsset = PuzzleCutter.generateLoosePieceAsset(def, piece.slotId, cellSize);
+      const cacheKey = `piece_${def.id}_${piece.slotId}_${cellSize}`;
+      const img = this.getOrCreateSvgImage(cacheKey, pieceAsset.svgContent);
 
-        ctx.fillStyle = isHovered ? '#fb8500' : '#777777';
-        ctx.font = isHovered ? 'bold 11px sans-serif' : '10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(slot.label, s.x + s.width / 2, s.y + s.height / 2);
+      if (img.complete && img.naturalWidth > 0) {
+        this.ctx.drawImage(img, drawX, drawY, cellSize, cellSize);
       }
     }
-  }
 
-  private renderLoosePiece(piece: LoosePiece): void {
-    const ctx = this.ctx;
-    const def = DEFAULT_INGREDIENTS[piece.ingredientId];
-    if (!def) return;
-    const slotDef = def.slots.find(s => s.slotId === piece.slotId);
-    const edges = slotDef?.edges || { top: 'flat', bottom: 'flat', left: 'flat', right: 'flat' };
+    // 3. Draw Dragging Piece (with 1.10x scale, raised shadow, centered under finger)
+    if (this.draggingPiece) {
+      const def = session.ingredients[this.draggingPiece.ingredientId];
+      if (def) {
+        const pieceAsset = PuzzleCutter.generateLoosePieceAsset(def, this.draggingPiece.slotId, cellSize * 1.1);
+        const cacheKey = `piece_drag_${def.id}_${this.draggingPiece.slotId}_${cellSize * 1.1}`;
+        const img = this.getOrCreateSvgImage(cacheKey, pieceAsset.svgContent);
 
-    const s = this.gridToScreen(piece.coord);
-
-    // Smooth drop animation interpolation
-    let visPos = this.pieceVisualPositions.get(piece.instanceId);
-    if (!visPos) {
-      visPos = { x: s.x, y: s.y };
-      this.pieceVisualPositions.set(piece.instanceId, visPos);
-    } else {
-      visPos.x += (s.x - visPos.x) * 0.35;
-      visPos.y += (s.y - visPos.y) * 0.35;
+        if (img.complete && img.naturalWidth > 0) {
+          const size = cellSize * 1.1;
+          this.ctx.save();
+          this.ctx.shadowColor = 'rgba(0,0,0,0.35)';
+          this.ctx.shadowBlur = 16;
+          this.ctx.shadowOffsetY = 8;
+          this.ctx.drawImage(
+            img,
+            this.dragPointerPos.x - size / 2,
+            this.dragPointerPos.y - size / 2,
+            size,
+            size
+          );
+          this.ctx.restore();
+        }
+      }
     }
-
-    const pad = 4;
-    const x = visPos.x + pad;
-    const y = visPos.y + pad;
-    const w = s.width - pad * 2;
-    const h = s.height - pad * 2;
-
-    // Drop shadow
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    this.drawJigsawPath(ctx, x + 2, y + 4, w, h, edges);
-    ctx.fill();
-    ctx.restore();
-
-    // Piece body
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = def.color;
-    ctx.lineWidth = 2.5;
-    this.drawJigsawPath(ctx, x, y, w, h, edges);
-    ctx.fill();
-    ctx.stroke();
-
-    // Emoji icon watermark
-    ctx.font = '15px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(def.emoji, x + w / 2, y + h / 2 - 4);
-
-    ctx.fillStyle = '#333333';
-    ctx.font = 'bold 9px sans-serif';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(slotDef ? slotDef.label : piece.slotId, x + w / 2, y + h - 2);
-  }
-
-  private renderDraggingPiece(piece: LoosePiece): void {
-    const ctx = this.ctx;
-    const def = DEFAULT_INGREDIENTS[piece.ingredientId];
-    if (!def) return;
-    const slotDef = def.slots.find(s => s.slotId === piece.slotId);
-    const edges = slotDef?.edges || { top: 'flat', bottom: 'flat', left: 'flat', right: 'flat' };
-
-    const s = this.gridToScreen(piece.coord);
-    const w = (s.width - 8) * 1.15;
-    const h = (s.height - 8) * 1.15;
-    const x = this.dragPointerPos.x - w / 2;
-    const y = this.dragPointerPos.y - h / 2;
-
-    // High shadow
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    this.drawJigsawPath(ctx, x + 4, y + 8, w, h, edges);
-    ctx.fill();
-    ctx.restore();
-
-    // Piece Body
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#ffb703';
-    ctx.lineWidth = 3.5;
-    this.drawJigsawPath(ctx, x, y, w, h, edges);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.font = '20px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(def.emoji, x + w / 2, y + h / 2 - 5);
-
-    ctx.fillStyle = '#fb8500';
-    ctx.font = 'bold 11px sans-serif';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(slotDef ? slotDef.label : piece.slotId, x + w / 2, y + h - 2);
-  }
-
-  private roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-    if (w < 2 * r) r = w / 2;
-    if (h < 2 * r) r = h / 2;
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
   }
 }
 
+// Boot application
 window.addEventListener('DOMContentLoaded', () => {
-  new WebGreyboxApp();
+  new WebGameApp();
 });

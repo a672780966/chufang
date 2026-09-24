@@ -9,6 +9,7 @@
     "sync:core": "node scripts/sync-core.mjs",
     "sim": "tsx packages/simulation/src/SimulationRunner.ts",
     "balance": "tsx packages/simulation/src/BalanceHarness.ts",
+    "playtest": "tsx packages/simulation/src/Stage3PlaytestRunner.ts",
     "build:core": "tsc --noEmit"
   },
   "devDependencies": {
