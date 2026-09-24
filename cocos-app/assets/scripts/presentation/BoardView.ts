@@ -7,7 +7,7 @@ import {
   CoreEventMap,
   DEFAULT_INGREDIENTS,
   IngredientDefinition
-} from '../../game-core/index.js';
+} from '../../game-core/index';
 
 const { ccclass, property } = _decorator;
 

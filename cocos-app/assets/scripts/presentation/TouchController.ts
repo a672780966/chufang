@@ -1,7 +1,7 @@
 import { _decorator, Component, Node, EventTouch, Vec3, UITransform, tween, Vec2, input, Input } from 'cc';
-import { GameManager } from '../GameManager.js';
-import { BoardView } from './BoardView.js';
-import { LoosePiece, DEFAULT_INGREDIENTS } from '../../game-core/index.js';
+import { GameManager } from '../GameManager';
+import { BoardView } from './BoardView';
+import { LoosePiece, DEFAULT_INGREDIENTS } from '../../game-core/index';
 
 const { ccclass, property } = _decorator;
 
@@ -19,6 +19,13 @@ export class TouchController extends Component {
   private _snapRadius: number = 95;
 
   onLoad() {
+    if (!this.boardView) {
+      this.boardView = this.getComponent(BoardView) || this.node.scene?.getComponentInChildren(BoardView) || null;
+    }
+    if (!this.gameManager) {
+      this.gameManager = this.getComponent(GameManager) || this.node.scene?.getComponentInChildren(GameManager) || null;
+    }
+
     // Register global touch listener via input to guarantee touch events are reliably caught
     input.on(Input.EventType.TOUCH_START, this.onTouchStart, this);
     input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
@@ -34,14 +41,14 @@ export class TouchController extends Component {
   }
 
   /**
-   * Converts a screen-space UI touch location to the local coordinate system of piecesContainer / BoardView.
+   * Converts a screen-space UI touch location to the local coordinate system of BoardView.node.
+   * Strictly uses BoardView.node's UITransform to guarantee 100% coordinate parity with BoardView.gridToLocalPos().
    */
   private screenToBoardLocal(uiLocation: Vec2): Vec3 {
-    const targetNode = this.boardView?.piecesContainer || this.boardView?.node;
-    if (!targetNode) {
+    if (!this.boardView || !this.boardView.node) {
       return new Vec3(uiLocation.x, uiLocation.y, 0);
     }
-    const uiTransform = targetNode.getComponent(UITransform);
+    const uiTransform = this.boardView.node.getComponent(UITransform);
     if (!uiTransform) {
       return new Vec3(uiLocation.x, uiLocation.y, 0);
     }

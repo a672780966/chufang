@@ -8,16 +8,16 @@ import {
   NextOrderPreview,
   GridCoord,
   DEFAULT_PRESSURE_PROFILE
-} from '../model/Types.js';
-import { EventEmitter, CoreEventMap } from '../model/Events.js';
-import { BoardGrid } from '../board/BoardGrid.js';
-import { DiscreteGravity } from '../board/DiscreteGravity.js';
-import { PrepInventory } from '../inventory/PrepInventory.js';
-import { OrderSystem } from '../order/OrderSystem.js';
-import { FlowDirector } from '../director/FlowDirector.js';
-import { DeadlockDetector } from '../detector/DeadlockDetector.js';
-import { SeededRandom } from '../random/SeededRandom.js';
-import { DEFAULT_INGREDIENTS, DEFAULT_RECIPES } from '../data/DefaultData.js';
+} from '../model/Types';
+import { EventEmitter, CoreEventMap } from '../model/Events';
+import { BoardGrid } from '../board/BoardGrid';
+import { DiscreteGravity } from '../board/DiscreteGravity';
+import { PrepInventory } from '../inventory/PrepInventory';
+import { OrderSystem } from '../order/OrderSystem';
+import { FlowDirector } from '../director/FlowDirector';
+import { DeadlockDetector } from '../detector/DeadlockDetector';
+import { SeededRandom } from '../random/SeededRandom';
+import { DEFAULT_INGREDIENTS, DEFAULT_RECIPES } from '../data/DefaultData';
 
 export interface GameSessionState {
   dayNumber: number;

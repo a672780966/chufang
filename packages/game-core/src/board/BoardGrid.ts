@@ -1,4 +1,4 @@
-import { GridCoord, BoardProfile, DEFAULT_BOARD_PROFILE, IngredientTarget, LoosePiece } from '../model/Types.js';
+import { GridCoord, BoardProfile, DEFAULT_BOARD_PROFILE, IngredientTarget, LoosePiece } from '../model/Types';
 
 export type CellContent =
   | { type: 'empty' }

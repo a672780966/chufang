@@ -3,7 +3,7 @@ import {
   GameSession,
   CoreEventMap,
   DEFAULT_INGREDIENTS
-} from '../../game-core/index.js';
+} from '../../game-core/index';
 
 const { ccclass, property } = _decorator;
 

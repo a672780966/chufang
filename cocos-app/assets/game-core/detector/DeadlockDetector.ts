@@ -1,5 +1,5 @@
-import { BoardGrid } from '../board/BoardGrid.js';
-import { IngredientDefinition, RecipeDefinition } from '../model/Types.js';
+import { BoardGrid } from '../board/BoardGrid';
+import { IngredientDefinition, RecipeDefinition } from '../model/Types';
 
 export interface DeadlockCheckResult {
   isDeadlocked: boolean;

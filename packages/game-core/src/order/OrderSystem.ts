@@ -1,7 +1,7 @@
-import { Order, DayConfig, RecipeDefinition, NextOrderPreviewMode, NextOrderPreview } from '../model/Types.js';
-import { EventEmitter } from '../model/Events.js';
-import { PrepInventory } from '../inventory/PrepInventory.js';
-import { OrderBag } from './OrderBag.js';
+import { Order, DayConfig, RecipeDefinition, NextOrderPreviewMode, NextOrderPreview } from '../model/Types';
+import { EventEmitter } from '../model/Events';
+import { PrepInventory } from '../inventory/PrepInventory';
+import { OrderBag } from './OrderBag';
 
 export class OrderSystem {
   private _orderBag: OrderBag;

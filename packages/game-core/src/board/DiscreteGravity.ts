@@ -1,5 +1,5 @@
-import { GridCoord } from '../model/Types.js';
-import { BoardGrid } from './BoardGrid.js';
+import { GridCoord } from '../model/Types';
+import { BoardGrid } from './BoardGrid';
 
 export interface SettleResult {
   hasMoved: boolean;

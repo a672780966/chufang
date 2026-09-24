@@ -1,4 +1,4 @@
-import { GridCoord, Order, IngredientTarget, LoosePiece } from './Types.js';
+import { GridCoord, Order, IngredientTarget, LoosePiece } from './Types';
 
 export type CoreEventType =
   | 'TARGET_SPAWNED'

@@ -1,7 +1,7 @@
-import { DayConfig, RecipeDefinition, Order, OrderItemProgress, NextOrderPreviewMode, NextOrderPreview } from '../model/Types.js';
-import { SeededRandom } from '../random/SeededRandom.js';
-import { PrepInventory } from '../inventory/PrepInventory.js';
-import { EventEmitter } from '../model/Events.js';
+import { DayConfig, RecipeDefinition, Order, OrderItemProgress, NextOrderPreviewMode, NextOrderPreview } from '../model/Types';
+import { SeededRandom } from '../random/SeededRandom';
+import { PrepInventory } from '../inventory/PrepInventory';
+import { EventEmitter } from '../model/Events';
 
 export class OrderBag {
   private _rng: SeededRandom;

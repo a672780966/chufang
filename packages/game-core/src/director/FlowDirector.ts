@@ -8,11 +8,11 @@ import {
   NextOrderPreview,
   GridCoord,
   ReleaseCategory
-} from '../model/Types.js';
-import { SeededRandom } from '../random/SeededRandom.js';
-import { BoardGrid } from '../board/BoardGrid.js';
-import { PrepInventory } from '../inventory/PrepInventory.js';
-import { DeadlockDetector } from '../detector/DeadlockDetector.js';
+} from '../model/Types';
+import { SeededRandom } from '../random/SeededRandom';
+import { BoardGrid } from '../board/BoardGrid';
+import { PrepInventory } from '../inventory/PrepInventory';
+import { DeadlockDetector } from '../detector/DeadlockDetector';
 
 export class FlowDirector {
   private _rng: SeededRandom;

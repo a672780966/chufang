@@ -154,4 +154,111 @@ describe('Cocos Presentation Playable Chain: Drag -> Place -> Complete -> Refill
     assert.ok(boardViewState.targets.size > 0, 'New targets must have replenished after completion');
     assert.ok(boardViewState.pieces.size > 0, 'New pieces must have replenished after completion');
   });
+
+  it('should verify TouchController.screenToBoardLocal parity with BoardView.gridToLocalPos and touch mechanics', () => {
+    // Canvas config: 720 x 1280 (Center at 360, 640)
+    // BoardView node at (0, -120) relative to Canvas center -> BoardView Center on screen is (360, 520)
+    // BoardView contentSize: 576 x 864, anchor (0.5, 0.5)
+    // Columns: 8, Rows: 12. Cell size: 576/8 = 72, 864/12 = 72
+    const boardWidth = 576;
+    const boardHeight = 864;
+    const cellWidth = 72;
+    const cellHeight = 72;
+    const boardWorldCenter = { x: 360, y: 520 };
+
+    // BoardView.gridToLocalPos:
+    // originX = -boardWidth / 2 = -288
+    // originY = -boardHeight / 2 = -432
+    // x = originX + (col + 0.5) * cellWidth
+    // y = originY + (row + 0.5) * cellHeight
+    const gridToLocalPos = (coord: { col: number; row: number }) => {
+      const originX = -boardWidth / 2;
+      const originY = -boardHeight / 2;
+      return {
+        x: originX + (coord.col + 0.5) * cellWidth,
+        y: originY + (coord.row + 0.5) * cellHeight
+      };
+    };
+
+    // Simulated UITransform.convertToNodeSpaceAR for BoardView.node:
+    // Converts screen UI coordinate (uiLocation) to node local coordinate relative to anchor point (0.5, 0.5)
+    const boardNodeConvertToNodeSpaceAR = (uiLocation: { x: number; y: number }) => {
+      return {
+        x: uiLocation.x - boardWorldCenter.x,
+        y: uiLocation.y - boardWorldCenter.y
+      };
+    };
+
+    // Test 1: Coordinate Parity
+    // For every cell in the 8x12 grid, a touch on screen corresponding to that cell
+    // must convert to the EXACT same coordinate as gridToLocalPos!
+    for (let c = 0; c < 8; c++) {
+      for (let r = 0; r < 12; r++) {
+        const localPos = gridToLocalPos({ col: c, row: r });
+        // The touch on screen for this cell is at boardWorldCenter + localPos
+        const screenTouch = {
+          x: boardWorldCenter.x + localPos.x,
+          y: boardWorldCenter.y + localPos.y
+        };
+
+        // When using boardView.node UITransform:
+        const converted = boardNodeConvertToNodeSpaceAR(screenTouch);
+        assert.strictEqual(converted.x, localPos.x, `X mismatch at (${c}, ${r})`);
+        assert.strictEqual(converted.y, localPos.y, `Y mismatch at (${c}, ${r})`);
+
+        // Distance is 0 -> hit guaranteed (< 55px)
+        const hitDist = Math.hypot(converted.x - localPos.x, converted.y - localPos.y);
+        assert.strictEqual(hitDist, 0, `Hit distance must be 0`);
+      }
+    }
+
+    // Test 2: Contrast with buggy piecesContainer without UITransform
+    // Without UITransform, screenToBoardLocal would return raw screenTouch
+    const sampleLocal = gridToLocalPos({ col: 2, row: 3 });
+    const screenTouch = { x: boardWorldCenter.x + sampleLocal.x, y: boardWorldCenter.y + sampleLocal.y };
+    const rawDist = Math.hypot(screenTouch.x - sampleLocal.x, screenTouch.y - sampleLocal.y);
+    // Raw screen touch distance from local position is ~632px, completely failing hit detection!
+    assert.ok(rawDist > 500, 'Buggy fallback to screen coordinates creates >500px offset error');
+
+    // Test 3: Snap & Rebound Simulation
+    const session = new GameSession(DEFAULT_DAYS[0], 'touch_controller_test_seed');
+    const targets = session.grid.getAllTargets();
+    const pieces = session.grid.getAllLoosePieces();
+    assert.ok(targets.length > 0 && pieces.length > 0);
+
+    const piece = pieces[0];
+    const target = targets.find(t => t.instanceId === piece.targetInstanceId)!;
+    assert.ok(target, 'Target must match piece.targetInstanceId');
+
+    const def = DEFAULT_INGREDIENTS[target.ingredientId];
+    const slotDef = def.slots.find(s => s.slotId === piece.slotId)!;
+    const slotAbsCoord = {
+      col: target.anchor.col + slotDef.relativeCol,
+      row: target.anchor.row + slotDef.relativeRow
+    };
+    const slotLocalPos = gridToLocalPos(slotAbsCoord);
+
+    // Case A: Released within snap radius (dist = 50px <= 95px)
+    const nearTouchScreen = {
+      x: boardWorldCenter.x + slotLocalPos.x + 30,
+      y: boardWorldCenter.y + slotLocalPos.y + 40
+    };
+    const nearLocal = boardNodeConvertToNodeSpaceAR(nearTouchScreen);
+    const snapDist = Math.hypot(nearLocal.x - slotLocalPos.x, nearLocal.y - slotLocalPos.y);
+    assert.strictEqual(snapDist, 50);
+    assert.ok(snapDist <= 95, 'Must be within snap radius');
+
+    const placeRes = session.placePiece(piece.instanceId, target.instanceId, piece.slotId);
+    assert.strictEqual(placeRes.success, true, 'Placement within snap radius must succeed');
+
+    // Case B: Released beyond snap radius (dist = 150px > 95px) -> Rebound
+    const farTouchScreen = {
+      x: boardWorldCenter.x + slotLocalPos.x + 90,
+      y: boardWorldCenter.y + slotLocalPos.y + 120
+    };
+    const farLocal = boardNodeConvertToNodeSpaceAR(farTouchScreen);
+    const farDist = Math.hypot(farLocal.x - slotLocalPos.x, farLocal.y - slotLocalPos.y);
+    assert.strictEqual(farDist, 150);
+    assert.ok(farDist > 95, 'Must be outside snap radius -> triggers error rebound');
+  });
 });

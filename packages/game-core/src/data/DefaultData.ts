@@ -1,4 +1,4 @@
-import { IngredientDefinition, RecipeDefinition, DayConfig, DEFAULT_PRESSURE_PROFILE } from '../model/Types.js';
+import { IngredientDefinition, RecipeDefinition, DayConfig, DEFAULT_PRESSURE_PROFILE } from '../model/Types';
 
 export const DEFAULT_INGREDIENTS: Record<string, IngredientDefinition> = {
   bread: {
