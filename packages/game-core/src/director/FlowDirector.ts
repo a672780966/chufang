@@ -7,7 +7,9 @@ import {
   Order,
   NextOrderPreview,
   GridCoord,
-  ReleaseCategory
+  ReleaseCategory,
+  FlowDirectorProfile,
+  DEFAULT_DIRECTOR_PROFILE
 } from '../model/Types';
 import { SeededRandom } from '../random/SeededRandom';
 import { BoardGrid } from '../board/BoardGrid';
@@ -30,6 +32,10 @@ export class FlowDirector {
     this._ingredients = ingredients;
     this._recipes = recipes;
     this._rng = new SeededRandom(seed);
+  }
+
+  get profile(): FlowDirectorProfile {
+    return this._dayConfig.directorProfile || DEFAULT_DIRECTOR_PROFILE;
   }
 
   /**
@@ -66,28 +72,28 @@ export class FlowDirector {
       if (currentOrder) {
         const itemProg = currentOrder.items.find(i => i.ingredientId === ingredientId);
         if (itemProg && itemProg.reserved < itemProg.needed) {
-          score += 40;
+          score += this.profile.targetCurrentOrderWeight;
         }
       }
 
       // 2. Next order fact boost (internal real fact, completely decoupled from UI preview)
       if (nextOrderFact && nextOrderFact.items) {
         if (nextOrderFact.items.some(i => i.ingredientId === ingredientId)) {
-          score += 25;
+          score += this.profile.targetNextOrderFactWeight;
         }
       }
 
       // 3. Inventory deficit vs overflow penalty
       const availableCount = inventory.getAvailable(ingredientId);
       if (availableCount === 0) {
-        score += 15;
+        score += this.profile.targetInventoryZeroBonus;
       } else if (availableCount >= 2) {
-        score -= availableCount * 25; // Suppress hoarding
+        score -= availableCount * this.profile.targetInventoryOverflowPenalty; // Suppress hoarding
       }
 
       // 4. Duplicate target penalty (we want diverse targets on board)
       if (activeIngredientIds.has(ingredientId)) {
-        score -= 60;
+        score -= this.profile.targetDuplicatePenalty;
       }
 
       // Ensure score is positive
@@ -186,15 +192,20 @@ export class FlowDirector {
       if (currentOrder) {
         const itemProg = currentOrder.items.find(i => i.ingredientId === target.ingredientId);
         if (itemProg && itemProg.reserved < itemProg.needed) {
-          targetBaseWeight += 25;
+          targetBaseWeight += this.profile.pieceCurrentOrderWeight;
         }
       }
 
       // Next order fact boost (internal real fact)
       if (nextOrderFact && nextOrderFact.items) {
         if (nextOrderFact.items.some(i => i.ingredientId === target.ingredientId)) {
-          targetBaseWeight += 15;
+          targetBaseWeight += this.profile.pieceNextOrderFactWeight;
         }
+      }
+
+      // Near completion boost (PRD section 28: "1 个食材接近完成，让玩家持续感觉这个马上就好了")
+      if (progress >= this.profile.closureThresholdRatio || target.missingSlotIds.length <= 1) {
+        targetBaseWeight += this.profile.pieceNearCompletionBonus;
       }
 
       for (const slotId of availableMissingSlots) {
@@ -203,19 +214,31 @@ export class FlowDirector {
 
         // Check release eligibility
         if (category === 'early') {
-          pieceWeight += 20;
+          pieceWeight += this.profile.pieceEarlyWeightBonus;
         } else if (category === 'normal') {
           if (progress < 0.15) {
             pieceWeight *= 0.5;
           }
         } else if (category === 'closure') {
-          // Closure piece delay!
-          // Only release if progress is >= 70% OR starvation guard triggered
-          const starvationGuard = target.ageTurns >= 4 || target.missingSlotIds.length <= 1;
-          if (progress < 0.70 && !starvationGuard) {
-            pieceWeight = 0; // Temporarily withheld
+          // Closure piece release logic:
+          // A closure piece is the final key to complete the ingredient target.
+          // 1. Withhold while any non-closure slots remain unspawned.
+          // 2. Once only this closure slot remains, hold for closureHoldTurns moves
+          //    to create anticipation and forced target switching, unless starvation guard triggers.
+          const starvationGuard = target.ageTurns >= this.profile.closureStarvationTurns;
+          const otherSlotsUnspawned = availableMissingSlots.filter(s => s !== slotId).length > 0;
+          const isHeld = (target.nearCompletionTurns || 0) < this.profile.closureHoldTurns;
+
+          if (!starvationGuard) {
+            if (otherSlotsUnspawned) {
+              pieceWeight = 0; // Other non-closure slots must spawn first
+            } else if (isHeld) {
+              pieceWeight = 0; // Withheld during hold window to induce target switching
+            } else {
+              pieceWeight += this.profile.closureWeightBonus;
+            }
           } else {
-            pieceWeight += 35;
+            pieceWeight += this.profile.closureWeightBonus;
           }
         }
 
@@ -237,8 +260,33 @@ export class FlowDirector {
         : null;
     }
 
+    // Fallback: If all candidates were withheld by closure hold window, but unspawned missing slots exist,
+    // release the closure piece to avoid starving the board when no other pieces can spawn.
+    const fallbackCandidates: PieceCandidate[] = [];
+    for (const target of activeTargets) {
+      const spawnedSet = spawnedSlotsByTarget.get(target.instanceId);
+      const availableMissingSlots = target.missingSlotIds.filter(
+        slotId => !spawnedSet || !spawnedSet.has(slotId)
+      );
+      for (const slotId of availableMissingSlots) {
+        fallbackCandidates.push({
+          ingredientId: target.ingredientId,
+          slotId,
+          target,
+          weight: 30
+        });
+      }
+    }
+
+    if (fallbackCandidates.length > 0) {
+      const picked = this._rng.weightedPick(fallbackCandidates.map(c => ({ item: c, weight: c.weight })));
+      return picked && picked.target
+        ? { ingredientId: picked.ingredientId, slotId: picked.slotId, target: picked.target }
+        : null;
+    }
+
     // Target-first Instance Binding: If all active targets have their missing slots already spawned
-    // (or temporarily withheld by Closure ReleasePlan), NO orphan or duplicate pieces may be created.
+    // NO orphan or duplicate pieces may be created.
     return null;
   }
 }

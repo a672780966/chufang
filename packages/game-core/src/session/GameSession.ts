@@ -160,7 +160,8 @@ export class GameSession {
       placedSlotIds: [],
       missingSlotIds: allSlotIds,
       pieceReleasePlan: releasePlan,
-      ageTurns: 0
+      ageTurns: 0,
+      nearCompletionTurns: 0
     };
 
     // 1. Enter at spawn zone
@@ -284,7 +285,18 @@ export class GameSession {
 
     target.placedSlotIds.push(slotId);
     target.missingSlotIds = target.missingSlotIds.filter(s => s !== slotId);
-    target.ageTurns++;
+
+    // Advance turns for all active targets on the board
+    for (const t of this.grid.getAllTargets()) {
+      t.ageTurns++;
+      if (t.instanceId !== target.instanceId && t.missingSlotIds.length <= 1) {
+        t.nearCompletionTurns = (t.nearCompletionTurns || 0) + 1;
+      }
+    }
+    if (target.missingSlotIds.length <= 1 && (target.nearCompletionTurns === undefined || target.missingSlotIds.length === 1)) {
+      target.nearCompletionTurns = 0;
+    }
+
     this._stats.piecesPlaced++;
 
     this.events.emit('PIECE_PLACED', {

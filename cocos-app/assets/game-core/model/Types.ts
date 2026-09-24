@@ -66,6 +66,8 @@ export interface IngredientTarget {
   pieceReleasePlan: Record<string, ReleaseCategory>;
   /** Age / turns since creation */
   ageTurns: number;
+  /** Turns elapsed since entering near-completion state (<= 1 missing slot) */
+  nearCompletionTurns?: number;
 }
 
 export interface LoosePiece {
@@ -125,12 +127,59 @@ export interface PressureProfile {
 
 export const DEFAULT_PRESSURE_PROFILE: PressureProfile = {
   baseInflowPerPlacement: 1,
-  bonusInterval: 3,
+  bonusInterval: 4,
   bonusAmount: 1,
-  escalationThreshold: 6,
+  escalationThreshold: 8,
   escalationInterval: 2,
   escalationAmount: 1,
   pauseBonusOnDanger: true
+};
+
+export interface FlowDirectorProfile {
+  /** Target Spawn: weight bonus for ingredients needed by current order */
+  targetCurrentOrderWeight: number;
+  /** Target Spawn: weight bonus for ingredients needed by next order fact */
+  targetNextOrderFactWeight: number;
+  /** Target Spawn: inventory deficit bonus when available stock is 0 */
+  targetInventoryZeroBonus: number;
+  /** Target Spawn: inventory overflow penalty per item when available stock >= 2 */
+  targetInventoryOverflowPenalty: number;
+  /** Target Spawn: duplicate penalty if target ingredient is already on board */
+  targetDuplicatePenalty: number;
+
+  /** Loose Piece: weight bonus for missing slots of current order targets */
+  pieceCurrentOrderWeight: number;
+  /** Loose Piece: weight bonus for missing slots of next order targets */
+  pieceNextOrderFactWeight: number;
+  /** Loose Piece: near-completion bonus when target is >= 70% or has <= 1 slot missing */
+  pieceNearCompletionBonus: number;
+  /** Loose Piece: early release slot bonus */
+  pieceEarlyWeightBonus: number;
+  /** Loose Piece: progress threshold ratio before closure piece can be released */
+  closureThresholdRatio: number;
+  /** Loose Piece: turns elapsed before closure starvation guard triggers */
+  closureStarvationTurns: number;
+  /** Loose Piece: turns to withhold closure piece once only closure slot remains, to induce anticipation and target switching (default: 2) */
+  closureHoldTurns: number;
+  /** Loose Piece: closure piece bonus weight once eligible */
+  closureWeightBonus: number;
+}
+
+export const DEFAULT_DIRECTOR_PROFILE: FlowDirectorProfile = {
+  targetCurrentOrderWeight: 40,
+  targetNextOrderFactWeight: 10,
+  targetInventoryZeroBonus: 15,
+  targetInventoryOverflowPenalty: 25,
+  targetDuplicatePenalty: 60,
+
+  pieceCurrentOrderWeight: 25,
+  pieceNextOrderFactWeight: 5,
+  pieceNearCompletionBonus: 10,
+  pieceEarlyWeightBonus: 20,
+  closureThresholdRatio: 0.75,
+  closureStarvationTurns: 6,
+  closureHoldTurns: 2,
+  closureWeightBonus: 25
 };
 
 export interface DayConfig {
@@ -145,6 +194,7 @@ export interface DayConfig {
   loosePieceComfortMax: number;
   boardProfile?: BoardProfile;
   pressureProfile?: PressureProfile;
+  directorProfile?: FlowDirectorProfile;
 }
 
 export type NextOrderPreviewMode = 'NONE' | 'DISH_ONLY' | 'FULL_RECIPE';

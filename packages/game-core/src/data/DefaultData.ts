@@ -1,4 +1,4 @@
-import { IngredientDefinition, RecipeDefinition, DayConfig, DEFAULT_PRESSURE_PROFILE } from '../model/Types';
+import { IngredientDefinition, RecipeDefinition, DayConfig, DEFAULT_PRESSURE_PROFILE, DEFAULT_DIRECTOR_PROFILE } from '../model/Types';
 
 export const DEFAULT_INGREDIENTS: Record<string, IngredientDefinition> = {
   bread: {
@@ -683,7 +683,8 @@ export const DEFAULT_DAYS: DayConfig[] = [
     targetIngredientCount: 3,
     loosePieceComfortMin: 5,
     loosePieceComfortMax: 8,
-    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE }
+    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE },
+    directorProfile: { ...DEFAULT_DIRECTOR_PROFILE }
   },
   {
     dayNumber: 2,
@@ -693,7 +694,8 @@ export const DEFAULT_DAYS: DayConfig[] = [
     targetIngredientCount: 4,
     loosePieceComfortMin: 6,
     loosePieceComfortMax: 9,
-    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE }
+    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE },
+    directorProfile: { ...DEFAULT_DIRECTOR_PROFILE }
   },
   {
     dayNumber: 3,
@@ -703,7 +705,8 @@ export const DEFAULT_DAYS: DayConfig[] = [
     targetIngredientCount: 4,
     loosePieceComfortMin: 6,
     loosePieceComfortMax: 9,
-    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE }
+    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE },
+    directorProfile: { ...DEFAULT_DIRECTOR_PROFILE }
   },
   {
     dayNumber: 4,
@@ -729,6 +732,7 @@ export const DEFAULT_DAYS: DayConfig[] = [
     targetIngredientCount: 4,
     loosePieceComfortMin: 6,
     loosePieceComfortMax: 9,
-    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE }
+    pressureProfile: { ...DEFAULT_PRESSURE_PROFILE },
+    directorProfile: { ...DEFAULT_DIRECTOR_PROFILE }
   }
 ];
