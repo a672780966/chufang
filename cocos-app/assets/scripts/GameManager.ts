@@ -45,6 +45,14 @@ export class GameManager extends Component {
   private bindEvents() {
     const events = this._session.events;
 
+    events.on('TARGET_SPAWNED', (p) => {
+      this.boardView?.onTargetSpawned(p);
+    });
+
+    events.on('PIECE_SPAWNED', (p) => {
+      this.boardView?.onPieceSpawned(p);
+    });
+
     events.on('PIECE_PLACED', (p) => {
       this.boardView?.onPiecePlaced(p);
     });

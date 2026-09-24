@@ -34,12 +34,13 @@ export class FlowDirector {
   /**
    * Stage A: Target Selector
    * Evaluates which ingredient definition should be spawned next on the board.
+   * Strictly filters candidates to only those that can legally fit into the top Spawn Zone!
    */
   selectNextTargetIngredient(
     grid: BoardGrid,
     inventory: PrepInventory,
     currentOrder: Order | null,
-    nextOrderHint: NextOrderPreview | null
+    nextOrderFact: Order | null
   ): IngredientDefinition | null {
     const activeTargets = grid.getAllTargets();
     const activeIngredientIds = new Set(activeTargets.map(t => t.ingredientId));
@@ -56,12 +57,23 @@ export class FlowDirector {
 
     if (candidateSet.size === 0) return null;
 
-    const scoredCandidates: Array<{ item: IngredientDefinition; weight: number }> = [];
-
+    // CRITICAL: Strictly filter to candidates that can legally spawn in the top Spawn Zone!
+    const validDefCandidates: IngredientDefinition[] = [];
     for (const ingredientId of candidateSet) {
       const def = this._ingredients[ingredientId];
       if (!def) continue;
+      const spawnAnchors = grid.findSpawnAnchorsForFootprint(def.footprint);
+      if (spawnAnchors.length > 0) {
+        validDefCandidates.push(def);
+      }
+    }
 
+    if (validDefCandidates.length === 0) return null;
+
+    const scoredCandidates: Array<{ item: IngredientDefinition; weight: number }> = [];
+
+    for (const def of validDefCandidates) {
+      const ingredientId = def.id;
       let score = 50; // Base score
 
       // 1. Current order need (highest preference, but not guaranteed)
@@ -72,10 +84,10 @@ export class FlowDirector {
         }
       }
 
-      // 2. Next order hint (secondary preference)
-      if (nextOrderHint && nextOrderHint.requirements) {
-        if (nextOrderHint.requirements.some(r => r.ingredientId === ingredientId)) {
-          score += 20;
+      // 2. Next order fact boost (internal real fact, completely decoupled from UI preview)
+      if (nextOrderFact && nextOrderFact.items) {
+        if (nextOrderFact.items.some(i => i.ingredientId === ingredientId)) {
+          score += 25;
         }
       }
 
@@ -142,7 +154,7 @@ export class FlowDirector {
     grid: BoardGrid,
     inventory: PrepInventory,
     currentOrder: Order | null,
-    nextOrderHint: NextOrderPreview | null
+    nextOrderFact: Order | null
   ): { target: IngredientTarget; slotId: string } | null {
     const activeTargets = grid.getAllTargets();
     if (activeTargets.length === 0) return null;
@@ -189,10 +201,10 @@ export class FlowDirector {
         }
       }
 
-      // Next order hint boost
-      if (nextOrderHint && nextOrderHint.requirements) {
-        if (nextOrderHint.requirements.some(r => r.ingredientId === target.ingredientId)) {
-          targetBaseWeight += 10;
+      // Next order fact boost (internal real fact)
+      if (nextOrderFact && nextOrderFact.items) {
+        if (nextOrderFact.items.some(i => i.ingredientId === target.ingredientId)) {
+          targetBaseWeight += 15;
         }
       }
 

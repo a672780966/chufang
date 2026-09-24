@@ -56,6 +56,14 @@ export class OrderSystem {
   }
 
   /**
+   * Internal truth: Returns the full real next order fact (not filtered by UI mode).
+   * Used exclusively by FlowDirector for intelligent anticipation.
+   */
+  getNextOrderFact(): Order | null {
+    return this._orderBag.peekNextOrder();
+  }
+
+  /**
    * Spawns the next order and attempts immediate reservation from inventory.
    */
   private spawnNextOrder(): Order | null {

@@ -238,4 +238,20 @@ export class BoardGrid {
     }
     return occupied / totalCount;
   }
+
+  /**
+   * Returns the maximum row index + 1 currently occupied across all columns.
+   */
+  getMaxStackHeight(): number {
+    let maxHeight = 0;
+    for (let c = 0; c < this.columns; c++) {
+      for (let r = this.totalRows - 1; r >= 0; r--) {
+        if (this._cells[c][r].type !== 'empty') {
+          if (r + 1 > maxHeight) maxHeight = r + 1;
+          break;
+        }
+      }
+    }
+    return maxHeight;
+  }
 }

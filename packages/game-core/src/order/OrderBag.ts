@@ -107,12 +107,14 @@ export class OrderBag {
     if (mode === 'DISH_ONLY') {
       return {
         mode: 'DISH_ONLY',
+        dishId: next.recipeId,
         dishName: next.dishName,
         emoji: next.emoji
       };
     }
     return {
       mode: 'FULL_RECIPE',
+      dishId: next.recipeId,
       dishName: next.dishName,
       emoji: next.emoji,
       requirements: next.items.map(i => ({ ingredientId: i.ingredientId, count: i.needed }))

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite packages/web-greybox",
-    "test": "tsx --test packages/game-core/test/GameCore.test.ts",
+    "test": "tsx --test packages/game-core/test/*.test.ts",
+    "sync:core": "node scripts/sync-core.mjs",
     "sim": "tsx packages/simulation/src/SimulationRunner.ts",
     "build:core": "tsc --noEmit"
   },

@@ -17,10 +17,11 @@ export interface SimReport {
   avgIngredientsCompleted: number;
   avgOrdersCompleted: number;
   avgFinalRevenue: number;
+  avgDangerEvents: number;
+  avgNearDeadRecoveries: number;
   cascadeOccurrenceRatePct: number;
   maxCascadeChain: number;
   avgInventoryWaste: number;
-  avgDeadlockChecks: number;
 }
 
 export type BotStrategy = 'novice' | 'targeted' | 'master';
@@ -34,10 +35,32 @@ export class SimulationRunner {
     seed: string | number,
     strategy: BotStrategy = 'targeted',
     maxSteps: number = 300
-  ): { cleared: boolean; blocked: boolean; session: GameSession; steps: number } {
+  ): {
+    cleared: boolean;
+    blocked: boolean;
+    session: GameSession;
+    steps: number;
+    dangerEvents: number;
+    nearDeadRecoveries: number;
+  } {
     const session = new GameSession(dayConfig, seed);
     const botRng = new SeededRandom(`${seed}_bot`);
     let steps = 0;
+    let dangerEvents = 0;
+    let nearDeadRecoveries = 0;
+    let isCurrentlyInDanger = false;
+
+    session.events.on('BOARD_DANGER', () => {
+      dangerEvents++;
+      isCurrentlyInDanger = true;
+    });
+
+    session.events.on('INGREDIENT_COMPLETED', () => {
+      if (isCurrentlyInDanger) {
+        nearDeadRecoveries++;
+        isCurrentlyInDanger = false;
+      }
+    });
 
     while (!session.isGameOver && steps < maxSteps) {
       steps++;
@@ -68,9 +91,11 @@ export class SimulationRunner {
           }
 
           if (strategy === 'master') {
-            // Check next order hint for preparation
-            if (state.nextOrderPreview && state.nextOrderPreview.requirements) {
-              if (state.nextOrderPreview.requirements.some(r => r.ingredientId === target.ingredientId)) {
+            // Check next order hint for preparation (deduced from dishId recipe)
+            const dishId = state.nextOrderPreview?.dishId;
+            if (dishId && DEFAULT_RECIPES[dishId]) {
+              const reqs = DEFAULT_RECIPES[dishId].requirements;
+              if (reqs.some((r: any) => r.ingredientId === target.ingredientId)) {
                 score += 25;
               }
             }
@@ -113,7 +138,9 @@ export class SimulationRunner {
       cleared: finalState.isGoalReached,
       blocked: finalState.isDeadlocked,
       session,
-      steps
+      steps,
+      dangerEvents,
+      nearDeadRecoveries
     };
   }
 
@@ -139,6 +166,9 @@ export class SimulationRunner {
       let totalRemainingInventory = 0;
       let totalDeadlockChecks = 0;
 
+      let totalDangerEvents = 0;
+      let totalNearDeadRecoveries = 0;
+
       for (let i = 0; i < runsPerDay; i++) {
         const seed = `sim_${day.dayNumber}_run_${i}_${strategy}`;
         const result = this.runSingleGame(day, seed, strategy);
@@ -152,6 +182,9 @@ export class SimulationRunner {
         totalIngredients += stats.ingredientsCompleted;
         totalOrders += stats.ordersCompleted;
         totalRevenue += stats.totalRevenue;
+        totalDangerEvents += result.dangerEvents;
+        totalNearDeadRecoveries += result.nearDeadRecoveries;
+
         if (stats.cascadeEventsCount > 0) cascadeEventsCount++;
         if (stats.maxCascadeChain > maxCascadeChain) maxCascadeChain = stats.maxCascadeChain;
 
@@ -171,10 +204,11 @@ export class SimulationRunner {
         avgIngredientsCompleted: Math.round((totalIngredients / runsPerDay) * 10) / 10,
         avgOrdersCompleted: Math.round((totalOrders / runsPerDay) * 10) / 10,
         avgFinalRevenue: Math.round(totalRevenue / runsPerDay),
+        avgDangerEvents: Math.round((totalDangerEvents / runsPerDay) * 10) / 10,
+        avgNearDeadRecoveries: Math.round((totalNearDeadRecoveries / runsPerDay) * 10) / 10,
         cascadeOccurrenceRatePct: Math.round((cascadeEventsCount / runsPerDay) * 100),
         maxCascadeChain,
-        avgInventoryWaste: Math.round((totalRemainingInventory / runsPerDay) * 10) / 10,
-        avgDeadlockChecks: Math.round(totalDeadlockChecks / runsPerDay)
+        avgInventoryWaste: Math.round((totalRemainingInventory / runsPerDay) * 10) / 10
       });
     }
 
@@ -196,6 +230,6 @@ if (process.argv[1] && process.argv[1].endsWith('SimulationRunner.ts')) {
 
   console.log('\nSimulation Validation Highlights:');
   for (const r of reports) {
-    console.log(`- Day ${r.dayNumber}: Clear Rate = ${r.clearRatePct}%, Cascade Rate = ${r.cascadeOccurrenceRatePct}%, Max Chain = ${r.maxCascadeChain}, Avg Orders = ${r.avgOrdersCompleted}, Waste = ${r.avgInventoryWaste}`);
+    console.log(`- Day ${r.dayNumber}: Clear = ${r.clearRatePct}%, Blocked = ${r.blockedRuns}, Danger Events = ${r.avgDangerEvents}, Near-Dead Recoveries = ${r.avgNearDeadRecoveries}, Cascade Rate = ${r.cascadeOccurrenceRatePct}%, Max Chain = ${r.maxCascadeChain}`);
   }
 }

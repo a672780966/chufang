@@ -48,6 +48,7 @@ export class GameSession {
   private _isGameOver: boolean = false;
   private _targetCounter: number = 1;
   private _pieceCounter: number = 1;
+  private _consecutiveNonClearPlacements: number = 0;
 
   private _stats: GameStats = {
     totalRevenue: 0,
@@ -127,7 +128,7 @@ export class GameSession {
       this.grid,
       this.inventory,
       this.orderSystem.currentOrder,
-      this.orderSystem.getNextOrderPreview()
+      this.orderSystem.getNextOrderFact()
     );
     if (!def) return false;
 
@@ -163,6 +164,13 @@ export class GameSession {
 
     // 2. Unified DiscreteGravity drops the target down into resting position
     const settleResult = DiscreteGravity.settle(this.grid);
+
+    this.events.emit('TARGET_SPAWNED', {
+      target,
+      fromAnchor: chosenAnchor,
+      toAnchor: { ...target.anchor }
+    });
+
     if (settleResult.hasMoved) {
       this.events.emit('BOARD_SETTLED', {
         movedTargets: settleResult.movedTargets,
@@ -183,7 +191,7 @@ export class GameSession {
       this.grid,
       this.inventory,
       this.orderSystem.currentOrder,
-      this.orderSystem.getNextOrderPreview()
+      this.orderSystem.getNextOrderFact()
     );
     if (!selected) return false;
 
@@ -292,10 +300,18 @@ export class GameSession {
     if (target.missingSlotIds.length === 0) {
       this.handleIngredientCompleted(target);
     } else {
-      // Micro Refill (per GDD and grill-me):
-      // Each piece placed frees a slot and draws 1 new piece from top spawn zone if space allows!
-      // This allows board pressure to accumulate realistically toward danger when targets take multiple steps.
+      this._consecutiveNonClearPlacements++;
+
+      // Action-driven spatial pressure:
+      // Base inflow: 1 piece enters from top
       this.trySpawnNextLoosePiece();
+
+      // Pacing momentum: Every 3 non-completing placements, an extra piece drops into the board!
+      // This causes loose pieces to steadily accumulate towards danger if player lingers without clearing.
+      if (this._consecutiveNonClearPlacements % 3 === 0) {
+        this.trySpawnNextLoosePiece();
+      }
+
       this.checkDeadlockAndDanger();
     }
 
@@ -304,14 +320,15 @@ export class GameSession {
 
   /**
    * Handles completion of an ingredient target:
-   * 1. Remove from board -> PrepInventory
+   * 1. Remove from board -> PrepInventory (major 4~9 cell relief!)
    * 2. Order reservation & cascade
-   * 3. Board-wide discrete settling (Completion Reflow)
+   * 3. Board-wide discrete settling (Completion Reflow / Near-dead recovery)
    * 4. Replenish targets & pieces
    * 5. Check victory / deadlock
    */
   private handleIngredientCompleted(target: IngredientTarget): void {
     this._stats.ingredientsCompleted++;
+    this._consecutiveNonClearPlacements = 0; // Reset pressure accumulator!
     this.events.emit('INGREDIENT_COMPLETED', { target });
 
     // Remove from board

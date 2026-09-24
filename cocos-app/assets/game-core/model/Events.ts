@@ -1,6 +1,7 @@
 import { GridCoord, Order, IngredientTarget, LoosePiece } from './Types.js';
 
 export type CoreEventType =
+  | 'TARGET_SPAWNED'
   | 'PIECE_SPAWNED'
   | 'PIECE_MOVED'
   | 'PIECE_PLACED'
@@ -25,6 +26,7 @@ export type CoreEventType =
   | 'BOARD_SETTLED';
 
 export interface CoreEventMap {
+  TARGET_SPAWNED: { target: IngredientTarget; fromAnchor: GridCoord; toAnchor: GridCoord };
   PIECE_SPAWNED: { piece: LoosePiece; fromCoord: GridCoord; toCoord: GridCoord };
   PIECE_MOVED: { pieceInstanceId: string; fromCoord: GridCoord; toCoord: GridCoord };
   PIECE_PLACED: {

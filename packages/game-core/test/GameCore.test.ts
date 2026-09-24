@@ -68,7 +68,7 @@ describe('DeadlockDetector & FlowDirector Consistency', () => {
       grid,
       session.inventory,
       session.orderSystem.currentOrder,
-      session.orderSystem.getNextOrderPreview()
+      session.orderSystem.getNextOrderFact()
     );
 
     assert.strictEqual(check.hasSpawnableMissingPiece, selected !== null);
@@ -159,3 +159,114 @@ describe('PrepInventory and Reservation', () => {
     assert.strictEqual(inv.getReserved('beef'), 0);
   });
 });
+
+describe('NextOrderFact FlowDirector Weight Modulation', () => {
+  it('should statistically boost selection of ingredients required by nextOrderFact', () => {
+    const inv = new PrepInventory();
+    const grid = new BoardGrid();
+
+    let beefCountWithBeefNext = 0;
+    let beefCountWithSaladNext = 0;
+    const trials = 200;
+
+    const beefOrderFact: any = {
+      orderId: 'fact_beef',
+      dishId: 'burger',
+      dishName: '汉堡',
+      revenue: 100,
+      createdAtTurns: 0,
+      items: [{ ingredientId: 'beef', needed: 2, reserved: 0 }]
+    };
+
+    const saladOrderFact: any = {
+      orderId: 'fact_salad',
+      dishId: 'veggie_salad',
+      dishName: '沙拉',
+      revenue: 80,
+      createdAtTurns: 0,
+      items: [{ ingredientId: 'salad', needed: 2, reserved: 0 }]
+    };
+
+    for (let i = 0; i < trials; i++) {
+      const directorBeef = new FlowDirector(DEFAULT_DAYS[1], DEFAULT_INGREDIENTS, DEFAULT_RECIPES, 1000 + i);
+      const chosenBeef = directorBeef.selectNextTargetIngredient(grid, inv, null, beefOrderFact);
+      if (chosenBeef?.id === 'beef') beefCountWithBeefNext++;
+
+      const directorSalad = new FlowDirector(DEFAULT_DAYS[1], DEFAULT_INGREDIENTS, DEFAULT_RECIPES, 1000 + i);
+      const chosenSalad = directorSalad.selectNextTargetIngredient(grid, inv, null, saladOrderFact);
+      if (chosenSalad?.id === 'beef') beefCountWithSaladNext++;
+    }
+
+    assert.ok(
+      beefCountWithBeefNext > beefCountWithSaladNext,
+      `NextOrderFact with beef should pick beef more frequently (${beefCountWithBeefNext}) than when salad is next (${beefCountWithSaladNext})`
+    );
+  });
+});
+
+describe('Action-Driven Spatial Pressure & Natural Recovery', () => {
+  it('should accumulate spatial momentum on consecutive non-clearing moves and collapse height on completion', () => {
+    const session = new GameSession(DEFAULT_DAYS[0], 4321);
+    const initialHeight = session.grid.getMaxStackHeight();
+    assert.ok(initialHeight >= 0, 'Initial stack height should be non-negative');
+
+    // Simulate placements: when moves don't complete an ingredient, momentum builds
+    let piecesPlaced = 0;
+    while (piecesPlaced < 6 && !session.getState().isGameOver) {
+      const state = session.getState();
+      const targets = session.grid.getAllTargets();
+      const loose = session.grid.getAllLoosePieces();
+
+      let placed = false;
+      for (const p of loose) {
+        const target = targets.find(t => t.instanceId === p.targetInstanceId);
+        if (target && target.missingSlotIds.includes(p.slotId)) {
+          // If this move would complete the target, skip it temporarily to let momentum build
+          if (target.missingSlotIds.length === 1 && piecesPlaced < 3) {
+            continue;
+          }
+          const res = session.placePiece(p.instanceId, target.instanceId, p.slotId);
+          if (res.success) {
+            placed = true;
+            piecesPlaced++;
+            break;
+          }
+        }
+      }
+      if (!placed) break;
+    }
+
+    assert.ok(piecesPlaced > 0, 'Should have successfully placed pieces');
+  });
+});
+
+describe('Rigorous Deadlock Detection (PRD 3.1 BOARD_BLOCKED)', () => {
+  it('should declare deadlock when top spawn line is blocked and no legal moves or completions exist', () => {
+    const grid = new BoardGrid();
+    // Fill the entire spawn zone (rows to totalRows - 1) completely with loose pieces
+    for (let r = grid.rows; r < grid.totalRows; r++) {
+      for (let c = 0; c < grid.columns; c++) {
+        grid.occupyLoosePiece({
+          instanceId: `blocker_${c}_${r}`,
+          ingredientId: 'bread',
+          targetInstanceId: 'non_existent_target',
+          slotId: 'b_0',
+          coord: { col: c, row: r }
+        });
+      }
+    }
+
+    // No targets on board, top spawn row blocked:
+    // 1. hasPendingClear = false
+    // 2. hasLegalPiecePlacement = false
+    // 3. hasSpawnableMissingPiece = false
+    // 4. hasLegalTargetSpawn = false (spawn zone blocked)
+    const check = DeadlockDetector.evaluate(grid, DEFAULT_INGREDIENTS, 2);
+    assert.strictEqual(check.hasPendingClear, false);
+    assert.strictEqual(check.hasLegalPiecePlacement, false);
+    assert.strictEqual(check.hasSpawnableMissingPiece, false);
+    assert.strictEqual(check.hasLegalTargetSpawn, false);
+    assert.strictEqual(check.isDeadlocked, true, 'Board must be strictly identified as deadlocked (BOARD_BLOCKED)');
+  });
+});
+

@@ -123,6 +123,7 @@ export type NextOrderPreviewMode = 'NONE' | 'DISH_ONLY' | 'FULL_RECIPE';
 
 export interface NextOrderPreview {
   mode: NextOrderPreviewMode;
+  dishId?: string;
   dishName?: string;
   emoji?: string;
   requirements?: RecipeRequirement[];
