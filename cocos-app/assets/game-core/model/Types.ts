@@ -125,7 +125,7 @@ export interface PressureProfile {
   pauseBonusOnDanger: boolean;
 }
 
-export const DEFAULT_PRESSURE_PROFILE: PressureProfile = {
+export const STAGE2_FROZEN_PRESSURE_PROFILE: PressureProfile = {
   baseInflowPerPlacement: 1,
   bonusInterval: 4,
   bonusAmount: 1,
@@ -134,6 +134,8 @@ export const DEFAULT_PRESSURE_PROFILE: PressureProfile = {
   escalationAmount: 1,
   pauseBonusOnDanger: true
 };
+
+export const DEFAULT_PRESSURE_PROFILE: PressureProfile = STAGE2_FROZEN_PRESSURE_PROFILE;
 
 export interface FlowDirectorProfile {
   /** Target Spawn: weight bonus for ingredients needed by current order */
@@ -165,7 +167,7 @@ export interface FlowDirectorProfile {
   closureWeightBonus: number;
 }
 
-export const DEFAULT_DIRECTOR_PROFILE: FlowDirectorProfile = {
+export const STAGE2_FROZEN_DIRECTOR_PROFILE: FlowDirectorProfile = {
   targetCurrentOrderWeight: 40,
   targetNextOrderFactWeight: 10,
   targetInventoryZeroBonus: 15,
@@ -181,6 +183,8 @@ export const DEFAULT_DIRECTOR_PROFILE: FlowDirectorProfile = {
   closureHoldTurns: 2,
   closureWeightBonus: 25
 };
+
+export const DEFAULT_DIRECTOR_PROFILE: FlowDirectorProfile = STAGE2_FROZEN_DIRECTOR_PROFILE;
 
 export interface DayConfig {
   dayNumber: number;
