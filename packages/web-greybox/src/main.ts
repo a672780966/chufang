@@ -17,6 +17,7 @@ import {
 import { AudioDirector } from './audio/AudioDirector.js';
 import { WebStorageAdapter } from './storage/WebStorageAdapter.js';
 import { WebTelemetrySink } from './telemetry/WebTelemetrySink.js';
+import { PastoralTheme } from './theme/PastoralTheme.js';
 
 class WebGameApp {
   private flow!: GameFlowManager;
@@ -31,6 +32,7 @@ class WebGameApp {
   private pieceVisualPositions = new Map<string, { x: number; y: number }>();
   private targetVisualAnchors = new Map<string, { x: number; y: number }>();
   private currentTutorialCue: DragTutorialCue | null = null;
+  private completedAnimTargets = new Map<string, { startTime: number; target: IngredientTarget }>();
 
   // SVG Image Cache for 60fps canvas blitting
   private svgImageCache = new Map<string, HTMLImageElement>();
@@ -230,7 +232,7 @@ class WebGameApp {
     const highest = this.flow.campaignState.highestUnlockedDay;
     const continueLabel = document.getElementById('btn-continue-label');
     if (continueLabel) {
-      continueLabel.textContent = `开始营业 (DAY ${highest})`;
+      continueLabel.textContent = `开始今日营业 (DAY ${highest})`;
     }
 
     for (let day = 1; day <= 12; day++) {
@@ -241,12 +243,13 @@ class WebGameApp {
 
       if (isCompleted) {
         tile.classList.add('completed');
-        tile.innerHTML = `<div>D${day}</div><div style="font-size:10px;">✓</div>`;
+        tile.innerHTML = `<div>D${day}</div><div class="day-stamp">已营业✓</div>`;
       } else if (isLocked) {
         tile.classList.add('locked');
-        tile.innerHTML = `<div>D${day}</div><div style="font-size:10px;">🔒</div>`;
+        tile.innerHTML = `<div>D${day}</div><div style="font-size:10px; color:var(--ink-muted);">🔒</div>`;
       } else {
-        tile.innerHTML = `<div>D${day}</div><div style="font-size:10px; color:#ea580c;">GO</div>`;
+        if (day === highest) tile.classList.add('current-play');
+        tile.innerHTML = `<div>D${day}</div><div style="font-size:10px; color:var(--sage-dark); font-weight:800;">今日</div>`;
       }
 
       if (!isLocked) {
@@ -264,6 +267,7 @@ class WebGameApp {
     this.targetVisualAnchors.clear();
     this.draggingPiece = null;
     this.wobblePieces.clear();
+    this.completedAnimTargets.clear();
     this.currentTutorialCue = null;
     this.resizeCanvas();
 
@@ -274,9 +278,17 @@ class WebGameApp {
       this.flow.beginPlaying();
     }, 250);
 
-    // Bind session audio cues
+    // Bind session audio & visual cues
     session.events.on('PIECE_PLACED', () => AudioDirector.playSnapPiece());
-    session.events.on('INGREDIENT_COMPLETED', (d: any) => AudioDirector.playIngredientComplete(d.target?.ingredientId));
+    session.events.on('INGREDIENT_COMPLETED', (d: any) => {
+      AudioDirector.playIngredientComplete(d.target?.ingredientId);
+      if (d.target) {
+        this.completedAnimTargets.set(d.target.instanceId, {
+          startTime: performance.now(),
+          target: d.target
+        });
+      }
+    });
     session.events.on('CASCADE_STEP', (d: any) => AudioDirector.playCascade(d.chainLength));
     session.events.on('ORDER_COMPLETED', () => {
       AudioDirector.playOrderComplete();
@@ -298,7 +310,7 @@ class WebGameApp {
     const session = this.flow.session;
     if (!session) return;
 
-    // Header Day & Revenue
+    // A. Top Header Day & Revenue
     const dayTitle = document.getElementById('day-title');
     if (dayTitle) dayTitle.textContent = `DAY ${String(session.dayConfig.dayNumber).padStart(2, '0')}`;
 
@@ -311,25 +323,27 @@ class WebGameApp {
       fill.style.width = `${pct}%`;
     }
 
-    // Receipt Order Info
+    // B. Hanging Thermal Receipt
     const order = session.orderSystem.currentOrder;
+    const orderIdNum = document.getElementById('order-id-num');
     const orderIdDish = document.getElementById('order-id-dish');
     const orderRevenue = document.getElementById('order-revenue');
     const checklist = document.getElementById('receipt-checklist');
 
     if (order) {
-      if (orderIdDish) orderIdDish.textContent = `${order.orderId} ${order.emoji} ${order.dishName}`;
+      if (orderIdNum) orderIdNum.textContent = `${order.orderId}`;
+      if (orderIdDish) orderIdDish.textContent = `${order.emoji} ${order.dishName}`;
       if (orderRevenue) orderRevenue.textContent = `¥${order.baseRevenue}`;
 
       if (checklist) {
         checklist.innerHTML = '';
+        // Clean dish progress dots (no raw ugly ingredient text lists!)
         for (const item of order.items) {
-          const ing = DEFAULT_INGREDIENTS[item.ingredientId];
-          const div = document.createElement('div');
+          const dot = document.createElement('div');
           const isSatisfied = item.reserved >= item.needed;
-          div.className = `receipt-item ${isSatisfied ? 'satisfied' : 'unmet'}`;
-          div.textContent = `${ing?.name || item.ingredientId}`;
-          checklist.appendChild(div);
+          dot.className = `dish-progress-dot ${isSatisfied ? 'filled' : ''}`;
+          dot.title = `${item.ingredientId}: ${item.reserved}/${item.needed}`;
+          checklist.appendChild(dot);
         }
       }
     }
@@ -341,31 +355,36 @@ class WebGameApp {
 
     if (nextHint && nextLabel) {
       if (session.dayConfig.dayNumber >= 7 && nextPreview.dishId) {
-        nextHint.style.display = 'flex';
+        nextHint.style.display = 'inline-flex';
         nextLabel.textContent = `${nextPreview.emoji} ${nextPreview.dishName}`;
       } else {
         nextHint.style.display = 'none';
       }
     }
 
-    // Inventory Tray
-    const tray = document.getElementById('inventory-tray');
-    if (tray) {
-      tray.innerHTML = '';
-      const stock = session.inventory.getAllAvailable();
-      let hasAny = false;
-      for (const [id, count] of Object.entries(stock)) {
-        if (count > 0) {
-          hasAny = true;
-          const ing = DEFAULT_INGREDIENTS[id];
-          const chip = document.createElement('div');
-          chip.className = 'inv-chip';
-          chip.textContent = `${ing?.emoji || '🍱'} ×${count}`;
-          tray.appendChild(chip);
-        }
+    // D. Serving Tray (2 slots for prepared dishes)
+    const slot0 = document.getElementById('tray-slot-0');
+    const slot1 = document.getElementById('tray-slot-1');
+    const stock = session.inventory.getAllAvailable();
+    const stockEntries = Object.entries(stock).filter(([_, c]) => c > 0);
+    if (slot0) {
+      if (stockEntries[0]) {
+        const ing = DEFAULT_INGREDIENTS[stockEntries[0][0]];
+        slot0.textContent = ing?.emoji || '🍱';
+        slot0.className = 'tray-dish-slot occupied';
+      } else {
+        slot0.textContent = '空';
+        slot0.className = 'tray-dish-slot';
       }
-      if (!hasAny) {
-        tray.innerHTML = `<span style="font-size:11px; color:#94a3b8; font-weight:500;">备料台 (空)</span>`;
+    }
+    if (slot1) {
+      if (stockEntries[1]) {
+        const ing = DEFAULT_INGREDIENTS[stockEntries[1][0]];
+        slot1.textContent = ing?.emoji || '🍱';
+        slot1.className = 'tray-dish-slot occupied';
+      } else {
+        slot1.textContent = '空';
+        slot1.className = 'tray-dish-slot';
       }
     }
 
@@ -373,6 +392,7 @@ class WebGameApp {
     const dangerBanner = document.getElementById('danger-banner');
     if (dangerBanner) {
       dangerBanner.style.display = session.isBoardInDanger() ? 'block' : 'none';
+      dangerBanner.textContent = '⚠️ 厨房忙碌中，请尽快拼合出餐腾出台面~';
     }
 
     // Cascade banner
@@ -380,7 +400,7 @@ class WebGameApp {
     if (cascadeBanner) {
       if (session.stats.cascadeEventsCount > 0) {
         cascadeBanner.style.display = 'block';
-        cascadeBanner.textContent = `⚡ 连续出餐 ×${session.stats.maxCascadeChain}! 厨房运转中`;
+        cascadeBanner.textContent = `⚡ 连续出餐 ×${session.stats.maxCascadeChain}！今日厨房好忙~`;
       } else {
         cascadeBanner.style.display = 'none';
       }
@@ -609,6 +629,31 @@ class WebGameApp {
     requestAnimationFrame(loop);
   }
 
+  private drawSteamPuffs(centerX: number, topY: number, progress: number): void {
+    this.ctx.save();
+    const alpha = Math.max(0, (1 - progress) * 0.8);
+    this.ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+    this.ctx.lineWidth = 2.5;
+    this.ctx.lineCap = 'round';
+    for (let i = -1; i <= 1; i++) {
+      const offsetX = i * 14;
+      const lift = progress * 32;
+      const baseY = topY - lift;
+      this.ctx.beginPath();
+      this.ctx.moveTo(centerX + offsetX, baseY);
+      this.ctx.bezierCurveTo(
+        centerX + offsetX - 5 + Math.sin(progress * 5 + i * 1.5) * 4,
+        baseY - 8,
+        centerX + offsetX + 5 + Math.cos(progress * 5 + i * 1.5) * 4,
+        baseY - 16,
+        centerX + offsetX + Math.sin(progress * 3) * 3,
+        baseY - 24
+      );
+      this.ctx.stroke();
+    }
+    this.ctx.restore();
+  }
+
   private render(): void {
     this.resizeCanvas();
     const rect = this.canvas.getBoundingClientRect();
@@ -622,53 +667,50 @@ class WebGameApp {
     const { originX, originY, cellSize } = this.getBoardOrigin();
     const cols = session.grid.columns;
     const rows = session.grid.rows;
+    const now = performance.now();
 
-    // 1. Board Background Plate (Kitchen Counter)
+    // 1. Linen Mat Base Plate (Warm Pastoral Table Mat - ZERO visible grid cells!)
     const boardW = cols * cellSize;
     const boardH = rows * cellSize;
     const boardX = originX;
     const boardY = originY - (rows - 1) * cellSize;
 
     this.ctx.save();
-    // Soft board container fill
-    this.ctx.fillStyle = '#f8fafc';
-    this.roundRect(this.ctx, boardX, boardY, boardW, boardH, 12);
+    // Warm Linen mat fill
+    this.ctx.fillStyle = PastoralTheme.colors.bgLinen;
+    this.roundRect(this.ctx, boardX, boardY, boardW, boardH, PastoralTheme.radii.board);
     this.ctx.fill();
 
-    // Subtle cell grid
-    this.ctx.strokeStyle = 'rgba(203, 213, 225, 0.45)';
-    this.ctx.lineWidth = 1;
-    for (let c = 0; c < cols; c++) {
-      for (let r = 0; r < rows; r++) {
-        const cellPos = this.gridToScreen({ col: c, row: r });
-        this.ctx.strokeRect(cellPos.x + 1, cellPos.y + 1, cellSize - 2, cellSize - 2);
-      }
-    }
+    // Soft wood trim border
+    this.ctx.strokeStyle = PastoralTheme.colors.woodLight;
+    this.ctx.lineWidth = 4;
+    this.roundRect(this.ctx, boardX, boardY, boardW, boardH, PastoralTheme.radii.board);
+    this.ctx.stroke();
 
-    // Top Danger Zone boundary (row 10-11)
+    // Delicate inner border line
+    this.ctx.strokeStyle = 'rgba(139, 99, 71, 0.12)';
+    this.ctx.lineWidth = 1.5;
+    this.roundRect(this.ctx, boardX + 3, boardY + 3, boardW - 6, boardH - 6, PastoralTheme.radii.board - 2);
+    this.ctx.stroke();
+
+    // Top Danger Zone Divider (Warm pastel alert line, never harsh red)
     const dangerZonePos = this.gridToScreen({ col: 0, row: 10 });
     const isDanger = session.isBoardInDanger();
     if (isDanger) {
-      this.ctx.fillStyle = 'rgba(234, 88, 12, 0.12)';
-      this.ctx.fillRect(boardX, dangerZonePos.y, boardW, cellSize * 2);
+      this.ctx.fillStyle = 'rgba(231, 155, 98, 0.10)';
+      this.ctx.fillRect(boardX + 4, dangerZonePos.y, boardW - 8, cellSize * 2);
     }
-    this.ctx.setLineDash([6, 4]);
-    this.ctx.strokeStyle = isDanger ? '#ea580c' : 'rgba(226, 232, 240, 0.9)';
+    this.ctx.setLineDash([8, 6]);
+    this.ctx.strokeStyle = isDanger ? PastoralTheme.colors.danger : 'rgba(180, 160, 140, 0.35)';
     this.ctx.lineWidth = isDanger ? 2 : 1;
     this.ctx.beginPath();
-    this.ctx.moveTo(boardX, dangerZonePos.y + cellSize);
-    this.ctx.lineTo(boardX + boardW, dangerZonePos.y + cellSize);
+    this.ctx.moveTo(boardX + 8, dangerZonePos.y + cellSize);
+    this.ctx.lineTo(boardX + boardW - 8, dangerZonePos.y + cellSize);
     this.ctx.stroke();
     this.ctx.setLineDash([]);
-
-    // Board Outer Border
-    this.ctx.strokeStyle = isDanger ? '#ea580c' : '#cbd5e1';
-    this.ctx.lineWidth = 2;
-    this.roundRect(this.ctx, boardX, boardY, boardW, boardH, 12);
-    this.ctx.stroke();
     this.ctx.restore();
 
-    // 2. Targets (Plates and Jigsaw Sockets)
+    // 2. Active Targets (Ceramic Plates & Jigsaw Sockets)
     for (const target of session.grid.getAllTargets()) {
       const def = session.ingredients[target.ingredientId];
       if (!def) continue;
@@ -678,27 +720,30 @@ class WebGameApp {
       const targetW = def.width * cellSize;
       const targetH = def.height * cellSize;
 
-      // Target background plate
+      // Ceramic white target dish base plate
       this.ctx.save();
-      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
-      this.ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
+      this.ctx.fillStyle = PastoralTheme.colors.targetPlate;
+      this.ctx.shadowColor = PastoralTheme.shadows.targetPlate;
       this.ctx.shadowBlur = 8;
       this.ctx.shadowOffsetY = 2;
-      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, 8);
+      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, PastoralTheme.radii.plate);
       this.ctx.fill();
       this.ctx.restore();
 
       this.ctx.save();
-      this.ctx.strokeStyle = '#e2e8f0';
+      this.ctx.strokeStyle = PastoralTheme.colors.targetBorder;
       this.ctx.lineWidth = 1.5;
-      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, 8);
+      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, PastoralTheme.radii.plate);
       this.ctx.stroke();
       this.ctx.restore();
 
       // Draw each slot in target
-      const baseColor = def.color || '#ea580c';
+      const baseColor = def.color || PastoralTheme.colors.tomato;
       for (const slot of def.slots) {
         const isPlaced = target.placedSlotIds.includes(slot.slotId);
+        const isMatchingDrag = this.draggingPiece &&
+          this.draggingPiece.targetInstanceId === target.instanceId &&
+          this.draggingPiece.slotId === slot.slotId;
         const isTutorialTarget = this.currentTutorialCue?.targetInstanceId === target.instanceId &&
           this.currentTutorialCue?.slotId === slot.slotId;
 
@@ -716,80 +761,154 @@ class WebGameApp {
         const pathCommands = PuzzleGeometry.generateSlotPathCommands(slotBounds, slot.edges);
 
         if (isPlaced) {
-          // Completed slot: Authentic ingredient color + crisp white border
+          // Completed slot: Authentic ingredient color + delicate cardboard seam line
           this.ctx.save();
           this.ctx.fillStyle = baseColor;
           this.drawBezierPath(pathCommands);
           this.ctx.fill();
 
-          this.ctx.strokeStyle = '#ffffff';
-          this.ctx.lineWidth = 2.5;
+          this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
+          this.ctx.lineWidth = 2;
           this.ctx.stroke();
 
           // Ingredient center icon
-          this.ctx.font = `${Math.round(cellSize * 0.4)}px sans-serif`;
+          this.ctx.font = `${Math.round(cellSize * 0.38)}px sans-serif`;
           this.ctx.textAlign = 'center';
           this.ctx.textBaseline = 'middle';
           this.ctx.fillText(def.emoji || '🍱', slotPos.x + cellSize / 2, slotPos.y + cellSize / 2);
           this.ctx.restore();
         } else {
-          // Missing slot: Recessed socket with dashed border
+          // Missing slot: Recessed socket (ZERO debug text!)
           this.ctx.save();
-          this.ctx.fillStyle = isTutorialTarget ? 'rgba(254, 243, 199, 0.85)' : 'rgba(226, 232, 240, 0.65)';
-          this.drawBezierPath(pathCommands);
-          this.ctx.fill();
 
-          this.ctx.setLineDash(isTutorialTarget ? [6, 4] : [4, 4]);
-          this.ctx.strokeStyle = isTutorialTarget ? '#f59e0b' : '#94a3b8';
-          this.ctx.lineWidth = isTutorialTarget ? 3.5 : 1.8;
-          this.ctx.stroke();
-          this.ctx.setLineDash([]);
+          if (isMatchingDrag) {
+            // Drag-Hover Snap Guide: Gentle golden honey glow
+            const pulse = Math.sin(now / 140) * 0.18 + 0.65;
+            this.ctx.fillStyle = `rgba(253, 230, 138, ${pulse})`;
+            this.drawBezierPath(pathCommands);
+            this.ctx.fill();
 
-          // Slot name/label
-          this.ctx.fillStyle = isTutorialTarget ? '#b45309' : '#94a3b8';
-          this.ctx.font = `bold ${Math.max(10, Math.round(cellSize * 0.22))}px sans-serif`;
-          this.ctx.textAlign = 'center';
-          this.ctx.textBaseline = 'middle';
-          this.ctx.fillText(slot.label || slot.slotId, slotPos.x + cellSize / 2, slotPos.y + cellSize / 2);
+            this.ctx.strokeStyle = PastoralTheme.colors.honey;
+            this.ctx.lineWidth = 2.5;
+            this.ctx.stroke();
+          } else if (isTutorialTarget) {
+            // Tutorial cue: Soft amber beacon
+            this.ctx.fillStyle = 'rgba(254, 243, 199, 0.85)';
+            this.drawBezierPath(pathCommands);
+            this.ctx.fill();
+
+            this.ctx.setLineDash([5, 4]);
+            this.ctx.strokeStyle = PastoralTheme.colors.honey;
+            this.ctx.lineWidth = 2.5;
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+          } else {
+            // Normal empty socket: Translucent recessed socket with soft dashed outline
+            this.ctx.fillStyle = PastoralTheme.colors.socketBg;
+            this.drawBezierPath(pathCommands);
+            this.ctx.fill();
+
+            this.ctx.setLineDash([4, 4]);
+            this.ctx.strokeStyle = PastoralTheme.colors.socketDashed;
+            this.ctx.lineWidth = 1.5;
+            this.drawBezierPath(pathCommands);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+          }
           this.ctx.restore();
         }
       }
+    }
 
-      // Target Header Label Badge
-      const labelText = `${def.emoji} ${def.name} (${target.placedSlotIds.length}/${def.slots.length})`;
+    // 3. Dish Completion Celebration Animations (550ms: scale bounce, seam fading, golden shimmer, steam puffs)
+    for (const [instanceId, anim] of this.completedAnimTargets.entries()) {
+      const elapsed = now - anim.startTime;
+      if (elapsed > 550) {
+        this.completedAnimTargets.delete(instanceId);
+        continue;
+      }
+
+      const progress = elapsed / 550;
+      const target = anim.target;
+      const def = session.ingredients[target.ingredientId];
+      if (!def) continue;
+
+      const targetX = originX + target.anchor.col * cellSize;
+      const targetY = originY - (target.anchor.row + def.height - 1) * cellSize;
+      const targetW = def.width * cellSize;
+      const targetH = def.height * cellSize;
+      const bounce = 1.0 + 0.05 * Math.sin(progress * Math.PI);
+      const alpha = Math.max(0, 1 - Math.max(0, (progress - 0.75) / 0.25));
+
       this.ctx.save();
-      this.ctx.font = `bold ${Math.max(10, Math.round(cellSize * 0.22))}px sans-serif`;
-      const textW = this.ctx.measureText(labelText).width;
-      const badgeW = textW + 12;
-      const badgeH = 16;
-      const badgeX = targetX + (targetW - badgeW) / 2;
-      const badgeY = targetY - badgeH - 2;
+      this.ctx.globalAlpha = alpha;
+      this.ctx.translate(targetX + targetW / 2, targetY + targetH / 2);
+      this.ctx.scale(bounce, bounce);
+      this.ctx.translate(-(targetX + targetW / 2), -(targetY + targetH / 2));
 
-      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-      this.ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
-      this.ctx.shadowBlur = 4;
-      this.ctx.shadowOffsetY = 1;
-      this.roundRect(this.ctx, badgeX, badgeY, badgeW, badgeH, 6);
+      // Golden celebratory glow plate
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+      this.ctx.shadowColor = 'rgba(232, 184, 92, 0.5)';
+      this.ctx.shadowBlur = 18;
+      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, PastoralTheme.radii.plate);
       this.ctx.fill();
 
-      this.ctx.shadowColor = 'transparent';
-      this.ctx.strokeStyle = '#cbd5e1';
-      this.ctx.lineWidth = 1;
-      this.roundRect(this.ctx, badgeX, badgeY, badgeW, badgeH, 6);
+      this.ctx.strokeStyle = PastoralTheme.colors.honey;
+      this.ctx.lineWidth = 2.5;
       this.ctx.stroke();
 
-      this.ctx.fillStyle = '#334155';
+      // Draw slots with fading seams
+      const baseColor = def.color || PastoralTheme.colors.tomato;
+      for (const slot of def.slots) {
+        const slotCol = target.anchor.col + slot.relativeCol;
+        const slotRow = target.anchor.row + slot.relativeRow;
+        const slotPos = this.gridToScreen({ col: slotCol, row: slotRow });
+
+        const slotBounds = {
+          x: slotPos.x + 3,
+          y: slotPos.y + 3,
+          width: cellSize - 6,
+          height: cellSize - 6
+        };
+        const pathCommands = PuzzleGeometry.generateSlotPathCommands(slotBounds, slot.edges);
+
+        this.ctx.save();
+        this.ctx.fillStyle = baseColor;
+        this.drawBezierPath(pathCommands);
+        this.ctx.fill();
+
+        this.ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0, 1 - progress * 1.6)})`;
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+        this.ctx.restore();
+      }
+
+      // Golden shimmer sweep across the plate
+      const shimmerX = targetX - targetW * 0.4 + progress * targetW * 2.2;
+      const shimmerGrad = this.ctx.createLinearGradient(shimmerX, targetY, shimmerX + 50, targetY + targetH);
+      shimmerGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      shimmerGrad.addColorStop(0.5, 'rgba(253, 230, 138, 0.75)');
+      shimmerGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      this.ctx.fillStyle = shimmerGrad;
+      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, PastoralTheme.radii.plate);
+      this.ctx.fill();
+
+      // Big completed food emoji
+      this.ctx.font = `${Math.round(Math.min(targetW, targetH) * 0.44)}px sans-serif`;
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(labelText, targetX + targetW / 2, badgeY + badgeH / 2);
+      this.ctx.fillText(def.emoji || '🍱', targetX + targetW / 2, targetY + targetH / 2);
+
+      // Steam puffs rising up
+      this.drawSteamPuffs(targetX + targetW / 2, targetY, progress);
+
       this.ctx.restore();
     }
 
-    // 3. Loose Pieces (Resting & Wobbling)
-    const now = performance.now();
+    // 4. Loose Pieces (Resting & Smooth Wobbling - ZERO debug text!)
     for (const piece of session.grid.getAllLoosePieces()) {
       if (this.draggingPiece && this.draggingPiece.instanceId === piece.instanceId) {
-        continue; // Render dragged piece on top layer
+        continue; // Render dragged piece on topmost layer
       }
 
       const def = session.ingredients[piece.ingredientId];
@@ -798,14 +917,14 @@ class WebGameApp {
       let drawX = 0;
       let drawY = 0;
 
-      // Handle wrong drop wobble
+      // Smooth wrong drop wobble
       const wobble = this.wobblePieces.get(piece.instanceId);
       if (wobble) {
         const elapsed = now - wobble.startTime;
         const targetScreen = this.gridToScreen(piece.coord);
         if (elapsed < 300) {
           const t = elapsed / 300;
-          const wobbleOffset = Math.sin(t * Math.PI * 4) * (1 - t) * 12;
+          const wobbleOffset = Math.sin(t * Math.PI * 4) * (1 - t) * 10;
           drawX = wobble.startX + (targetScreen.x - wobble.startX) * t + wobbleOffset;
           drawY = wobble.startY + (targetScreen.y - wobble.startY) * t;
         } else {
@@ -829,58 +948,86 @@ class WebGameApp {
       const edges = slotDef?.edges || { top: 'flat', right: 'flat', bottom: 'flat', left: 'flat' };
       const pathCommands = PuzzleGeometry.generateSlotPathCommands(pieceBounds, edges);
 
-      // Drop shadow
+      // Warm cardboard drop shadow
       this.ctx.save();
-      this.ctx.shadowColor = 'rgba(0, 0, 0, 0.22)';
+      this.ctx.shadowColor = PastoralTheme.shadows.piece;
       this.ctx.shadowBlur = 6;
       this.ctx.shadowOffsetY = 3;
 
       // Piece Fill
-      this.ctx.fillStyle = def.color || '#f97316';
+      this.ctx.fillStyle = def.color || PastoralTheme.colors.tomato;
       this.drawBezierPath(pathCommands);
       this.ctx.fill();
       this.ctx.restore();
 
-      // Piece Outline & Crisp Interlocking Seam
+      // Cardboard puzzle edge outline
       this.ctx.save();
-      this.ctx.strokeStyle = '#ffffff';
+      this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
       this.ctx.lineWidth = 2.5;
       this.drawBezierPath(pathCommands);
       this.ctx.stroke();
 
-      // Inner Highlight stroke
+      // Inner subtle highlight stroke
       this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
       this.ctx.lineWidth = 1;
       this.ctx.stroke();
 
-      // Piece Content: Emoji & Slot Tag
-      this.ctx.font = `${Math.round(cellSize * 0.36)}px sans-serif`;
+      // Delicious food emoji (no debug text badges!)
+      this.ctx.font = `${Math.round(cellSize * 0.42)}px sans-serif`;
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(def.emoji || '🍱', drawX + cellSize / 2, drawY + cellSize / 2 - 4);
-
-      const label = slotDef?.label || piece.slotId;
-      this.ctx.font = `bold ${Math.max(8, Math.round(cellSize * 0.17))}px sans-serif`;
-      const lblW = this.ctx.measureText(label).width;
-      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      this.roundRect(this.ctx, drawX + cellSize / 2 - lblW / 2 - 4, drawY + cellSize / 2 + cellSize * 0.14, lblW + 8, 13, 4);
-      this.ctx.fill();
-
-      this.ctx.fillStyle = '#ffffff';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(label, drawX + cellSize / 2, drawY + cellSize / 2 + cellSize * 0.14 + 6.5);
+      this.ctx.fillText(def.emoji || '🍱', drawX + cellSize / 2, drawY + cellSize / 2);
       this.ctx.restore();
     }
 
-    // 4. Dragging Piece (Topmost Layer: 1.15x scale, floating drop shadow)
+    // 5. Target Header Pill Badges (Rendered over plate edge so always readable: "🍱 温泉蛋牛丼 (2/4)")
+    for (const target of session.grid.getAllTargets()) {
+      const def = session.ingredients[target.ingredientId];
+      if (!def) continue;
+
+      const targetX = originX + target.anchor.col * cellSize;
+      const targetY = originY - (target.anchor.row + def.height - 1) * cellSize;
+      const targetW = def.width * cellSize;
+
+      const labelText = `${def.emoji || '🍱'} ${def.name} (${target.placedSlotIds.length}/${def.slots.length})`;
+      this.ctx.save();
+      this.ctx.font = `bold ${Math.max(11, Math.round(cellSize * 0.23))}px "Hiragino Maru Gothic ProN", "Yu Gothic UI", sans-serif`;
+      const textW = this.ctx.measureText(labelText).width;
+      const badgeW = textW + 16;
+      const badgeH = 18;
+      const badgeX = targetX + (targetW - badgeW) / 2;
+      const badgeY = targetY - badgeH / 2; // Sits neatly across top rim of dish
+
+      this.ctx.fillStyle = PastoralTheme.colors.paper;
+      this.ctx.shadowColor = 'rgba(70, 55, 40, 0.16)';
+      this.ctx.shadowBlur = 5;
+      this.ctx.shadowOffsetY = 1;
+      this.roundRect(this.ctx, badgeX, badgeY, badgeW, badgeH, 9);
+      this.ctx.fill();
+
+      this.ctx.shadowColor = 'transparent';
+      this.ctx.strokeStyle = PastoralTheme.colors.woodLight;
+      this.ctx.lineWidth = 1.2;
+      this.roundRect(this.ctx, badgeX, badgeY, badgeW, badgeH, 9);
+      this.ctx.stroke();
+
+      this.ctx.fillStyle = PastoralTheme.colors.inkDark;
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(labelText, targetX + targetW / 2, badgeY + badgeH / 2);
+      this.ctx.restore();
+    }
+
+    // 6. Dragging Piece (Topmost Layer: 1.08x scale, elevated shadow, finger lift offset)
     if (this.draggingPiece) {
       const def = session.ingredients[this.draggingPiece.ingredientId];
       if (def) {
         const slotDef = def.slots.find(s => s.slotId === this.draggingPiece!.slotId);
-        const dragScale = 1.15;
+        const dragScale = 1.08;
         const dragSize = cellSize * dragScale;
+        // Finger lift offset (-10px) so player's fingertip doesn't block the piece!
         const dragX = this.dragPointerPos.x - dragSize / 2;
-        const dragY = this.dragPointerPos.y - dragSize / 2;
+        const dragY = this.dragPointerPos.y - dragSize / 2 - 10;
 
         const pieceBounds = {
           x: dragX + 3,
@@ -892,36 +1039,25 @@ class WebGameApp {
         const pathCommands = PuzzleGeometry.generateSlotPathCommands(pieceBounds, edges);
 
         this.ctx.save();
-        this.ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+        this.ctx.shadowColor = PastoralTheme.shadows.pieceLifted;
         this.ctx.shadowBlur = 18;
         this.ctx.shadowOffsetY = 10;
 
-        this.ctx.fillStyle = def.color || '#f97316';
+        this.ctx.fillStyle = def.color || PastoralTheme.colors.tomato;
         this.drawBezierPath(pathCommands);
         this.ctx.fill();
         this.ctx.restore();
 
         this.ctx.save();
-        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
         this.ctx.lineWidth = 3.5;
         this.drawBezierPath(pathCommands);
         this.ctx.stroke();
 
-        this.ctx.font = `${Math.round(dragSize * 0.38)}px sans-serif`;
+        this.ctx.font = `${Math.round(dragSize * 0.44)}px sans-serif`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(def.emoji || '🍱', dragX + dragSize / 2, dragY + dragSize / 2 - 5);
-
-        const dragLabel = slotDef?.label || this.draggingPiece.slotId;
-        this.ctx.font = `bold ${Math.max(10, Math.round(dragSize * 0.18))}px sans-serif`;
-        const dragLblW = this.ctx.measureText(dragLabel).width;
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        this.roundRect(this.ctx, dragX + dragSize / 2 - dragLblW / 2 - 5, dragY + dragSize / 2 + dragSize * 0.14, dragLblW + 10, 14, 5);
-        this.ctx.fill();
-
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(dragLabel, dragX + dragSize / 2, dragY + dragSize / 2 + dragSize * 0.14 + 7);
+        this.ctx.fillText(def.emoji || '🍱', dragX + dragSize / 2, dragY + dragSize / 2);
         this.ctx.restore();
       }
     }

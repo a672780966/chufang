@@ -4,6 +4,7 @@ import {
   CoreEventMap,
   DEFAULT_INGREDIENTS
 } from '../../game-core/index';
+import { PastoralTheme } from './PastoralTheme';
 
 const { ccclass, property } = _decorator;
 
@@ -58,16 +59,16 @@ export class ReceiptPrinterView extends Component {
     }
     g.clear();
 
-    // Receipt Paper Background (light warm white with subtle drop shadow)
-    g.fillColor = new Color(250, 248, 245);
-    g.strokeColor = new Color(200, 195, 185);
-    g.lineWidth = 2;
-    g.roundRect(-320, -100, 640, 200, 12);
+    // Receipt Paper Background (light warm cream paper with soft stroke)
+    g.fillColor = PastoralTheme.ccColors.paper;
+    g.strokeColor = new Color(216, 206, 194);
+    g.lineWidth = 1.5;
+    g.roundRect(-320, -100, 640, 200, 10);
     g.fill();
     g.stroke();
 
-    // Top printer slot slit
-    g.fillColor = new Color(40, 44, 52);
+    // Top printer slot slit (wooden warmth)
+    g.fillColor = PastoralTheme.ccColors.woodDeep;
     g.roundRect(-330, 95, 660, 14, 6);
     g.fill();
 
@@ -82,7 +83,7 @@ export class ReceiptPrinterView extends Component {
       this.dishNameLabel = node.getComponent(Label) || node.addComponent(Label);
       this.dishNameLabel.fontSize = 22;
       this.dishNameLabel.lineHeight = 26;
-      this.dishNameLabel.color = new Color(30, 30, 35);
+      this.dishNameLabel.color = PastoralTheme.ccColors.inkMain;
     }
 
     if (!this.revenueLabel) {
@@ -95,7 +96,7 @@ export class ReceiptPrinterView extends Component {
       this.revenueLabel = node.getComponent(Label) || node.addComponent(Label);
       this.revenueLabel.fontSize = 24;
       this.revenueLabel.lineHeight = 28;
-      this.revenueLabel.color = new Color(210, 45, 45);
+      this.revenueLabel.color = Color.fromHEX(new Color(), '#D9534F'); // Japanese red rubber stamp
     }
 
     if (!this.checklistLabel) {
@@ -108,7 +109,7 @@ export class ReceiptPrinterView extends Component {
       this.checklistLabel = node.getComponent(Label) || node.addComponent(Label);
       this.checklistLabel.fontSize = 17;
       this.checklistLabel.lineHeight = 22;
-      this.checklistLabel.color = new Color(70, 75, 85);
+      this.checklistLabel.color = PastoralTheme.ccColors.inkSecondary;
     }
 
     if (!this.nextOrderLabel) {
@@ -121,7 +122,7 @@ export class ReceiptPrinterView extends Component {
       this.nextOrderLabel = node.getComponent(Label) || node.addComponent(Label);
       this.nextOrderLabel.fontSize = 15;
       this.nextOrderLabel.lineHeight = 18;
-      this.nextOrderLabel.color = new Color(130, 135, 145);
+      this.nextOrderLabel.color = PastoralTheme.ccColors.inkSecondary;
     }
 
     if (!this.cascadeBannerLabel) {
@@ -133,9 +134,9 @@ export class ReceiptPrinterView extends Component {
         this.node.addChild(node);
       }
       this.cascadeBannerLabel = node.getComponent(Label) || node.addComponent(Label);
-      this.cascadeBannerLabel.fontSize = 24;
-      this.cascadeBannerLabel.lineHeight = 28;
-      this.cascadeBannerLabel.color = new Color(255, 195, 0);
+      this.cascadeBannerLabel.fontSize = 22;
+      this.cascadeBannerLabel.lineHeight = 26;
+      this.cascadeBannerLabel.color = PastoralTheme.ccColors.honey;
     }
   }
 

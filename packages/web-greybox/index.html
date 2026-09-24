@@ -3,8 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>食材拼图 × 外卖营业 - V1.0</title>
+  <title>暖阳料理小铺 - 日式治愈美食拼图</title>
   <style>
+    /* ==========================================================================
+       Stage 3B: 日漫田园治愈系美食拼图 Design System Tokens & Base Styles
+       ========================================================================== */
+    :root {
+      --bg-warm-cream: #F7F1E7;
+      --bg-linen: #EEE6D8;
+      --wood-light: #D8B58C;
+      --wood-deep: #8B6347;
+      --wood-border: #C49E72;
+      --sage-light: #DCE5D4;
+      --sage-main: #91AA82;
+      --sage-dark: #6C855E;
+      --sky-mist: #CBDDE0;
+      --paper: #FFFDF7;
+      --paper-shadow: rgba(70, 55, 40, 0.12);
+
+      --ink-main: #403A34;
+      --ink-secondary: #766E65;
+      --ink-muted: #A09689;
+      --ink-white: #FFFFFF;
+
+      --honey: #E8B85C;
+      --tomato: #D96959;
+      --danger: #E79B62;
+      --success-gold: #F3C969;
+      --snap-guide: rgba(253, 230, 138, 0.75);
+
+      --shadow-small: 0 2px 6px rgba(65, 45, 30, 0.10);
+      --shadow-medium: 0 5px 14px rgba(65, 45, 30, 0.14);
+      --shadow-floating: 0 10px 24px rgba(65, 45, 30, 0.18);
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -13,28 +45,48 @@
       -webkit-user-select: none;
       touch-action: none;
     }
+
     body {
-      background-color: #12131a;
+      background-color: #1F1A17;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(216, 181, 140, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(145, 170, 130, 0.08) 0%, transparent 40%);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
       overflow: hidden;
-      color: #333;
+      color: var(--ink-main);
     }
+
+    /* Mobile 720x1280 Aspect Frame (Responsive container) */
     #game-container {
       position: relative;
       width: 100vw;
-      max-width: 480px;
+      max-width: 460px;
       height: 100vh;
-      max-height: 960px;
-      background: #faf8f5;
+      max-height: 920px;
+      background: var(--bg-warm-cream);
       display: flex;
       flex-direction: column;
-      box-shadow: 0 16px 50px rgba(0,0,0,0.6);
-      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.08);
+      border-radius: 24px;
       overflow: hidden;
+    }
+
+    /* Ambient Morning Sunlight & Leaf Shadow Overlay */
+    #ambient-sunlight {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      background: 
+        radial-gradient(circle at 15% 10%, rgba(255, 248, 220, 0.35) 0%, transparent 50%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, transparent 60%);
+      z-index: 50;
     }
 
     /* Views */
@@ -46,301 +98,395 @@
       position: absolute;
       top: 0;
       left: 0;
-      background: #faf8f5;
-      transition: opacity 0.25s ease;
+      background: var(--bg-warm-cream);
+      transition: opacity 0.28s ease, transform 0.28s ease;
     }
     .view-hidden {
       display: none !important;
     }
 
-    /* --- Main Menu View --- */
+    /* ==========================================================================
+       1. Main Menu (清晨开店前的小店桌面)
+       ========================================================================== */
     #view-menu {
       align-items: center;
       justify-content: space-between;
-      padding: 40px 24px 28px;
-      background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+      padding: 36px 20px 24px;
+      background: 
+        linear-gradient(180deg, #FBF8F2 0%, var(--bg-warm-cream) 100%);
+      overflow-y: auto;
     }
+
     .menu-header {
       text-align: center;
-      margin-top: 16px;
+      margin-top: 10px;
     }
-    .menu-logo-badge {
-      display: inline-block;
-      font-size: 54px;
-      margin-bottom: 8px;
-      filter: drop-shadow(0 6px 12px rgba(234, 88, 12, 0.25));
+
+    .menu-logo-plate {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 76px;
+      height: 76px;
+      background: var(--paper);
+      border-radius: 50%;
+      box-shadow: var(--shadow-medium), inset 0 0 0 2px var(--wood-light);
+      margin-bottom: 12px;
+      font-size: 40px;
     }
+
     .menu-title {
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 800;
-      color: #7c2d12;
-      letter-spacing: 1px;
+      color: var(--wood-deep);
+      letter-spacing: 0.5px;
+      text-shadow: 0 1px 2px rgba(255,255,255,0.8);
     }
+
     .menu-subtitle {
-      font-size: 14px;
-      color: #9a3412;
-      margin-top: 6px;
+      font-size: 13px;
+      color: var(--ink-secondary);
+      margin-top: 5px;
       font-weight: 500;
+      letter-spacing: 0.3px;
     }
+
+    /* Day Select Section (营业手账本) */
+    .journal-book {
+      background: var(--paper);
+      border-radius: 18px;
+      padding: 16px 14px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: var(--shadow-medium), inset 0 0 0 1px rgba(216, 181, 140, 0.4);
+      margin: 14px 0;
+      position: relative;
+    }
+
+    .journal-book::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 14px;
+      right: 14px;
+      height: 4px;
+      background: repeating-linear-gradient(90deg, var(--wood-light) 0, var(--wood-light) 12px, transparent 12px, transparent 18px);
+      border-radius: 2px;
+    }
+
+    .journal-title-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed var(--bg-linen);
+    }
+
+    .journal-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--wood-deep);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .journal-sub {
+      font-size: 11px;
+      color: var(--ink-muted);
+    }
+
+    .day-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .day-tile {
+      background: var(--bg-warm-cream);
+      border: 1px solid rgba(216, 181, 140, 0.5);
+      border-radius: 10px;
+      padding: 8px 4px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink-main);
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      box-shadow: 0 1px 3px rgba(65, 45, 30, 0.06);
+    }
+
+    .day-tile:active {
+      transform: scale(0.95);
+    }
+
+    .day-tile.completed {
+      background: #F4F8F1;
+      border-color: var(--sage-main);
+      color: var(--sage-dark);
+    }
+
+    .day-stamp {
+      font-size: 9px;
+      color: var(--tomato);
+      border: 1px solid var(--tomato);
+      border-radius: 4px;
+      padding: 0 3px;
+      display: inline-block;
+      margin-top: 2px;
+      transform: rotate(-4deg);
+      font-weight: 800;
+    }
+
+    .day-tile.locked {
+      background: #EFECE6;
+      border-color: #E2DDD5;
+      color: var(--ink-muted);
+      cursor: not-allowed;
+      opacity: 0.65;
+      box-shadow: none;
+    }
+
+    .day-tile.current-play {
+      border: 2px solid var(--sage-main);
+      background: #FFFFFF;
+      box-shadow: 0 0 0 2px var(--sage-light);
+    }
+
     .menu-actions {
       width: 100%;
-      max-width: 360px;
+      max-width: 380px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
     }
-    .btn-main {
-      background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
-      color: #fff;
+
+    /* Pastoral Buttons */
+    .btn-wood-main {
+      background: linear-gradient(180deg, var(--sage-main) 0%, var(--sage-dark) 100%);
+      color: #FFFFFF;
       border: none;
-      padding: 16px;
-      border-radius: 28px;
-      font-size: 18px;
-      font-weight: bold;
+      padding: 15px;
+      border-radius: 20px;
+      font-size: 17px;
+      font-weight: 700;
       cursor: pointer;
-      box-shadow: 0 6px 16px rgba(194, 65, 12, 0.35);
-      transition: transform 0.1s ease, filter 0.1s ease;
+      box-shadow: 0 6px 16px rgba(108, 133, 94, 0.35), inset 0 1px 0 rgba(255,255,255,0.3);
+      transition: transform 0.09s ease, filter 0.09s ease;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
     }
-    .btn-main:active {
+
+    .btn-wood-main:active {
       transform: scale(0.97);
-      filter: brightness(0.92);
+      filter: brightness(0.94);
     }
-    .btn-secondary {
-      background: #ffffff;
-      color: #9a3412;
-      border: 2px solid #fdba74;
-      padding: 12px;
-      border-radius: 24px;
-      font-size: 15px;
+
+    .btn-paper-secondary {
+      background: var(--paper);
+      color: var(--wood-deep);
+      border: 1.5px solid var(--wood-light);
+      padding: 11px;
+      border-radius: 18px;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
+      box-shadow: var(--shadow-small);
+      transition: transform 0.09s ease;
     }
 
-    /* Day Select Section */
-    .day-select-card {
-      background: rgba(255, 255, 255, 0.85);
-      backdrop-filter: blur(8px);
-      border-radius: 16px;
-      padding: 16px;
-      width: 100%;
-      max-width: 360px;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-    }
-    .day-select-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: #9a3412;
-      margin-bottom: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .day-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-    }
-    .day-tile {
-      background: #fff;
-      border: 1.5px solid #fed7aa;
-      border-radius: 10px;
-      padding: 8px 4px;
-      text-align: center;
-      font-size: 13px;
-      font-weight: 700;
-      color: #7c2d12;
-      cursor: pointer;
-      position: relative;
-      transition: transform 0.1s ease;
-    }
-    .day-tile:active {
-      transform: scale(0.94);
-    }
-    .day-tile.locked {
-      background: #f3f4f6;
-      border-color: #e5e7eb;
-      color: #9ca3af;
-      cursor: not-allowed;
-    }
-    .day-tile.completed {
-      border-color: #22c55e;
-      background: #f0fdf4;
-      color: #166534;
+    .btn-paper-secondary:active {
+      transform: scale(0.97);
     }
 
-    /* --- Game HUD & Printer Header --- */
-    #printer-header {
-      background: #1e293b;
-      padding: 10px 14px 6px;
-      color: #fff;
+    /* ==========================================================================
+       2. In-Game HUD: 4-Layer Hierarchy
+       A: Top Light Bar (58~68px)
+       B: Thermal Receipt Area (130~155px)
+       C: Central Linen Board (~820~860px)
+       D: Bottom Light Auxiliary Area (95~120px)
+       ========================================================================== */
+    #view-game {
+      background: var(--bg-warm-cream);
+    }
+
+    /* A. Top Light Status Bar */
+    #top-status-bar {
       display: flex;
-      flex-direction: column;
-      position: relative;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 18px 4px;
+      background: transparent;
       z-index: 10;
     }
-    .printer-slit {
-      background: #0f172a;
-      height: 4px;
-      border-radius: 2px;
-      margin-bottom: 6px;
-    }
-    .printer-controls {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+
+    .day-wooden-badge {
+      background: linear-gradient(180deg, #E8C8A2 0%, var(--wood-light) 100%);
+      color: var(--wood-deep);
+      padding: 4px 12px;
+      border-radius: 10px;
       font-size: 13px;
-    }
-    .day-pill {
-      background: rgba(255,255,255,0.15);
-      padding: 3px 8px;
-      border-radius: 12px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-    }
-    .revenue-badge {
       font-weight: 800;
-      color: #facc15;
-      font-size: 14px;
-    }
-    .goal-progress-bar {
-      width: 100%;
-      height: 6px;
-      background: rgba(255,255,255,0.2);
-      border-radius: 3px;
-      margin-top: 6px;
-      overflow: hidden;
-    }
-    .goal-progress-fill {
-      height: 100%;
-      width: 0%;
-      background: #10b981;
-      border-radius: 3px;
-      transition: width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 5px rgba(88, 55, 30, 0.15), inset 0 1px 0 rgba(255,255,255,0.4);
+      border: 1px solid #C49E72;
     }
 
-    /* Hanging Receipt Paper */
-    #receipt-paper {
-      background: #ffffff;
-      padding: 8px 14px;
-      margin: 0 14px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-      border-bottom-left-radius: 4px;
-      border-bottom-right-radius: 4px;
-      position: relative;
-      font-size: 12px;
-      z-index: 9;
-      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+    .revenue-pill-card {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      min-width: 140px;
     }
+
+    .revenue-text-row {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--wood-deep);
+      margin-bottom: 3px;
+    }
+
+    .revenue-progress-track {
+      width: 100%;
+      height: 5px;
+      background: rgba(216, 181, 140, 0.35);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .revenue-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--honey) 0%, #F59E0B 100%);
+      border-radius: 3px;
+      transition: width 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* B. Hanging Thermal Receipt Paper */
+    #receipt-section {
+      padding: 2px 16px 4px;
+      z-index: 9;
+      position: relative;
+    }
+
+    #receipt-paper {
+      background: var(--paper);
+      padding: 10px 16px;
+      border-radius: 4px 4px 0 0;
+      box-shadow: var(--shadow-medium);
+      position: relative;
+      font-family: var(--font-family-receipt, "Courier New", Courier, monospace, sans-serif);
+      border-top: 3px solid var(--wood-deep);
+    }
+
+    /* Zigzag perforated tear edge at bottom of receipt */
     #receipt-paper::after {
       content: "";
       position: absolute;
-      bottom: -6px;
+      bottom: -8px;
       left: 0;
       width: 100%;
-      height: 6px;
-      background: radial-gradient(circle, transparent 4px, #fff 5px);
+      height: 8px;
+      background: radial-gradient(circle, transparent 4px, var(--paper) 5px);
       background-size: 10px 10px;
     }
-    .receipt-top {
+
+    .receipt-header-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-weight: 800;
-      font-size: 14px;
-      border-bottom: 1px dashed #cbd5e1;
-      padding-bottom: 4px;
+      border-bottom: 1px dashed rgba(118, 110, 101, 0.3);
+      padding-bottom: 5px;
       margin-bottom: 6px;
     }
+
+    .receipt-order-num {
+      font-size: 12px;
+      color: var(--ink-secondary);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .receipt-dish-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--ink-main);
+    }
+
+    .receipt-price-stamp {
+      font-size: 17px;
+      font-weight: 900;
+      color: var(--tomato);
+      border: 1.5px solid var(--tomato);
+      padding: 1px 7px;
+      border-radius: 6px;
+      transform: rotate(-2deg);
+      display: inline-block;
+      letter-spacing: 0.5px;
+    }
+
+    .receipt-progress-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--ink-secondary);
+    }
+
     .receipt-checklist {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px 10px;
-      font-size: 11px;
-    }
-    .receipt-item {
-      display: flex;
       align-items: center;
-      gap: 3px;
-      color: #64748b;
+      gap: 6px;
     }
-    .receipt-item.satisfied {
-      color: #0f172a;
-      font-weight: 600;
+
+    .dish-progress-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #E5DECF;
+      border: 1px solid #C5BBA9;
     }
-    .receipt-item.satisfied::before {
-      content: "✅";
-      font-size: 10px;
+
+    .dish-progress-dot.filled {
+      background: var(--sage-main);
+      border-color: var(--sage-dark);
+      box-shadow: 0 0 4px rgba(145, 170, 130, 0.6);
     }
-    .receipt-item.unmet::before {
-      content: "⬜";
-      font-size: 10px;
-    }
-    .next-order-hint {
-      margin-top: 6px;
-      padding-top: 4px;
-      border-top: 1px dashed #e2e8f0;
-      font-size: 11px;
-      color: #64748b;
-      display: flex;
+
+    /* Next Order Tag (Day 7+) */
+    .next-order-tag-pill {
+      display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-weight: 600;
-    }
-    .next-order-tag {
-      background: #f1f5f9;
-      padding: 1px 5px;
-      border-radius: 4px;
-      font-size: 10px;
-      color: #475569;
-    }
-
-    /* Banners & Cues */
-    #danger-banner {
-      background: #ea580c;
-      color: #fff;
       font-size: 11px;
-      font-weight: bold;
-      text-align: center;
-      padding: 3px;
-      display: none;
-      z-index: 8;
-      animation: pulse 1s infinite alternate;
-    }
-    #cascade-banner {
-      background: linear-gradient(90deg, #ec4899, #f59e0b);
-      color: #fff;
-      font-size: 12px;
-      font-weight: 800;
-      text-align: center;
-      padding: 4px;
-      display: none;
-      z-index: 8;
-      box-shadow: 0 4px 10px rgba(236, 72, 153, 0.3);
-    }
-    @keyframes pulse {
-      from { opacity: 0.85; }
-      to { opacity: 1; filter: brightness(1.2); }
+      color: var(--ink-secondary);
+      background: #F1ECE1;
+      padding: 2px 7px;
+      border-radius: 6px;
+      border: 1px dashed #D5CBB9;
     }
 
-    /* Core Board Canvas */
+    /* C. Central Linen Board Area (~820~860px) */
     #board-wrapper {
       flex: 1;
       position: relative;
-      margin: 6px 12px;
-      background: #ffffff;
-      border-radius: 12px;
-      border: 2px solid #e2e8f0;
+      margin: 4px 14px 6px;
+      background: var(--bg-linen);
+      border-radius: 26px;
+      border: 3px solid var(--wood-light);
+      box-shadow: inset 0 2px 10px rgba(70, 55, 40, 0.12), var(--shadow-small);
       overflow: hidden;
-      box-shadow: inset 0 2px 8px rgba(0,0,0,0.04);
     }
+
     #board-canvas {
       position: absolute;
       top: 0;
@@ -349,186 +495,279 @@
       height: 100%;
     }
 
+    /* Gentle danger banner */
+    #danger-banner {
+      background: linear-gradient(90deg, #FDE68A 0%, var(--danger) 100%);
+      color: #6C2B0B;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+      padding: 4px;
+      display: none;
+      z-index: 15;
+      box-shadow: 0 2px 6px rgba(231, 155, 98, 0.25);
+    }
+
+    /* Soft cascade banner */
+    #cascade-banner {
+      background: linear-gradient(90deg, #F3C969 0%, var(--honey) 100%);
+      color: #5D3D08;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      padding: 4px;
+      display: none;
+      z-index: 15;
+      box-shadow: 0 3px 8px rgba(243, 201, 105, 0.3);
+    }
+
     /* Tutorial Visual Indicator */
     #tutorial-indicator {
       position: absolute;
       pointer-events: none;
-      z-index: 20;
+      z-index: 25;
       display: none;
     }
+
     .tutorial-finger {
-      font-size: 32px;
-      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
-      animation: float-guide 1.2s infinite ease-in-out;
-    }
-    @keyframes float-guide {
-      0% { transform: translate(0, 0); }
-      50% { transform: translate(8px, -14px); }
-      100% { transform: translate(0, 0); }
+      font-size: 34px;
+      filter: drop-shadow(0 4px 8px rgba(65, 45, 30, 0.3));
+      animation: float-finger 1.2s infinite ease-in-out;
     }
 
-    /* Bottom Bar */
+    @keyframes float-finger {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0); }
+    }
+
+    /* D. Bottom Light Auxiliary Area (95~120px) */
     #bottom-bar {
-      height: 48px;
-      background: #1e293b;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 0 12px;
-      color: #fff;
-      font-size: 12px;
+      justify-content: space-between;
+      padding: 6px 16px 12px;
       z-index: 10;
     }
-    .inventory-tray {
-      display: flex;
-      gap: 6px;
-      overflow-x: auto;
-      max-width: 65%;
-      padding: 2px 0;
-    }
-    .inv-chip {
-      background: rgba(255,255,255,0.15);
-      padding: 2px 6px;
-      border-radius: 12px;
+
+    .serving-tray {
       display: flex;
       align-items: center;
-      gap: 3px;
-      font-size: 11px;
-      white-space: nowrap;
-    }
-    .sys-btn {
-      background: rgba(255,255,255,0.2);
-      border: none;
-      color: #fff;
-      padding: 4px 8px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .sys-btn:active {
-      background: rgba(255,255,255,0.4);
+      gap: 8px;
+      background: #ECE4D6;
+      border: 1.5px solid var(--wood-light);
+      border-radius: 14px;
+      padding: 4px 10px;
+      box-shadow: inset 0 1px 4px rgba(70,55,40,0.08);
+      min-height: 42px;
     }
 
-    /* Modals */
+    .tray-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--wood-deep);
+      margin-right: 2px;
+    }
+
+    .tray-dish-slot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--paper);
+      border: 1.5px dashed var(--wood-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .tray-dish-slot.occupied {
+      border-style: solid;
+      border-color: var(--sage-main);
+      box-shadow: var(--shadow-small);
+    }
+
+    .aux-btn-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-wood-circle {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--paper);
+      border: 1.5px solid var(--wood-light);
+      color: var(--wood-deep);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-small);
+      transition: transform 0.09s ease;
+    }
+
+    .btn-wood-circle:active {
+      transform: scale(0.92);
+      filter: brightness(0.95);
+    }
+
+    /* ==========================================================================
+       Modals & Dialogs (暖意便签纸风格)
+       ========================================================================== */
     .modal-overlay {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0,0,0,0.65);
+      background: rgba(31, 26, 23, 0.6);
+      backdrop-filter: blur(4px);
       display: flex;
       justify-content: center;
       align-items: center;
       z-index: 100;
       display: none;
     }
-    .modal-card {
-      background: #fff;
-      padding: 24px;
+
+    .modal-card-paper {
+      background: var(--paper);
+      padding: 26px 20px 22px;
       border-radius: 20px;
       text-align: center;
-      max-width: 320px;
-      width: 86%;
-      box-shadow: 0 12px 36px rgba(0,0,0,0.3);
+      max-width: 340px;
+      width: 88%;
+      box-shadow: var(--shadow-floating), 0 0 0 1px rgba(216, 181, 140, 0.4);
+      position: relative;
     }
-    .modal-card h2 {
-      margin-bottom: 10px;
-      font-size: 22px;
-      color: #0f172a;
+
+    .modal-card-paper h2 {
+      font-size: 21px;
+      color: var(--wood-deep);
+      margin-bottom: 8px;
+      font-weight: 800;
     }
-    .modal-card p {
-      font-size: 14px;
-      color: #64748b;
-      margin-bottom: 16px;
-      line-height: 1.5;
+
+    .modal-card-paper p {
+      font-size: 13px;
+      color: var(--ink-secondary);
+      margin-bottom: 18px;
+      line-height: 1.6;
     }
-    .action-btn {
-      background: #ea580c;
-      color: #fff;
-      border: none;
-      padding: 12px 28px;
-      border-radius: 24px;
-      font-size: 15px;
-      font-weight: bold;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35);
-      width: 100%;
-    }
-    .setting-row {
+
+    .setting-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 10px 0;
-      border-bottom: 1px solid #f1f5f9;
+      padding: 10px 4px;
+      border-bottom: 1px dashed #E8E2D5;
       font-size: 14px;
       font-weight: 600;
-      color: #334155;
+      color: var(--ink-main);
+    }
+
+    .toggle-wood-btn {
+      background: var(--sage-main);
+      color: #FFFFFF;
+      border: none;
+      padding: 5px 14px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(108, 133, 94, 0.3);
+    }
+
+    .toggle-wood-btn.off {
+      background: #B3AAA0;
+      box-shadow: none;
     }
   </style>
 </head>
 <body>
   <div id="game-container">
-    <!-- VIEW: MAIN MENU -->
+    <div id="ambient-sunlight"></div>
+
+    <!-- ======================================================================
+         VIEW: MAIN MENU (清晨日式料理小铺)
+         ====================================================================== -->
     <div class="view-screen" id="view-menu">
       <div class="menu-header">
-        <div class="menu-logo-badge">🍱</div>
-        <h1 class="menu-title">食材拼图 × 外卖营业</h1>
-        <p class="menu-subtitle">Jigsaw Drop × Food Takeaway</p>
+        <div class="menu-logo-plate">🍱</div>
+        <h1 class="menu-title">暖阳料理小铺</h1>
+        <p class="menu-subtitle">日式田园治愈美食拼图</p>
       </div>
 
-      <div class="day-select-card">
-        <div class="day-select-title">选择营业日 (DAY 1 ~ 12)</div>
+      <!-- 营业手账 (Day Select Ledger) -->
+      <div class="journal-book">
+        <div class="journal-title-bar">
+          <div class="journal-title">
+            <span>📖</span>
+            <span>本月营业手账</span>
+          </div>
+          <div class="journal-sub">DAY 1 ~ 12</div>
+        </div>
         <div class="day-grid" id="menu-day-grid">
-          <!-- Populated dynamically: Day 1 ~ 12 tiles -->
+          <!-- Populated dynamically -->
         </div>
       </div>
 
       <div class="menu-actions">
-        <button class="btn-main" id="btn-menu-continue">
-          <span>🚀</span>
-          <span id="btn-continue-label">开始营业 (DAY 1)</span>
+        <button class="btn-wood-main" id="btn-menu-continue">
+          <span>🍵</span>
+          <span id="btn-continue-label">开始今日营业 (DAY 1)</span>
         </button>
-        <button class="btn-secondary" id="btn-menu-settings">
-          <span>⚙️ 游戏设置</span>
+        <button class="btn-paper-secondary" id="btn-menu-settings">
+          <span>⚙️ 小铺便签 / 设置</span>
         </button>
       </div>
     </div>
 
-    <!-- VIEW: GAME PLAYING -->
+    <!-- ======================================================================
+         VIEW: IN-GAME HUD (木桌拼图桌面)
+         ====================================================================== -->
     <div class="view-screen view-hidden" id="view-game">
-      <!-- Receipt Printer & Header -->
-      <div id="printer-header">
-        <div class="printer-slit"></div>
-        <div class="printer-controls">
-          <span class="day-pill" id="day-title">DAY 01</span>
-          <span class="revenue-badge" id="revenue-display">¥0 / ¥200</span>
-        </div>
-        <div class="goal-progress-bar">
-          <div class="goal-progress-fill" id="goal-progress-fill"></div>
-        </div>
-      </div>
-
-      <!-- Hanging Receipt Paper -->
-      <div id="receipt-paper">
-        <div class="receipt-top">
-          <span id="order-id-dish">#0832 田园沙拉</span>
-          <span id="order-revenue" style="color: #e63946;">¥70</span>
-        </div>
-        <div class="receipt-checklist" id="receipt-checklist">
-          <!-- Populated dynamically -->
-        </div>
-        <div class="next-order-hint" id="next-order-hint">
-          <span class="next-order-tag">NEXT</span>
-          <span id="next-order-label">🥗 田园沙拉</span>
+      <!-- A. Top Light Status Bar -->
+      <div id="top-status-bar">
+        <span class="day-wooden-badge" id="day-title">DAY 01</span>
+        <div class="revenue-pill-card">
+          <div class="revenue-text-row" id="revenue-display">¥0 / ¥200</div>
+          <div class="revenue-progress-track">
+            <div class="revenue-progress-fill" id="goal-progress-fill"></div>
+          </div>
         </div>
       </div>
 
-      <div id="danger-banner">⚠️ 棋盘空间告急！请尽快拼合食材释放大块空间！</div>
-      <div id="cascade-banner">⚡ 连续出餐 ×2! 订单急速打印</div>
+      <!-- B. Hanging Thermal Receipt Paper -->
+      <div id="receipt-section">
+        <div id="receipt-paper">
+          <div class="receipt-header-row">
+            <div>
+              <div class="receipt-order-num">ORDER <span id="order-id-num">#1001</span></div>
+              <div class="receipt-dish-title" id="order-id-dish">🥗 田园沙拉</div>
+            </div>
+            <div class="receipt-price-stamp" id="order-revenue">¥70</div>
+          </div>
 
-      <!-- Core Board Canvas -->
+          <div class="receipt-progress-row">
+            <div style="font-size: 11px; color: var(--ink-secondary); font-weight: 600;">出餐进度</div>
+            <div class="receipt-checklist" id="receipt-checklist">
+              <!-- Dish progress stamps populated dynamically -->
+            </div>
+            <div class="next-order-tag-pill" id="next-order-hint">
+              <span>NEXT</span>
+              <span id="next-order-label">🥪 经典三明治</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="danger-banner">⚠️ 厨房忙碌中，请尽快拼合出餐腾出台面~</div>
+      <div id="cascade-banner">⚡ 连续出餐！今日厨房好忙~</div>
+
+      <!-- C. Central Board Area (Linen Mat, Zero Grid Table UI!) -->
       <div id="board-wrapper">
         <canvas id="board-canvas"></canvas>
         <div id="tutorial-indicator">
@@ -536,73 +775,88 @@
         </div>
       </div>
 
-      <!-- Bottom Bar -->
+      <!-- D. Bottom Auxiliary Area (今日备餐盘 + 木质圆钮) -->
       <div id="bottom-bar">
-        <div class="inventory-tray" id="inventory-tray"></div>
-        <div style="display: flex; gap: 6px;">
-          <button class="sys-btn" id="btn-audio">🔊</button>
-          <button class="sys-btn" id="btn-pause">暂停</button>
+        <div class="serving-tray" id="inventory-tray">
+          <span class="tray-label">今日备餐:</span>
+          <div class="tray-dish-slot" id="tray-slot-0">空</div>
+          <div class="tray-dish-slot" id="tray-slot-1">空</div>
+        </div>
+        <div class="aux-btn-group">
+          <button class="btn-wood-circle" id="btn-audio" title="音乐音效">🔊</button>
+          <button class="btn-wood-circle" id="btn-pause" title="暂停营业">⏸</button>
         </div>
       </div>
     </div>
 
-    <!-- Victory Modal (Day Complete) -->
+    <!-- ======================================================================
+         Modals
+         ====================================================================== -->
+    <!-- Victory Modal: 今天辛苦啦 (Day Clear) -->
     <div class="modal-overlay" id="modal-victory">
-      <div class="modal-card">
-        <h2>🎉 DAY COMPLETE!</h2>
-        <p id="victory-summary">营业额达标！外卖订单全部准时送达。</p>
+      <div class="modal-card-paper">
+        <h2>🍵 今天辛苦啦</h2>
+        <p id="victory-summary">
+          DAY 01 营业结束<br>
+          营业额达标，料理准时送出！
+        </p>
         <div style="display: flex; flex-direction: column; gap: 8px;">
-          <button class="action-btn" id="btn-next-day">进入下一天 ➔</button>
-          <button class="btn-secondary" id="btn-victory-menu" style="width: 100%;">返回主菜单</button>
+          <button class="btn-wood-main" id="btn-next-day">明天继续营业 ➔</button>
+          <button class="btn-paper-secondary" id="btn-victory-menu" style="width: 100%;">返回小铺大厅</button>
         </div>
       </div>
     </div>
 
-    <!-- Game Over Modal (Board Blocked) -->
+    <!-- Failed Modal: 今天有点忙不过来 (Day Failed) -->
     <div class="modal-overlay" id="modal-failed">
-      <div class="modal-card">
-        <h2 style="color: #dc2626;">🚫 棋盘阻塞</h2>
-        <p>顶部生成区已满，且场上散落碎片无法形成有效消除。</p>
+      <div class="modal-card-paper">
+        <h2 style="color: var(--danger);">🍃 今天有点忙不过来</h2>
+        <p id="failed-summary">
+          台面上堆满了食材碎屑，<br>
+          整理一下桌面，明天会更顺利~
+        </p>
         <div style="display: flex; flex-direction: column; gap: 8px;">
-          <button class="action-btn" id="btn-retry" style="background: #dc2626;">重新挑战</button>
-          <button class="btn-secondary" id="btn-failed-menu" style="width: 100%;">返回主菜单</button>
+          <button class="btn-wood-main" id="btn-retry" style="background: linear-gradient(180deg, #E79B62 0%, #C97E45 100%);">再试一次</button>
+          <button class="btn-paper-secondary" id="btn-failed-menu" style="width: 100%;">稍后整理 (返回大厅)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pause Modal -->
+    <div class="modal-overlay" id="modal-pause">
+      <div class="modal-card-paper">
+        <h2>⏸ 稍作休息</h2>
+        <p>小店营业暂时挂牌，随时可以继续。</p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button class="btn-wood-main" id="btn-resume">继续营业</button>
+          <button class="btn-paper-secondary" id="btn-pause-menu" style="width: 100%;">保存并回大厅</button>
         </div>
       </div>
     </div>
 
     <!-- Settings Modal -->
     <div class="modal-overlay" id="modal-settings">
-      <div class="modal-card">
-        <h2>⚙️ 游戏设置</h2>
-        <div class="setting-row">
-          <span>🎵 背景音乐</span>
-          <button class="sys-btn" id="btn-toggle-bgm" style="background: #ea580c; color: #fff;">开启</button>
+      <div class="modal-card-paper">
+        <h2>⚙️ 小店便签 / 设置</h2>
+        <div style="margin: 14px 0 18px; text-align: left;">
+          <div class="setting-item">
+            <span>🎵 背景音乐</span>
+            <button class="toggle-wood-btn" id="btn-toggle-bgm">开启</button>
+          </div>
+          <div class="setting-item">
+            <span>🔔 操作音效</span>
+            <button class="toggle-wood-btn" id="btn-toggle-sfx">开启</button>
+          </div>
+          <div class="setting-item">
+            <span>🗑️ 重置所有进度</span>
+            <button class="btn-paper-secondary" id="btn-reset-save" style="padding: 4px 10px; font-size: 11px;">重置</button>
+          </div>
+          <div class="setting-item">
+            <span>📊 导出营业数据</span>
+            <button class="btn-paper-secondary" id="btn-export-telemetry" style="padding: 4px 10px; font-size: 11px;">导出</button>
+          </div>
         </div>
-        <div class="setting-row">
-          <span>🔊 游戏音效</span>
-          <button class="sys-btn" id="btn-toggle-sfx" style="background: #ea580c; color: #fff;">开启</button>
-        </div>
-        <div class="setting-row" style="margin-top: 10px;">
-          <span>🔄 游戏进度</span>
-          <button class="sys-btn" id="btn-reset-save" style="background: #64748b; color: #fff;">重置存档</button>
-        </div>
-        <div class="setting-row" style="margin-top: 10px;">
-          <span>📊 遥测日志</span>
-          <button class="sys-btn" id="btn-export-telemetry" style="background: #0284c7; color: #fff;">导出 JSON</button>
-        </div>
-        <button class="action-btn" id="btn-close-settings" style="margin-top: 16px;">完成</button>
-      </div>
-    </div>
-
-    <!-- Pause Modal -->
-    <div class="modal-overlay" id="modal-pause">
-      <div class="modal-card">
-        <h2>⏸️ 游戏暂停</h2>
-        <p>厨房暂停接单，进度已自动保留。</p>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          <button class="action-btn" id="btn-resume">继续营业</button>
-          <button class="btn-secondary" id="btn-pause-menu" style="width: 100%;">返回主菜单</button>
-        </div>
+        <button class="btn-wood-main" id="btn-close-settings" style="width: 100%; padding: 11px;">完成</button>
       </div>
     </div>
   </div>
