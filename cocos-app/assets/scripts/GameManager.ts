@@ -126,6 +126,26 @@ export class GameManager extends Component {
       this.updateHUD();
     });
 
+    events.on('DISH_PIECE_SPAWNED', (p) => {
+      this.boardView?.onDishPieceSpawned(p);
+      this.updateHUD();
+    });
+
+    events.on('DISH_COMPLETED', (p) => {
+      this.boardView?.onDishCompleted(p);
+      CocosAudioDirector.playOrderComplete();
+      this.updateHUD();
+    });
+
+    events.on('DISH_CLEARED', (p) => {
+      this.boardView?.onDishCleared(p);
+      this.updateHUD();
+    });
+
+    events.on('DISH_SERVED', () => {
+      this.updateHUD();
+    });
+
     events.on('PIECE_PLACED', (p) => {
       this.boardView?.onPiecePlaced(p);
       this.updateHUD();

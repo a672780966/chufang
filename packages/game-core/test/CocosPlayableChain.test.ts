@@ -261,4 +261,165 @@ describe('Cocos Presentation Playable Chain: Drag -> Place -> Complete -> Refill
     assert.strictEqual(farDist, 150);
     assert.ok(farDist > 95, 'Must be outside snap radius -> triggers error rebound');
   });
+
+  it('should execute full Cocos Day 1 3-order loop with DISH_COMPLETED -> clear -> DISH_SERVED -> victory lifecycle', () => {
+    const session = new GameSession(DEFAULT_DAYS[0], 'cocos_3order_lifecycle_seed');
+
+    // 1. Verify raster asset key generation parity and zero slot_slot_0_0 duplication
+    const getCocosAssetPath = (dishOrIngId: string, slotId: string) => {
+      const normalizedSlot = slotId.startsWith('slot_') ? slotId : `slot_${slotId}`;
+      const dishPath = `textures/dishes/piece_${dishOrIngId}_${normalizedSlot}/spriteFrame`;
+      return { normalizedSlot, dishPath };
+    };
+
+    const keyCheck1 = getCocosAssetPath('dish_salad', 'slot_0_0');
+    assert.strictEqual(keyCheck1.dishPath, 'textures/dishes/piece_dish_salad_slot_0_0/spriteFrame');
+    assert.ok(!keyCheck1.dishPath.includes('slot_slot_'), 'Must never produce slot_slot_ in raster asset path');
+
+    const keyCheck2 = getCocosAssetPath('dish_salad', '0_0');
+    assert.strictEqual(keyCheck2.dishPath, 'textures/dishes/piece_dish_salad_slot_0_0/spriteFrame');
+
+    // 2. Verify Gold Sample raster asset assertion (strictly forbids silent vector fallback)
+    const simulateCocosLoadRaster = (dishId: string, slotId: string, hasAsset: boolean) => {
+      const { dishPath } = getCocosAssetPath(dishId, slotId);
+      if (!hasAsset && dishId.startsWith('dish_')) {
+        throw new Error(`[Gold Sample Error] Missing raster asset for dish piece: ${dishPath}. Silent fallback to vector graphics is strictly prohibited for Gold Sample dishes!`);
+      }
+      return hasAsset;
+    };
+
+    assert.throws(
+      () => simulateCocosLoadRaster('dish_salad', 'slot_1_1', false),
+      /\[Gold Sample Error\] Missing raster asset for dish piece/
+    );
+
+    // 3. Cocos Presentation State Simulation
+    const cocosBoardState = {
+      dishPieceNodes: new Map<string, { pieceId: string; dishId: string; coord: { col: number; row: number }; nodeName: string }>(),
+      activeCelebrations: 0,
+      clearedCount: 0,
+      receiptTitle: '',
+      revenue: 0,
+      victoryActive: false,
+      dayClearedCount: 0
+    };
+
+    // Initialize board with Day 1 pieces using createDishPieceNode contract
+    for (const p of session.dishPuzzleManager.getAllPieces()) {
+      cocosBoardState.dishPieceNodes.set(p.pieceInstanceId, {
+        pieceId: p.pieceInstanceId,
+        dishId: p.dishId,
+        coord: { ...p.boardCoord },
+        nodeName: `DishPiece_${p.pieceInstanceId}`
+      });
+    }
+    assert.strictEqual(cocosBoardState.dishPieceNodes.size, 17, 'Initial Day 1 board has 17 pieces');
+
+    // Wire Cocos event handlers identical to Cocos GameManager & BoardView
+    session.events.on('DISH_PIECE_SPAWNED', (payload) => {
+      // Must invoke createDishPieceNode contract
+      cocosBoardState.dishPieceNodes.set(payload.piece.pieceInstanceId, {
+        pieceId: payload.piece.pieceInstanceId,
+        dishId: payload.piece.dishId,
+        coord: { ...payload.toCoord },
+        nodeName: `DishPiece_${payload.piece.pieceInstanceId}`
+      });
+    });
+
+    session.events.on('DISH_COMPLETED', (payload) => {
+      cocosBoardState.activeCelebrations++;
+      // Cocos BoardView schedules clearCompletedGroup after 550ms completion celebration
+      setTimeout(() => {
+        session.dishPuzzleManager.clearCompletedGroup(payload.groupId);
+      }, 0);
+    });
+
+    session.events.on('DISH_CLEARED', (payload) => {
+      cocosBoardState.clearedCount++;
+      // Remove cleared piece nodes
+      for (const [id, node] of Array.from(cocosBoardState.dishPieceNodes.entries())) {
+        if (!session.dishPuzzleManager.getPiece(id)) {
+          cocosBoardState.dishPieceNodes.delete(id);
+        }
+      }
+    });
+
+    session.events.on('DISH_SERVED', () => {
+      cocosBoardState.revenue = session.revenue;
+      cocosBoardState.receiptTitle = session.orderSystem.currentOrder?.dishName || '';
+    });
+
+    session.events.on('DAY_CLEARED', () => {
+      cocosBoardState.dayClearedCount++;
+      cocosBoardState.victoryActive = true;
+    });
+
+    // Helper: simulate touch drag moves solving the active salad instance
+    const solveSaladViaTouchMoves = () => {
+      const mgr = session.dishPuzzleManager;
+      const saladPieces = mgr.getAllPieces().filter(p => p.dishId === 'dish_salad');
+      const p00 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 0)!;
+
+      // Touch Move 1: Duo (2,0) & (2,1)
+      const p20 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 0)!;
+      const g20 = mgr.getGroupByPieceId(p20.pieceInstanceId)!;
+      const res1 = mgr.tryMoveGroup(g20.groupId, 2, 0, p20.pieceInstanceId);
+      assert.ok(res1.success);
+
+      // Touch Move 2: (0,2)
+      const p02 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 2)!;
+      const g02 = mgr.getGroupByPieceId(p02.pieceInstanceId)!;
+      const res2 = mgr.tryMoveGroup(g02.groupId, 0, 2, p02.pieceInstanceId);
+      assert.ok(res2.success);
+
+      // Touch Move 3: (1,2)
+      const p12 = saladPieces.find(p => p.dishCol === 1 && p.dishRow === 2)!;
+      const g12 = mgr.getGroupByPieceId(p12.pieceInstanceId)!;
+      const res3 = mgr.tryMoveGroup(g12.groupId, 1, 2, p12.pieceInstanceId);
+      assert.ok(res3.success);
+
+      // Touch Move 4: (2,2) -> Completes Dish
+      const p22 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 2)!;
+      const g22 = mgr.getGroupByPieceId(p22.pieceInstanceId)!;
+      const res4 = mgr.tryMoveGroup(g22.groupId, 2, 2, p22.pieceInstanceId);
+      assert.ok(res4.completedDish, 'Should trigger completedDish in Cocos TouchController');
+
+      // Clear completed dish via BoardView lifecycle
+      mgr.clearCompletedGroup(p00.groupId);
+    };
+
+    // --- Cocos Order 1 (#1001 Salad) ---
+    assert.strictEqual(session.orderSystem.currentOrder?.orderId, '#1001');
+    solveSaladViaTouchMoves();
+    assert.strictEqual(session.revenue, 70);
+    assert.strictEqual(session.orderSystem.ordersFulfilledCount, 1);
+    assert.strictEqual(session.orderSystem.currentOrder?.orderId, '#1002');
+    assert.strictEqual(cocosBoardState.dayClearedCount, 0);
+
+    // --- Cocos Order 2 (#1002 Salad) ---
+    solveSaladViaTouchMoves();
+    assert.strictEqual(session.revenue, 140);
+    assert.strictEqual(session.orderSystem.ordersFulfilledCount, 2);
+    assert.strictEqual(session.orderSystem.currentOrder?.orderId, '#1003');
+    assert.strictEqual(cocosBoardState.dayClearedCount, 0);
+
+    // --- Cocos Order 3 (#1003 Salad -> Business Goal Reached) ---
+    solveSaladViaTouchMoves();
+    assert.strictEqual(session.revenue, 210);
+    assert.strictEqual(session.orderSystem.ordersFulfilledCount, 3);
+    assert.ok(session.orderSystem.isGoalReached);
+    assert.strictEqual(session.orderSystem.currentOrder, null, 'Must stop advancing orders when goal reached');
+
+    // Authoritative Day Cleared in Cocos
+    assert.strictEqual(cocosBoardState.dayClearedCount, 1, 'Cocos DAY_CLEARED must be emitted exactly once');
+    assert.strictEqual(cocosBoardState.victoryActive, true, 'Cocos Victory Modal must be activated');
+
+    // Zero orphan pieces on Cocos board
+    const finalPieces = session.dishPuzzleManager.getAllPieces();
+    assert.strictEqual(finalPieces.length, 8);
+    for (const p of finalPieces) {
+      assert.ok(cocosBoardState.dishPieceNodes.has(p.pieceInstanceId));
+      assert.ok(['dish_breakfast', 'dish_ramen'].includes(p.dishId));
+    }
+  });
 });

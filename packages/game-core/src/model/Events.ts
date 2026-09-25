@@ -1,8 +1,10 @@
 import { GridCoord, Order, IngredientTarget, LoosePiece } from './Types';
+import { DishPuzzlePiece } from '../puzzle/DishPuzzleModel';
 
 export type CoreEventType =
   | 'TARGET_SPAWNED'
   | 'PIECE_SPAWNED'
+  | 'DISH_PIECE_SPAWNED'
   | 'PIECE_MOVED'
   | 'PIECE_PLACED'
   | 'INGREDIENT_PROGRESS'
@@ -32,6 +34,7 @@ export type CoreEventType =
 export interface CoreEventMap {
   TARGET_SPAWNED: { target: IngredientTarget; fromAnchor: GridCoord; toAnchor: GridCoord };
   PIECE_SPAWNED: { piece: LoosePiece; fromCoord: GridCoord; toCoord: GridCoord };
+  DISH_PIECE_SPAWNED: { piece: DishPuzzlePiece; fromCoord?: GridCoord; toCoord: GridCoord };
   PIECE_MOVED: { pieceInstanceId: string; fromCoord: GridCoord; toCoord: GridCoord };
   PIECE_PLACED: {
     pieceInstanceId: string;

@@ -96,15 +96,7 @@ export class GameSession {
     // Connect Dish serving (triggered when completed group clears) directly with OrderSystem
     this.events.on('DISH_SERVED', ({ dishId }) => {
       this.orderSystem.handleCompletedDish(dishId);
-      if (this.orderSystem.isGoalReached) {
-        this._isGameOver = true;
-        this.events.emit('DAY_CLEARED', {
-          dayNumber: this.dayConfig.dayNumber,
-          totalRevenue: this.orderSystem.totalRevenue,
-          businessGoal: this.orderSystem.businessGoal,
-          ordersCompleted: this.orderSystem.ordersFulfilledCount
-        });
-      } else if (this.orderSystem.currentOrder) {
+      if (!this.orderSystem.isGoalReached && this.orderSystem.currentOrder) {
         const neededDishId = this.orderSystem.currentOrder.dishId || (this.orderSystem.currentOrder.recipeId.startsWith('dish_') ? this.orderSystem.currentOrder.recipeId : `dish_${this.orderSystem.currentOrder.recipeId}`);
         this.dishPuzzleManager.ensureActiveDishInstance(neededDishId);
       }

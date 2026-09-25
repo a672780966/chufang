@@ -213,15 +213,16 @@ export class BoardView extends Component {
    * Standard raster piece SpriteFrame loader with graceful fallback support.
    */
   public loadRasterSpriteFrame(dishOrIngId: string, slotId: string, onLoaded: (sf: SpriteFrame | null) => void): void {
-    const key = `${dishOrIngId}_${slotId}`;
+    const normalizedSlot = slotId.startsWith('slot_') ? slotId : `slot_${slotId}`;
+    const key = `${dishOrIngId}_${normalizedSlot}`;
     if (BoardView._spriteFrameCache.has(key)) {
       onLoaded(BoardView._spriteFrameCache.get(key)!);
       return;
     }
 
     // Standard Cocos bundle resource path for raster piece cutouts
-    const dishPath = `textures/dishes/piece_${dishOrIngId}_slot_${slotId}/spriteFrame`;
-    const piecePath = `textures/pieces/${dishOrIngId}/${slotId}/spriteFrame`;
+    const dishPath = `textures/dishes/piece_${dishOrIngId}_${normalizedSlot}/spriteFrame`;
+    const piecePath = `textures/pieces/${dishOrIngId}/${normalizedSlot}/spriteFrame`;
     const assetPath = dishOrIngId.startsWith('dish_') ? dishPath : piecePath;
     if (resources && typeof resources.load === 'function') {
       resources.load(assetPath, SpriteFrame, (err, sf) => {
@@ -229,11 +230,21 @@ export class BoardView extends Component {
           BoardView._spriteFrameCache.set(key, sf);
           onLoaded(sf);
         } else {
+          if (dishOrIngId.startsWith('dish_')) {
+            const errMsg = `[Gold Sample Error] Missing raster asset for dish piece: ${assetPath}. Silent fallback to vector graphics is strictly prohibited for Gold Sample dishes!`;
+            console.error(errMsg);
+            throw new Error(errMsg);
+          }
           // Fallback triggered: retains the high-fidelity vector representation
           onLoaded(null);
         }
       });
     } else {
+      if (dishOrIngId.startsWith('dish_')) {
+        const errMsg = `[Gold Sample Error] Cocos resources loader unavailable to load Gold Sample raster asset: ${assetPath}. Silent fallback to vector graphics is strictly prohibited!`;
+        console.error(errMsg);
+        throw new Error(errMsg);
+      }
       onLoaded(null);
     }
   }
@@ -444,5 +455,67 @@ export class BoardView extends Component {
         tween(node).to(0.22, { position: dest }, { easing: 'quadOut' }).start();
       }
     }
+  }
+
+  onDishPieceSpawned(payload: CoreEventMap['DISH_PIECE_SPAWNED']) {
+    const node = this.createDishPieceNode(payload.piece);
+    if (payload.fromCoord) {
+      const fromPos = this.gridToLocalPos(payload.fromCoord);
+      const toPos = this.gridToLocalPos(payload.toCoord);
+      node.setPosition(fromPos);
+      tween(node)
+        .to(0.22, { position: toPos }, { easing: 'quadOut' })
+        .start();
+    }
+  }
+
+  onDishCompleted(payload: CoreEventMap['DISH_COMPLETED']) {
+    // 550ms completion celebration matching Web presentation
+    for (const p of payload.pieces) {
+      const node = this.piecesContainer?.getChildByName(`DishPiece_${p.pieceInstanceId}`);
+      if (node) {
+        tween(node)
+          .to(0.22, { scale: new Vec3(1.12, 1.12, 1) }, { easing: 'sineOut' })
+          .to(0.22, { scale: new Vec3(1.0, 1.0, 1) }, { easing: 'sineIn' })
+          .start();
+      }
+    }
+
+    // After 550ms celebration: invoke clearCompletedGroup on DishPuzzleManager
+    this.scheduleOnce(() => {
+      if (this._session && this._session.dishPuzzleManager) {
+        this._session.dishPuzzleManager.clearCompletedGroup(payload.groupId);
+      }
+    }, 0.55);
+  }
+
+  onDishCleared(payload: CoreEventMap['DISH_CLEARED']) {
+    // 1. Remove nodes of the cleared dish pieces
+    if (this.piecesContainer) {
+      for (const child of [...this.piecesContainer.children]) {
+        if (child.name.startsWith('DishPiece_')) {
+          const pId = child.name.replace('DishPiece_', '');
+          if (!this._session?.dishPuzzleManager?.getPiece(pId)) {
+            tween(child)
+              .to(0.12, { scale: new Vec3(0, 0, 1) })
+              .call(() => child.destroy())
+              .start();
+          }
+        }
+      }
+    }
+
+    // 2. Settle remaining piece nodes to their post-gravity positions
+    this.scheduleOnce(() => {
+      if (this._session && this._session.dishPuzzleManager) {
+        for (const piece of this._session.dishPuzzleManager.getAllPieces()) {
+          const node = this.piecesContainer?.getChildByName(`DishPiece_${piece.pieceInstanceId}`);
+          if (node) {
+            const targetPos = this.gridToLocalPos(piece.boardCoord);
+            tween(node).to(0.22, { position: targetPos }, { easing: 'quadOut' }).start();
+          }
+        }
+      }
+    }, 0.15);
   }
 }

@@ -442,16 +442,10 @@ export class DishPuzzleManager {
 
     this.applyGravity();
 
-    // Emit spawn events for the presentation layer
+    // Emit typed DISH_PIECE_SPAWNED events for presentation layer
     for (const p of [s_0_0, s_1_0, s_0_1, s_1_1, s_2_0, s_2_1, s_0_2, s_1_2, s_2_2]) {
-      this.events.emit('PIECE_SPAWNED', {
-        piece: {
-          instanceId: p.pieceInstanceId,
-          ingredientId: p.dishId,
-          targetInstanceId: p.dishPuzzleInstanceId,
-          slotId: p.slotId,
-          coord: p.boardCoord
-        },
+      this.events.emit('DISH_PIECE_SPAWNED', {
+        piece: p,
         fromCoord: { col: p.boardCoord.col, row: this.rows - 1 },
         toCoord: p.boardCoord
       });
@@ -582,14 +576,8 @@ export class DishPuzzleManager {
               this.createGroup([newPiece]);
               spawned.push(newPiece);
 
-              this.events.emit('PIECE_SPAWNED', {
-                piece: {
-                  instanceId: newPiece.pieceInstanceId,
-                  ingredientId: newPiece.dishId,
-                  targetInstanceId: newPiece.dishPuzzleInstanceId,
-                  slotId: newPiece.slotId,
-                  coord: newPiece.boardCoord
-                },
+              this.events.emit('DISH_PIECE_SPAWNED', {
+                piece: newPiece,
                 fromCoord: { col: targetCol, row: this.rows - 1 },
                 toCoord: newPiece.boardCoord
               });
@@ -607,5 +595,36 @@ export class DishPuzzleManager {
     }
 
     return spawned;
+  }
+
+  /**
+   * Returns missing slot coordinates for an instance that have not yet been spawned.
+   */
+  getMissingSlots(instanceId: string): { col: number; row: number }[] {
+    const inst = this._instances.get(instanceId);
+    if (!inst) return [];
+    const missing: { col: number; row: number }[] = [];
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        if (!inst.spawnedSlots.has(`${c}_${r}`)) {
+          missing.push({ col: c, row: r });
+        }
+      }
+    }
+    return missing;
+  }
+
+  /**
+   * Deterministically refills missing pieces across all active instances until completeness
+   * (9/9 pieces spawned for each active instance) or until no more pieces can be placed.
+   */
+  refillAllMissingPieces(): DishPuzzlePiece[] {
+    const allSpawned: DishPuzzlePiece[] = [];
+    let batch: DishPuzzlePiece[];
+    do {
+      batch = this.refillMissingPieces(3);
+      allSpawned.push(...batch);
+    } while (batch.length > 0);
+    return allSpawned;
   }
 }

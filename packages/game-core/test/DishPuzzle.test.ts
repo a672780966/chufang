@@ -388,4 +388,95 @@ describe('DishPuzzle Domain Model & Adjacency Engine', () => {
     assert.ok(dayClearedFired, 'DAY_CLEARED must be emitted');
     assert.strictEqual(session.orderSystem.currentOrder, null, 'Must stop advancing orders when goal reached');
   });
+
+  it('should emit DAY_CLEARED exactly once upon reaching business goal', () => {
+    const session = new GameSession(DEFAULT_DAYS[0], 'exactly_once_seed');
+    let dayClearedEmissionCount = 0;
+    session.events.on('DAY_CLEARED', () => {
+      dayClearedEmissionCount++;
+    });
+
+    const solveActiveSalad = () => {
+      const manager = session.dishPuzzleManager;
+      const salad = Array.from(manager.getAllPieces())
+        .map(p => manager['_instances'].get(p.dishPuzzleInstanceId)!)
+        .find(inst => inst && inst.dishId === 'dish_salad' && !inst.isCompleted)!;
+
+      const saladPieces = manager.getAllPieces().filter(p => p.dishPuzzleInstanceId === salad.instanceId);
+      const p00 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 0)!;
+
+      const p20 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 0)!;
+      const g20 = manager.getGroupByPieceId(p20.pieceInstanceId)!;
+      manager.tryMoveGroup(g20.groupId, 2, 0, p20.pieceInstanceId);
+
+      const p02 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 2)!;
+      const g02 = manager.getGroupByPieceId(p02.pieceInstanceId)!;
+      manager.tryMoveGroup(g02.groupId, 0, 2, p02.pieceInstanceId);
+
+      const p12 = saladPieces.find(p => p.dishCol === 1 && p.dishRow === 2)!;
+      const g12 = manager.getGroupByPieceId(p12.pieceInstanceId)!;
+      manager.tryMoveGroup(g12.groupId, 1, 2, p12.pieceInstanceId);
+
+      const p22 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 2)!;
+      const g22 = manager.getGroupByPieceId(p22.pieceInstanceId)!;
+      manager.tryMoveGroup(g22.groupId, 2, 2, p22.pieceInstanceId);
+
+      manager.clearCompletedGroup(p00.groupId);
+    };
+
+    // Solve 3 consecutive salad orders to exceed goal (210 >= 200)
+    solveActiveSalad();
+    assert.strictEqual(dayClearedEmissionCount, 0, 'Should not emit before goal reached');
+    solveActiveSalad();
+    assert.strictEqual(dayClearedEmissionCount, 0, 'Should not emit before goal reached');
+    solveActiveSalad();
+
+    // Business goal authoritative exit must emit DAY_CLEARED EXACTLY ONCE
+    assert.strictEqual(dayClearedEmissionCount, 1, 'DAY_CLEARED must be emitted exactly once (no double-firing)');
+    assert.strictEqual(session.revenue, 210);
+    assert.strictEqual(session.orderSystem.currentOrder, null);
+  });
+
+  it('should ensure all active DishPuzzleInstances achieve eventual completeness (9/9 pieces spawned)', () => {
+    const manager = new DishPuzzleManager(8, 12);
+    manager.initDay1Layout();
+
+    const instances = Array.from(manager['_instances'].values());
+    const breakfast = instances.find(i => i.dishId === 'dish_breakfast')!;
+    const salad = instances.find(i => i.dishId === 'dish_salad')!;
+    const ramen = instances.find(i => i.dishId === 'dish_ramen')!;
+
+    assert.ok(breakfast && salad && ramen, 'All 3 dishes must exist');
+    assert.strictEqual(salad.spawnedSlots.size, 9, 'Salad starts complete with 9 pieces');
+    assert.strictEqual(breakfast.spawnedSlots.size, 4, 'Breakfast starts with 4 pieces');
+    assert.strictEqual(ramen.spawnedSlots.size, 4, 'Ramen starts with 4 pieces');
+
+    // Missing slots check
+    const breakfastMissing = manager.getMissingSlots(breakfast.instanceId);
+    assert.strictEqual(breakfastMissing.length, 5);
+    const ramenMissing = manager.getMissingSlots(ramen.instanceId);
+    assert.strictEqual(ramenMissing.length, 5);
+
+    // Track DISH_PIECE_SPAWNED events
+    const spawnedEvents: any[] = [];
+    manager.events.on('DISH_PIECE_SPAWNED', (p) => {
+      spawnedEvents.push(p);
+    });
+
+    // Run deterministic refill for all remaining missing pieces
+    const refilled = manager.refillAllMissingPieces();
+    assert.strictEqual(refilled.length, 10, 'Should spawn 5 breakfast + 5 ramen pieces');
+    assert.strictEqual(spawnedEvents.length, 10, 'Must emit DISH_PIECE_SPAWNED for each refilled piece');
+
+    // Eventual completeness verified
+    assert.strictEqual(breakfast.spawnedSlots.size, 9, 'Breakfast must achieve eventual completeness (9/9)');
+    assert.strictEqual(ramen.spawnedSlots.size, 9, 'Ramen must achieve eventual completeness (9/9)');
+
+    // Verify all pieces on board belong to valid instances and have zero orphans
+    const allPieces = manager.getAllPieces();
+    for (const p of allPieces) {
+      assert.ok(manager['_instances'].has(p.dishPuzzleInstanceId), 'Every piece must have valid instance');
+      assert.ok(['dish_breakfast', 'dish_salad', 'dish_ramen'].includes(p.dishId));
+    }
+  });
 });
