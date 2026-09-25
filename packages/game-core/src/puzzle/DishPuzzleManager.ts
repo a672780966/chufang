@@ -1,0 +1,410 @@
+/**
+ * DishPuzzleManager.ts
+ * Manages active dish puzzle instances, piece groups, and physical adjacency snapping on the board grid.
+ * Enforces pure deterministic rules for:
+ *   Piece -> Piece -> Group -> Dish -> Clear
+ */
+
+import { GridCoord } from '../model/Types';
+import { EventEmitter } from '../model/Events';
+import {
+  DishPuzzlePiece,
+  PieceGroup,
+  DishPuzzleInstance,
+  arePiecesDishAdjacent,
+  arePiecesGeometricallyAligned,
+  generateDishSlotEdges
+} from './DishPuzzleModel';
+import { GOLD_SAMPLE_DISH_MANIFEST } from '../data/DishManifest';
+
+export interface MoveGroupResult {
+  success: boolean;
+  merged: boolean;
+  completedDish?: DishPuzzleInstance;
+  reason?: string;
+}
+
+export class DishPuzzleManager {
+  readonly events: EventEmitter;
+  readonly columns: number;
+  readonly rows: number;
+
+  private _instances = new Map<string, DishPuzzleInstance>();
+  private _pieces = new Map<string, DishPuzzlePiece>();
+  private _groups = new Map<string, PieceGroup>();
+  /** 2D grid lookup: [row][col] -> pieceInstanceId or null */
+  private _gridCells: (string | null)[][];
+  private _instanceCounter: number = 1;
+  private _pieceCounter: number = 1;
+  private _groupCounter: number = 1;
+
+  constructor(columns: number = 8, rows: number = 12, events?: EventEmitter) {
+    this.columns = columns;
+    this.rows = rows;
+    this.events = events || new EventEmitter();
+
+    this._gridCells = Array.from({ length: rows }, () => Array(columns).fill(null));
+  }
+
+  getPiece(pieceId: string): DishPuzzlePiece | undefined {
+    return this._pieces.get(pieceId);
+  }
+
+  getGroup(groupId: string): PieceGroup | undefined {
+    return this._groups.get(groupId);
+  }
+
+  getGroupByPieceId(pieceId: string): PieceGroup | undefined {
+    const piece = this._pieces.get(pieceId);
+    if (!piece) return undefined;
+    return this._groups.get(piece.groupId);
+  }
+
+  getAllPieces(): DishPuzzlePiece[] {
+    return Array.from(this._pieces.values());
+  }
+
+  getAllGroups(): PieceGroup[] {
+    return Array.from(this._groups.values());
+  }
+
+  getPieceAt(col: number, row: number): DishPuzzlePiece | undefined {
+    if (col < 0 || col >= this.columns || row < 0 || row >= this.rows) return undefined;
+    const id = this._gridCells[row][col];
+    return id ? this._pieces.get(id) : undefined;
+  }
+
+  /**
+   * Initializes the Day 1 board layout containing pieces and partially connected groups
+   * from all 3 Gold Sample dishes (Breakfast, Salad, Ramen).
+   */
+  initDay1Layout(): void {
+    this._pieces.clear();
+    this._groups.clear();
+    this._instances.clear();
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.columns; c++) {
+        this._gridCells[r][c] = null;
+      }
+    }
+
+    // Create 3 active dish instances
+    const breakfast = this.createDishInstance('dish_breakfast');
+    const salad = this.createDishInstance('dish_salad');
+    const ramen = this.createDishInstance('dish_ramen');
+
+    // Salad Pieces:
+    // Group 1 (2 pieces): (0,0) and (1,0) at board (0,0) and (1,0)
+    const s_0_0 = this.createPiece(salad.instanceId, 'dish_salad', 0, 0, { col: 0, row: 0 });
+    const s_1_0 = this.createPiece(salad.instanceId, 'dish_salad', 1, 0, { col: 1, row: 0 });
+    this.createGroup([s_0_0, s_1_0]);
+
+    // Group 2 (2 pieces): (1,1) and (2,1) at board (5,0) and (6,0)
+    const s_1_1 = this.createPiece(salad.instanceId, 'dish_salad', 1, 1, { col: 5, row: 0 });
+    const s_2_1 = this.createPiece(salad.instanceId, 'dish_salad', 2, 1, { col: 6, row: 0 });
+    this.createGroup([s_1_1, s_2_1]);
+
+    // Salad loose pieces
+    const s_2_0 = this.createPiece(salad.instanceId, 'dish_salad', 2, 0, { col: 2, row: 0 });
+    this.createGroup([s_2_0]);
+
+    const s_0_1 = this.createPiece(salad.instanceId, 'dish_salad', 0, 1, { col: 0, row: 1 });
+    this.createGroup([s_0_1]);
+
+    const s_1_2 = this.createPiece(salad.instanceId, 'dish_salad', 1, 2, { col: 3, row: 0 });
+    this.createGroup([s_1_2]);
+
+    // Breakfast Pieces:
+    // Group 3 (2 pieces): (0,2) and (1,2) at board (3,1) and (4,1)
+    const b_0_2 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 0, 2, { col: 3, row: 1 });
+    const b_1_2 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 1, 2, { col: 4, row: 1 });
+    this.createGroup([b_0_2, b_1_2]);
+
+    // Breakfast loose pieces
+    const b_1_1 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 1, 1, { col: 4, row: 0 });
+    this.createGroup([b_1_1]);
+
+    const b_0_1 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 0, 1, { col: 1, row: 1 });
+    this.createGroup([b_0_1]);
+
+    // Ramen Pieces:
+    // Group 4 (2 pieces): (1,0) and (2,0) at board (5,1) and (6,1)
+    const r_1_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 1, 0, { col: 5, row: 1 });
+    const r_2_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 2, 0, { col: 6, row: 1 });
+    this.createGroup([r_1_0, r_2_0]);
+
+    // Ramen loose pieces
+    const r_0_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 0, 0, { col: 7, row: 0 });
+    this.createGroup([r_0_0]);
+
+    const r_1_1 = this.createPiece(ramen.instanceId, 'dish_ramen', 1, 1, { col: 7, row: 1 });
+    this.createGroup([r_1_1]);
+
+    this.applyGravity();
+  }
+
+  createDishInstance(dishId: string): DishPuzzleInstance {
+    const manifest = GOLD_SAMPLE_DISH_MANIFEST[dishId];
+    const instanceId = `inst_${dishId}_${this._instanceCounter++}`;
+    const instance: DishPuzzleInstance = {
+      instanceId,
+      dishId,
+      name: manifest?.name || dishId,
+      totalPieces: 9,
+      isCompleted: false
+    };
+    this._instances.set(instanceId, instance);
+    return instance;
+  }
+
+  createPiece(
+    dishPuzzleInstanceId: string,
+    dishId: string,
+    dishCol: number,
+    dishRow: number,
+    boardCoord: GridCoord
+  ): DishPuzzlePiece {
+    const pieceInstanceId = `p_${dishId}_${dishCol}_${dishRow}_${this._pieceCounter++}`;
+    const slotId = `slot_${dishCol}_${dishRow}`;
+    const edges = generateDishSlotEdges(dishCol, dishRow, 3, 3);
+    const imagePath = `/assets/dishes/piece_${dishId}_slot_${dishCol}_${dishRow}.png`;
+
+    const piece: DishPuzzlePiece = {
+      pieceInstanceId,
+      dishPuzzleInstanceId,
+      dishId,
+      dishCol,
+      dishRow,
+      slotId,
+      boardCoord: { ...boardCoord },
+      groupId: '',
+      edges,
+      imagePath
+    };
+
+    this._pieces.set(pieceInstanceId, piece);
+    if (boardCoord.row >= 0 && boardCoord.row < this.rows && boardCoord.col >= 0 && boardCoord.col < this.columns) {
+      this._gridCells[boardCoord.row][boardCoord.col] = pieceInstanceId;
+    }
+
+    return piece;
+  }
+
+  createGroup(pieces: DishPuzzlePiece[]): PieceGroup {
+    if (pieces.length === 0) throw new Error('Cannot create empty PieceGroup');
+    const groupId = `grp_${pieces[0].dishId}_${this._groupCounter++}`;
+    const group: PieceGroup = {
+      groupId,
+      dishPuzzleInstanceId: pieces[0].dishPuzzleInstanceId,
+      dishId: pieces[0].dishId,
+      pieceIds: pieces.map(p => p.pieceInstanceId),
+      isComplete: pieces.length === 9
+    };
+
+    for (const p of pieces) {
+      p.groupId = groupId;
+    }
+
+    this._groups.set(groupId, group);
+    return group;
+  }
+
+  /**
+   * Attempts to move an entire PieceGroup so its anchor piece sits at targetAnchor.
+   * If valid, relocates all member pieces rigid-body style, then triggers adjacency check.
+   */
+  tryMoveGroup(groupId: string, targetCol: number, targetRow: number, referencePieceId?: string): MoveGroupResult {
+    const group = this._groups.get(groupId);
+    if (!group) return { success: false, merged: false, reason: 'GROUP_NOT_FOUND' };
+
+    const pieces = group.pieceIds.map(id => this._pieces.get(id)!).filter(Boolean);
+    if (pieces.length === 0) return { success: false, merged: false, reason: 'EMPTY_GROUP' };
+
+    // Reference piece to calculate offset
+    const ref = (referencePieceId ? this._pieces.get(referencePieceId) : null) || pieces[0];
+    const deltaCol = targetCol - ref.boardCoord.col;
+    const deltaRow = targetRow - ref.boardCoord.row;
+
+    // Check bounds and collision for every piece in the group
+    const newCoords: { piece: DishPuzzlePiece; col: number; row: number }[] = [];
+    for (const p of pieces) {
+      const c = p.boardCoord.col + deltaCol;
+      const r = p.boardCoord.row + deltaRow;
+
+      if (c < 0 || c >= this.columns || r < 0 || r >= this.rows) {
+        return { success: false, merged: false, reason: 'OUT_OF_BOUNDS' };
+      }
+
+      const occupantId = this._gridCells[r][c];
+      if (occupantId && !group.pieceIds.includes(occupantId)) {
+        return { success: false, merged: false, reason: 'CELL_OCCUPIED' };
+      }
+
+      newCoords.push({ piece: p, col: c, row: r });
+    }
+
+    // 1. Clear old grid cells
+    for (const p of pieces) {
+      if (this._gridCells[p.boardCoord.row][p.boardCoord.col] === p.pieceInstanceId) {
+        this._gridCells[p.boardCoord.row][p.boardCoord.col] = null;
+      }
+    }
+
+    // 2. Set new positions
+    for (const item of newCoords) {
+      item.piece.boardCoord.col = item.col;
+      item.piece.boardCoord.row = item.row;
+      this._gridCells[item.col >= 0 ? item.row : 0][item.col] = item.piece.pieceInstanceId;
+    }
+
+    // 3. Check for geometric adjacency snapping
+    const mergeResult = this.checkAndMergeAdjacency(groupId);
+
+    return {
+      success: true,
+      merged: mergeResult.merged,
+      completedDish: mergeResult.completedDish
+    };
+  }
+
+  /**
+   * Inspects orthogonal neighbor cells around every piece in the group.
+   * If an aligned matching piece from the same dish instance is found, merges groups!
+   */
+  checkAndMergeAdjacency(groupId: string): { merged: boolean; completedDish?: DishPuzzleInstance } {
+    let currentGroup = this._groups.get(groupId);
+    if (!currentGroup) return { merged: false };
+
+    let totalMerged = false;
+    let keepChecking = true;
+
+    while (keepChecking) {
+      keepChecking = false;
+      const memberPieces = currentGroup.pieceIds.map(id => this._pieces.get(id)!).filter(Boolean);
+
+      for (const piece of memberPieces) {
+        const neighbors = [
+          { col: piece.boardCoord.col + 1, row: piece.boardCoord.row },
+          { col: piece.boardCoord.col - 1, row: piece.boardCoord.row },
+          { col: piece.boardCoord.col, row: piece.boardCoord.row + 1 },
+          { col: piece.boardCoord.col, row: piece.boardCoord.row - 1 }
+        ];
+
+        for (const n of neighbors) {
+          const neighborPiece = this.getPieceAt(n.col, n.row);
+          if (!neighborPiece) continue;
+
+          // Must be same dish instance but different group
+          if (
+            neighborPiece.dishPuzzleInstanceId === piece.dishPuzzleInstanceId &&
+            neighborPiece.groupId !== currentGroup.groupId
+          ) {
+            // Check dish adjacency and geometric alignment
+            if (
+              arePiecesDishAdjacent(piece, neighborPiece) &&
+              arePiecesGeometricallyAligned(piece, neighborPiece)
+            ) {
+              // SNAP & MERGE!
+              const otherGroup = this._groups.get(neighborPiece.groupId);
+              if (otherGroup) {
+                this.mergeTwoGroups(currentGroup, otherGroup);
+                totalMerged = true;
+                keepChecking = true;
+                break;
+              }
+            }
+          }
+        }
+        if (keepChecking) break;
+      }
+    }
+
+    // Check if dish complete
+    if (currentGroup.pieceIds.length === 9) {
+      currentGroup.isComplete = true;
+      const instance = this._instances.get(currentGroup.dishPuzzleInstanceId);
+      if (instance && !instance.isCompleted) {
+        instance.isCompleted = true;
+        this.events.emit('DISH_COMPLETED', {
+          dishId: instance.dishId,
+          dishPuzzleInstanceId: instance.instanceId,
+          groupId: currentGroup.groupId,
+          pieces: currentGroup.pieceIds.map(id => this._pieces.get(id)!)
+        });
+        return { merged: totalMerged, completedDish: instance };
+      }
+    }
+
+    return { merged: totalMerged };
+  }
+
+  private mergeTwoGroups(targetGroup: PieceGroup, sourceGroup: PieceGroup): void {
+    for (const pieceId of sourceGroup.pieceIds) {
+      const piece = this._pieces.get(pieceId);
+      if (piece) {
+        piece.groupId = targetGroup.groupId;
+        targetGroup.pieceIds.push(pieceId);
+      }
+    }
+    this._groups.delete(sourceGroup.groupId);
+
+    this.events.emit('PIECE_GROUP_MERGED', {
+      targetGroupId: targetGroup.groupId,
+      pieceCount: targetGroup.pieceIds.length
+    });
+  }
+
+  /**
+   * Clears a completed 9-piece dish from the board, frees cells, settles gravity,
+   * and spawns new pieces to maintain playability.
+   */
+  clearCompletedGroup(groupId: string): void {
+    const group = this._groups.get(groupId);
+    if (!group) return;
+
+    // Remove pieces from grid
+    for (const pieceId of group.pieceIds) {
+      const piece = this._pieces.get(pieceId);
+      if (piece) {
+        if (this._gridCells[piece.boardCoord.row][piece.boardCoord.col] === pieceId) {
+          this._gridCells[piece.boardCoord.row][piece.boardCoord.col] = null;
+        }
+        this._pieces.delete(pieceId);
+      }
+    }
+    this._groups.delete(groupId);
+
+    this.events.emit('DISH_CLEARED', {
+      dishId: group.dishId,
+      dishPuzzleInstanceId: group.dishPuzzleInstanceId,
+      groupId
+    });
+
+    // Settle pieces above down
+    this.applyGravity();
+  }
+
+  /**
+   * Applies discrete gravity on all pieces, allowing them to drop to lowest available row.
+   */
+  applyGravity(): boolean {
+    let movedAny = false;
+    for (let c = 0; c < this.columns; c++) {
+      let writeRow = 0;
+      for (let r = 0; r < this.rows; r++) {
+        const pieceId = this._gridCells[r][c];
+        if (pieceId) {
+          if (r !== writeRow) {
+            this._gridCells[r][c] = null;
+            this._gridCells[writeRow][c] = pieceId;
+            const piece = this._pieces.get(pieceId);
+            if (piece) piece.boardCoord.row = writeRow;
+            movedAny = true;
+          }
+          writeRow++;
+        }
+      }
+    }
+    return movedAny;
+  }
+}

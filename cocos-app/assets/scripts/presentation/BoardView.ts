@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Vec3, tween, UITransform, Graphics, Label, Color, UIOpacity } from 'cc';
+import { _decorator, Component, Node, Vec3, tween, UITransform, Graphics, Label, Color, UIOpacity, Sprite, SpriteFrame, resources } from 'cc';
 import {
   GameSession,
   GridCoord,
@@ -9,7 +9,8 @@ import {
   IngredientDefinition,
   PuzzleGeometry,
   JigsawEdgeType,
-  DragTutorialCue
+  DragTutorialCue,
+  DishPuzzlePiece
 } from '../../game-core/index';
 import { PastoralTheme } from './PastoralTheme';
 
@@ -182,6 +183,42 @@ export class BoardView extends Component {
     targetNode.addChild(titleNode);
   }
 
+  private static _spriteFrameCache: Map<string, SpriteFrame> = new Map();
+
+  /**
+   * Registers a piece SpriteFrame in the cache for immediate synchronous retrieval.
+   */
+  public static registerPieceSpriteFrame(key: string, sf: SpriteFrame): void {
+    BoardView._spriteFrameCache.set(key, sf);
+  }
+
+  /**
+   * Standard raster piece SpriteFrame loader with graceful fallback support.
+   */
+  public loadRasterSpriteFrame(dishOrIngId: string, slotId: string, onLoaded: (sf: SpriteFrame | null) => void): void {
+    const key = `${dishOrIngId}_${slotId}`;
+    if (BoardView._spriteFrameCache.has(key)) {
+      onLoaded(BoardView._spriteFrameCache.get(key)!);
+      return;
+    }
+
+    // Standard Cocos bundle resource path for raster piece cutouts
+    const assetPath = `textures/pieces/${dishOrIngId}/${slotId}/spriteFrame`;
+    if (resources && typeof resources.load === 'function') {
+      resources.load(assetPath, SpriteFrame, (err, sf) => {
+        if (!err && sf) {
+          BoardView._spriteFrameCache.set(key, sf);
+          onLoaded(sf);
+        } else {
+          // Fallback triggered: retains the high-fidelity vector representation
+          onLoaded(null);
+        }
+      });
+    } else {
+      onLoaded(null);
+    }
+  }
+
   createPieceNode(piece: LoosePiece): Node {
     const def = DEFAULT_INGREDIENTS[piece.ingredientId];
     const node = new Node(`Piece_${piece.instanceId}`);
@@ -190,10 +227,13 @@ export class BoardView extends Component {
     const uiTransform = node.addComponent(UITransform);
     uiTransform.setContentSize(this._cellWidth, this._cellHeight);
 
-    // Visible Graphics: Authentic jigsaw Bezier tabs & blanks
-    const g = node.addComponent(Graphics);
-    const slotDef = def?.slots.find(s => s.slotId === piece.slotId);
+    // 1. Fallback Vector Graphics: Authentic jigsaw Bezier tabs & blanks
+    const fallbackNode = new Node('FallbackGraphics');
+    fallbackNode.addComponent(UITransform).setContentSize(this._cellWidth, this._cellHeight);
+    const g = fallbackNode.addComponent(Graphics);
+    node.addChild(fallbackNode);
 
+    const slotDef = def?.slots.find(s => s.slotId === piece.slotId);
     const baseColor = def?.color ? Color.fromHEX(new Color(), def.color) : PastoralTheme.ccColors.tomato;
     const halfW = this._cellWidth / 2;
     const halfH = this._cellHeight / 2;
@@ -210,19 +250,93 @@ export class BoardView extends Component {
 
     const commands = PuzzleGeometry.generateSlotPathCommands(bounds, edges);
 
-    // 1. Subtle warm drop shadow contour
+    // Subtle warm drop shadow contour
     g.strokeColor = new Color(70, 55, 40, 40);
     g.lineWidth = 4;
     this.drawBezierPath(g, commands);
     g.stroke();
 
-    // 2. Main body fill & crisp cardboard outline
+    // Main body fill & crisp cardboard outline
     g.fillColor = baseColor;
     g.strokeColor = new Color(255, 253, 247, 245);
     g.lineWidth = 2.5;
     this.drawBezierPath(g, commands);
     g.fill();
     g.stroke();
+
+    // 2. Raster Sprite Component (Primary renderer per production pipeline)
+    const spriteNode = new Node('RasterSprite');
+    const spriteTransform = spriteNode.addComponent(UITransform);
+    spriteTransform.setContentSize(this._cellWidth, this._cellHeight);
+    const sprite = spriteNode.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    spriteNode.active = false;
+    node.addChild(spriteNode);
+
+    // Asynchronously request raster piece SpriteFrame
+    this.loadRasterSpriteFrame(piece.ingredientId, piece.slotId, (sf) => {
+      if (sf && sprite && node.isValid) {
+        sprite.spriteFrame = sf;
+        spriteNode.active = true;
+        fallbackNode.active = false; // Hide fallback once raster texture is ready
+      }
+    });
+
+    this.piecesContainer?.addChild(node);
+    return node;
+  }
+
+  createDishPieceNode(piece: DishPuzzlePiece): Node {
+    const node = new Node(`DishPiece_${piece.pieceInstanceId}`);
+    node.setPosition(this.gridToLocalPos(piece.boardCoord));
+
+    const uiTransform = node.addComponent(UITransform);
+    uiTransform.setContentSize(this._cellWidth, this._cellHeight);
+
+    // 1. Fallback Vector Graphics
+    const fallbackNode = new Node('FallbackGraphics');
+    fallbackNode.addComponent(UITransform).setContentSize(this._cellWidth, this._cellHeight);
+    const g = fallbackNode.addComponent(Graphics);
+    node.addChild(fallbackNode);
+
+    const halfW = this._cellWidth / 2;
+    const halfH = this._cellHeight / 2;
+    const bounds = {
+      x: -halfW + 3,
+      y: -halfH + 3,
+      width: this._cellWidth - 6,
+      height: this._cellHeight - 6
+    };
+    const commands = PuzzleGeometry.generateSlotPathCommands(bounds, piece.edges);
+
+    g.strokeColor = new Color(70, 55, 40, 40);
+    g.lineWidth = 3;
+    this.drawBezierPath(g, commands);
+    g.stroke();
+
+    g.fillColor = new Color(245, 238, 220, 255);
+    g.strokeColor = new Color(255, 253, 247, 245);
+    g.lineWidth = 2;
+    this.drawBezierPath(g, commands);
+    g.fill();
+    g.stroke();
+
+    // 2. Raster Sprite Component
+    const spriteNode = new Node('RasterSprite');
+    const spriteTransform = spriteNode.addComponent(UITransform);
+    spriteTransform.setContentSize(this._cellWidth, this._cellHeight);
+    const sprite = spriteNode.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    spriteNode.active = false;
+    node.addChild(spriteNode);
+
+    this.loadRasterSpriteFrame(piece.dishId, piece.slotId, (sf) => {
+      if (sf && sprite && node.isValid) {
+        sprite.spriteFrame = sf;
+        spriteNode.active = true;
+        fallbackNode.active = false;
+      }
+    });
 
     this.piecesContainer?.addChild(node);
     return node;

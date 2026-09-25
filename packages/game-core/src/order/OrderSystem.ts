@@ -229,4 +229,25 @@ export class OrderSystem {
     if (chain === 3) return 1.2;
     return 1.3;
   }
+
+  /**
+   * Directly fulfills a dish puzzle, incrementing revenue and order count cleanly.
+   */
+  fulfillDish(dishId: string, revenue: number): void {
+    this._totalRevenue += revenue;
+    this._ordersFulfilledCount++;
+
+    this._events.emit('REVENUE_CHANGED', {
+      currentRevenue: this._totalRevenue,
+      businessGoal: this._businessGoal,
+      delta: revenue
+    });
+
+    if (this.isGoalReached) {
+      this._events.emit('BUSINESS_GOAL_REACHED', {
+        finalRevenue: this._totalRevenue,
+        businessGoal: this._businessGoal
+      });
+    }
+  }
 }

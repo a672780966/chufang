@@ -6,12 +6,14 @@ import {
   DEFAULT_DAYS,
   DEFAULT_INGREDIENTS,
   DEFAULT_RECIPES,
-  PuzzleCutter,
   PuzzleGeometry,
   BezierCommand,
   GridCoord,
-  IngredientTarget,
-  LoosePiece,
+  DishPuzzleManager,
+  DishPuzzlePiece,
+  PieceGroup,
+  DishPuzzleInstance,
+  GOLD_SAMPLE_DISH_MANIFEST,
   DragTutorialCue
 } from '../../game-core/src/index.js';
 import { AudioDirector } from './audio/AudioDirector.js';
@@ -24,23 +26,27 @@ class WebGameApp {
   private flow!: GameFlowManager;
   private canvas!: HTMLCanvasElement;
   private ctx!: CanvasRenderingContext2D;
-
-  // Render & Touch State
-  private draggingPiece: LoosePiece | null = null;
-  private dragPointerPos: { x: number; y: number } = { x: 0, y: 0 };
-  private dragOriginCoord: GridCoord | null = null;
-  private wobblePieces = new Map<string, { startTime: number; startX: number; startY: number }>();
-  private pieceVisualPositions = new Map<string, { x: number; y: number }>();
-  private targetVisualAnchors = new Map<string, { x: number; y: number }>();
   private currentTutorialCue: DragTutorialCue | null = null;
-  private completedAnimTargets = new Map<string, { startTime: number; target: IngredientTarget }>();
 
-  // SVG Image Cache for 60fps canvas blitting
-  private svgImageCache = new Map<string, HTMLImageElement>();
+  // DishPuzzle Domain & Touch State
+  private dishPuzzleManager!: DishPuzzleManager;
+  private draggingGroup: {
+    groupId: string;
+    pieces: DishPuzzlePiece[];
+    grabPiece: DishPuzzlePiece;
+    grabOffset: { x: number; y: number };
+  } | null = null;
+  private dragPointerPos: { x: number; y: number } = { x: 0, y: 0 };
+  private wobblePieces = new Map<string, { startTime: number; startX: number; startY: number }>();
+  private completedDishAnims = new Map<string, { startTime: number; dishId: string; pieces: DishPuzzlePiece[]; groupId: string }>();
+
+  private activeDishes: string[] = ['dish_salad', 'dish_breakfast', 'dish_ramen'];
+  private currentDishOrderIndex: number = 0;
 
   constructor() {
     SaveSystem.setStorage(new WebStorageAdapter());
     DishTextureManager.init();
+    (window as any).__app = this;
     this.initFlow();
     this.initDOM();
     this.startRenderLoop();
@@ -265,16 +271,17 @@ class WebGameApp {
   }
 
   private startDay(dayNumber: number): void {
-    this.pieceVisualPositions.clear();
-    this.targetVisualAnchors.clear();
-    this.draggingPiece = null;
+    this.draggingGroup = null;
     this.wobblePieces.clear();
-    this.completedAnimTargets.clear();
-    this.currentTutorialCue = null;
+    this.completedDishAnims.clear();
     this.resizeCanvas();
 
     const session = this.flow.startDay(dayNumber);
     WebTelemetrySink.log('day_start', dayNumber);
+
+    // Initialize True DishPuzzle domain with Day 1 layout (Breakfast, Salad, Ramen)
+    this.dishPuzzleManager = new DishPuzzleManager(session.grid.columns, session.grid.rows, session.events);
+    this.dishPuzzleManager.initDay1Layout();
 
     setTimeout(() => {
       this.flow.beginPlaying();
@@ -282,22 +289,11 @@ class WebGameApp {
 
     // Bind session audio & visual cues
     session.events.on('PIECE_PLACED', () => AudioDirector.playSnapPiece());
-    session.events.on('INGREDIENT_COMPLETED', (d: any) => {
-      AudioDirector.playIngredientComplete(d.target?.ingredientId);
-      if (d.target) {
-        this.completedAnimTargets.set(d.target.instanceId, {
-          startTime: performance.now(),
-          target: d.target
-        });
-      }
-    });
-    session.events.on('CASCADE_STEP', (d: any) => AudioDirector.playCascade(d.chainLength));
     session.events.on('ORDER_COMPLETED', () => {
       AudioDirector.playOrderComplete();
       AudioDirector.playRevenueGain();
     });
     session.events.on('BOARD_SETTLED', () => AudioDirector.playBoardSettling());
-    session.events.on('BOARD_DANGER', () => AudioDirector.playDanger());
     session.events.on('DAY_CLEARED', () => AudioDirector.playDayClear());
 
     AudioDirector.playReceiptPrint();
@@ -325,47 +321,55 @@ class WebGameApp {
       fill.style.width = `${pct}%`;
     }
 
-    // B. Hanging Thermal Receipt
-    const order = session.orderSystem.currentOrder;
+    // B. Hanging Thermal Receipt - True Master Dish Art Order
+    const curDishId = this.activeDishes[this.currentDishOrderIndex] || 'dish_salad';
+    const manifest = GOLD_SAMPLE_DISH_MANIFEST[curDishId];
     const orderIdNum = document.getElementById('order-id-num');
     const orderIdDish = document.getElementById('order-id-dish');
     const orderRevenue = document.getElementById('order-revenue');
     const checklist = document.getElementById('receipt-checklist');
 
-    if (order) {
-      if (orderIdNum) orderIdNum.textContent = `${order.orderId}`;
-      if (orderIdDish) orderIdDish.textContent = `${order.dishName}`;
-      const dishThumb = document.getElementById('receipt-dish-thumb') as HTMLImageElement;
-      if (dishThumb) {
-        dishThumb.src = DishTextureManager.DISH_MASTERS[order.recipeId] || '/assets/dishes/dish_salad_master.jpg';
-      }
-      if (orderRevenue) orderRevenue.textContent = `¥${order.baseRevenue}`;
+    if (orderIdNum) orderIdNum.textContent = '#1001';
+    if (orderIdDish) orderIdDish.textContent = manifest?.name || '田园沙拉';
+    const dishThumb = document.getElementById('receipt-dish-thumb') as HTMLImageElement;
+    if (dishThumb) {
+      dishThumb.src = manifest?.masterAsset || '/assets/dishes/dish_salad_master.jpg';
+    }
+    if (orderRevenue) orderRevenue.textContent = `¥${manifest?.orderRevenue || 70}`;
 
-      if (checklist) {
-        checklist.innerHTML = '';
-        // Clean dish progress dots (no raw ugly ingredient text lists!)
-        for (const item of order.items) {
-          const dot = document.createElement('div');
-          const isSatisfied = item.reserved >= item.needed;
-          dot.className = `dish-progress-dot ${isSatisfied ? 'filled' : ''}`;
-          dot.title = `${item.ingredientId}: ${item.reserved}/${item.needed}`;
-          checklist.appendChild(dot);
-        }
+    if (checklist) {
+      checklist.innerHTML = '';
+      // Status badges for the 3 active dishes on the board
+      for (const dId of this.activeDishes) {
+        const dManifest = GOLD_SAMPLE_DISH_MANIFEST[dId];
+        const groups = this.dishPuzzleManager
+          ? this.dishPuzzleManager.getAllGroups().filter(g => g.dishId === dId)
+          : [];
+        const maxGroupSize = groups.reduce((max, g) => Math.max(max, g.pieceIds.length), 0);
+        const isCurrent = dId === curDishId;
+
+        const badge = document.createElement('div');
+        badge.textContent = `${dManifest?.name || dId} (${maxGroupSize}/9)`;
+        badge.style.padding = '3px 8px';
+        badge.style.borderRadius = '8px';
+        badge.style.fontSize = '12px';
+        badge.style.fontWeight = isCurrent ? 'bold' : 'normal';
+        badge.style.color = isCurrent ? '#FFFFFF' : 'var(--ink-main)';
+        badge.style.background = isCurrent ? 'var(--sage-dark)' : 'rgba(238, 230, 216, 0.7)';
+        badge.style.border = isCurrent ? '1.5px solid var(--sage-main)' : '1px solid rgba(180, 160, 140, 0.3)';
+        checklist.appendChild(badge);
       }
     }
 
-    // Next Order Hint (Dish only, unlocked Day 7+)
+    // Next Order Hint
     const nextHint = document.getElementById('next-order-hint');
     const nextLabel = document.getElementById('next-order-label');
-    const nextPreview = session.orderSystem.getNextOrderPreview();
+    const nextDishId = this.activeDishes[(this.currentDishOrderIndex + 1) % this.activeDishes.length];
+    const nextManifest = GOLD_SAMPLE_DISH_MANIFEST[nextDishId];
 
     if (nextHint && nextLabel) {
-      if (session.dayConfig.dayNumber >= 7 && nextPreview.dishId) {
-        nextHint.style.display = 'inline-flex';
-        nextLabel.textContent = `${nextPreview.dishName}`;
-      } else {
-        nextHint.style.display = 'none';
-      }
+      nextHint.style.display = 'inline-flex';
+      nextLabel.textContent = `下道料理: ${nextManifest?.name || '暖汤拉面'}`;
     }
 
     // D. Serving Tray (2 slots for prepared dishes)
@@ -513,116 +517,121 @@ class WebGameApp {
     ctx.closePath();
   }
 
-  // --- SVG Image Cached Loading (Optional texture overlay) ---
-  private getOrCreateSvgImage(cacheKey: string, svgString: string): HTMLImageElement {
-    let img = this.svgImageCache.get(cacheKey);
-    if (!img) {
-      img = new Image();
-      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-      img.src = URL.createObjectURL(blob);
-      this.svgImageCache.set(cacheKey, img);
-    }
-    return img;
-  }
 
   // --- Touch & Pointer Handling ---
   private onPointerDown(e: PointerEvent): void {
-    if (this.flow.isInputLocked || !this.flow.session) return;
+    if (this.flow.isInputLocked || !this.dishPuzzleManager) return;
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const coord = this.screenToGrid(x, y);
-    const loose = this.flow.session.grid.getAllLoosePieces();
+    const { cellSize } = this.getBoardOrigin();
+    const allPieces = this.dishPuzzleManager.getAllPieces();
 
-    // Check hit on loose piece: exact coord match first, then proximity radius <= 1.15
-    let matchedPiece: LoosePiece | null = null;
-    for (const piece of loose) {
-      if (piece.coord.col === coord.col && piece.coord.row === coord.row) {
-        matchedPiece = piece;
+    // Check hit on any piece: exact bounding box first, then distance
+    let hitPiece: DishPuzzlePiece | null = null;
+    for (const piece of allPieces) {
+      const sp = this.gridToScreen(piece.boardCoord);
+      if (x >= sp.x && x <= sp.x + cellSize && y >= sp.y && y <= sp.y + cellSize) {
+        hitPiece = piece;
         break;
       }
     }
-    if (!matchedPiece) {
-      let bestDist = 1.15;
-      for (const piece of loose) {
-        const d = Math.hypot(piece.coord.col - coord.col, piece.coord.row - coord.row);
+
+    if (!hitPiece) {
+      let bestDist = cellSize * 0.9;
+      for (const piece of allPieces) {
+        const sp = this.gridToScreen(piece.boardCoord);
+        const center = { x: sp.x + cellSize / 2, y: sp.y + cellSize / 2 };
+        const d = Math.hypot(center.x - x, center.y - y);
         if (d < bestDist) {
           bestDist = d;
-          matchedPiece = piece;
+          hitPiece = piece;
         }
       }
     }
 
-    if (matchedPiece) {
-      this.draggingPiece = matchedPiece;
-      this.dragPointerPos = { x, y };
-      this.dragOriginCoord = { ...matchedPiece.coord };
-      AudioDirector.playPickPiece();
-      this.canvas.setPointerCapture(e.pointerId);
+    if (hitPiece) {
+      const group = this.dishPuzzleManager.getGroupByPieceId(hitPiece.pieceInstanceId);
+      if (group) {
+        const memberPieces = group.pieceIds.map(id => this.dishPuzzleManager.getPiece(id)!).filter(Boolean);
+        const refScreen = this.gridToScreen(hitPiece.boardCoord);
+        this.draggingGroup = {
+          groupId: group.groupId,
+          pieces: memberPieces,
+          grabPiece: hitPiece,
+          grabOffset: {
+            x: x - (refScreen.x + cellSize / 2),
+            y: y - (refScreen.y + cellSize / 2)
+          }
+        };
+        this.dragPointerPos = { x, y };
+        AudioDirector.playPickPiece();
+        try { this.canvas.setPointerCapture(e.pointerId); } catch {}
+      }
     }
   }
 
   private onPointerMove(e: PointerEvent): void {
-    if (!this.draggingPiece) return;
+    if (!this.draggingGroup) return;
     const rect = this.canvas.getBoundingClientRect();
     this.dragPointerPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
   private onPointerUp(e: PointerEvent): void {
-    if (!this.draggingPiece || !this.flow.session) {
-      this.draggingPiece = null;
+    if (!this.draggingGroup || !this.dishPuzzleManager) {
+      this.draggingGroup = null;
       return;
     }
 
-    const session = this.flow.session;
-    const piece = this.draggingPiece;
-    const coord = this.screenToGrid(this.dragPointerPos.x, this.dragPointerPos.y);
+    const group = this.draggingGroup;
+    // Calculate drop cell from grabPiece center position
+    const grabCenterX = this.dragPointerPos.x - group.grabOffset.x;
+    const grabCenterY = this.dragPointerPos.y - group.grabOffset.y;
+    const targetCoord = this.screenToGrid(grabCenterX, grabCenterY);
 
-    // Look for matching target at or near dropped coordinate
-    const target = session.grid.getAllTargets().find(t => t.instanceId === piece.targetInstanceId);
+    const moveResult = this.dishPuzzleManager.tryMoveGroup(
+      group.groupId,
+      targetCoord.col,
+      targetCoord.row,
+      group.grabPiece.pieceInstanceId
+    );
 
-    let placed = false;
-    if (target && target.missingSlotIds.includes(piece.slotId)) {
-      const def = session.ingredients[target.ingredientId];
-      const slot = def?.slots.find(s => s.slotId === piece.slotId);
-      if (slot) {
-        const slotAbsCol = target.anchor.col + slot.relativeCol;
-        const slotAbsRow = target.anchor.row + slot.relativeRow;
-
-        // Tolerant snap radius: distance in grid coords <= 1.35
-        const dist = Math.hypot(coord.col - slotAbsCol, coord.row - slotAbsRow);
-        if (dist <= 1.35) {
-          const res = this.flow.placePiece(piece.instanceId, target.instanceId, piece.slotId);
-          if (res.success) {
-            placed = true;
-            WebTelemetrySink.log('piece_placed', session.dayConfig.dayNumber, {
-              pieceId: piece.instanceId,
-              targetId: target.instanceId,
-              slotId: piece.slotId
-            });
-            this.updateTutorialCue(null);
-          }
-        }
+    if (moveResult.success) {
+      if (moveResult.merged) {
+        AudioDirector.playSnapPiece();
       }
-    }
+      if (moveResult.completedDish) {
+        AudioDirector.playOrderComplete();
+        AudioDirector.playRevenueGain();
 
-    if (!placed) {
-      // Trigger wobble feedback & smooth return
+        // 550ms completion celebration
+        this.completedDishAnims.set(moveResult.completedDish.instanceId, {
+          startTime: performance.now(),
+          dishId: moveResult.completedDish.dishId,
+          pieces: group.pieces,
+          groupId: group.groupId
+        });
+
+        const manifest = GOLD_SAMPLE_DISH_MANIFEST[moveResult.completedDish.dishId];
+        const rev = manifest?.orderRevenue || 70;
+        if (this.flow.session) {
+          this.flow.session.orderSystem.fulfillDish(moveResult.completedDish.dishId, rev);
+        }
+        // Advance current target dish
+        this.currentDishOrderIndex = (this.currentDishOrderIndex + 1) % this.activeDishes.length;
+      }
+    } else {
       AudioDirector.playWrongDrop();
-      WebTelemetrySink.log('wrong_drop', session.dayConfig.dayNumber);
-      this.wobblePieces.set(piece.instanceId, {
+      this.wobblePieces.set(group.grabPiece.pieceInstanceId, {
         startTime: performance.now(),
         startX: this.dragPointerPos.x,
         startY: this.dragPointerPos.y
       });
     }
 
-    this.draggingPiece = null;
-    this.dragOriginCoord = null;
-    try {
-      this.canvas.releasePointerCapture(e.pointerId);
-    } catch {}
+    this.draggingGroup = null;
+    try { this.canvas.releasePointerCapture(e.pointerId); } catch {}
     this.updateHUD();
   }
 
@@ -675,7 +684,7 @@ class WebGameApp {
     const rows = session.grid.rows;
     const now = performance.now();
 
-    // 1. Linen Mat Base Plate (Warm Pastoral Table Mat - ZERO visible grid cells!)
+    // 1. Pastoral Cutting Board / Counter Table Background
     const boardW = cols * cellSize;
     const boardH = rows * cellSize;
     const boardX = originX;
@@ -699,16 +708,22 @@ class WebGameApp {
     this.roundRect(this.ctx, boardX + 3, boardY + 3, boardW - 6, boardH - 6, PastoralTheme.radii.board - 2);
     this.ctx.stroke();
 
-    // Top Danger Zone Divider (Warm pastel alert line, never harsh red)
-    const dangerZonePos = this.gridToScreen({ col: 0, row: 10 });
-    const isDanger = session.isBoardInDanger();
-    if (isDanger) {
-      this.ctx.fillStyle = 'rgba(231, 155, 98, 0.10)';
-      this.ctx.fillRect(boardX + 4, dangerZonePos.y, boardW - 8, cellSize * 2);
+    // Subtle tactile dot guides at cell centers (NO rigid grid boxes)
+    this.ctx.fillStyle = 'rgba(180, 160, 140, 0.22)';
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const pt = this.gridToScreen({ col: c, row: r });
+        this.ctx.beginPath();
+        this.ctx.arc(pt.x + cellSize / 2, pt.y + cellSize / 2, 2, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
     }
+
+    // Top subtle divider line
+    const dangerZonePos = this.gridToScreen({ col: 0, row: 10 });
     this.ctx.setLineDash([8, 6]);
-    this.ctx.strokeStyle = isDanger ? PastoralTheme.colors.danger : 'rgba(180, 160, 140, 0.35)';
-    this.ctx.lineWidth = isDanger ? 2 : 1;
+    this.ctx.strokeStyle = 'rgba(180, 160, 140, 0.35)';
+    this.ctx.lineWidth = 1;
     this.ctx.beginPath();
     this.ctx.moveTo(boardX + 8, dangerZonePos.y + cellSize);
     this.ctx.lineTo(boardX + boardW - 8, dangerZonePos.y + cellSize);
@@ -716,396 +731,140 @@ class WebGameApp {
     this.ctx.setLineDash([]);
     this.ctx.restore();
 
-    // 2. Active Targets (Ceramic Plates & Jigsaw Sockets)
-    for (const target of session.grid.getAllTargets()) {
-      const def = session.ingredients[target.ingredientId];
-      if (!def) continue;
+    if (!this.dishPuzzleManager) return;
 
-      const targetX = originX + target.anchor.col * cellSize;
-      const targetY = originY - (target.anchor.row + def.height - 1) * cellSize;
-      const targetW = def.width * cellSize;
-      const targetH = def.height * cellSize;
-
-      // Ceramic white target dish base plate
-      this.ctx.save();
-      this.ctx.fillStyle = PastoralTheme.colors.targetPlate;
-      this.ctx.shadowColor = PastoralTheme.shadows.targetPlate;
-      this.ctx.shadowBlur = 8;
-      this.ctx.shadowOffsetY = 2;
-      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, PastoralTheme.radii.plate);
-      this.ctx.fill();
-      this.ctx.restore();
-
-      this.ctx.save();
-      this.ctx.strokeStyle = PastoralTheme.colors.targetBorder;
-      this.ctx.lineWidth = 1.5;
-      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, PastoralTheme.radii.plate);
-      this.ctx.stroke();
-      this.ctx.restore();
-
-      // Draw each slot in target
-      const baseColor = def.color || PastoralTheme.colors.tomato;
-      for (const slot of def.slots) {
-        const isPlaced = target.placedSlotIds.includes(slot.slotId);
-        const isMatchingDrag = this.draggingPiece &&
-          this.draggingPiece.targetInstanceId === target.instanceId &&
-          this.draggingPiece.slotId === slot.slotId;
-        const isTutorialTarget = this.currentTutorialCue?.targetInstanceId === target.instanceId &&
-          this.currentTutorialCue?.slotId === slot.slotId;
-
-        const slotCol = target.anchor.col + slot.relativeCol;
-        const slotRow = target.anchor.row + slot.relativeRow;
-        const slotPos = this.gridToScreen({ col: slotCol, row: slotRow });
-
-        const slotBounds = {
-          x: slotPos.x + 3,
-          y: slotPos.y + 3,
-          width: cellSize - 6,
-          height: cellSize - 6
-        };
-
-        const pathCommands = PuzzleGeometry.generateSlotPathCommands(slotBounds, slot.edges);
-
-        if (isPlaced) {
-          // Completed slot: Authentic cut piece image texture from Master Dish Art!
-          const pieceImg = DishTextureManager.getPieceImage(target.ingredientId, slot.slotId);
-          if (pieceImg) {
-            const padScreen = cellSize * 0.28;
-            this.ctx.drawImage(
-              pieceImg,
-              slotPos.x - padScreen,
-              slotPos.y - padScreen,
-              cellSize + padScreen * 2,
-              cellSize + padScreen * 2
-            );
-          } else {
-            this.ctx.save();
-            this.ctx.fillStyle = baseColor;
-            this.drawBezierPath(pathCommands);
-            this.ctx.fill();
-            this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
-            this.ctx.lineWidth = 2;
-            this.ctx.stroke();
-            this.ctx.restore();
-          }
-        } else {
-          // Missing slot: Recessed socket (ZERO debug text!)
-          this.ctx.save();
-
-          if (isMatchingDrag) {
-            // Drag-Hover Snap Guide: Gentle golden honey glow
-            const pulse = Math.sin(now / 140) * 0.18 + 0.65;
-            this.ctx.fillStyle = `rgba(253, 230, 138, ${pulse})`;
-            this.drawBezierPath(pathCommands);
-            this.ctx.fill();
-
-            this.ctx.strokeStyle = PastoralTheme.colors.honey;
-            this.ctx.lineWidth = 2.5;
-            this.ctx.stroke();
-          } else if (isTutorialTarget) {
-            // Tutorial cue: Soft amber beacon
-            this.ctx.fillStyle = 'rgba(254, 243, 199, 0.85)';
-            this.drawBezierPath(pathCommands);
-            this.ctx.fill();
-
-            this.ctx.setLineDash([5, 4]);
-            this.ctx.strokeStyle = PastoralTheme.colors.honey;
-            this.ctx.lineWidth = 2.5;
-            this.ctx.stroke();
-            this.ctx.setLineDash([]);
-          } else {
-            // Normal empty socket: Translucent recessed socket with soft dashed outline
-            this.ctx.fillStyle = PastoralTheme.colors.socketBg;
-            this.drawBezierPath(pathCommands);
-            this.ctx.fill();
-
-            this.ctx.setLineDash([4, 4]);
-            this.ctx.strokeStyle = PastoralTheme.colors.socketDashed;
-            this.ctx.lineWidth = 1.5;
-            this.drawBezierPath(pathCommands);
-            this.ctx.stroke();
-            this.ctx.setLineDash([]);
-          }
-          this.ctx.restore();
-        }
-      }
-    }
-
-    // 3. Dish Completion Celebration Animations (550ms: scale bounce, seam fading, golden shimmer, steam puffs)
-    for (const [instanceId, anim] of this.completedAnimTargets.entries()) {
+    // 2. Dish Completion Celebrations (550ms: glow, seam fading, smooth master art fade in)
+    for (const [instanceId, anim] of this.completedDishAnims.entries()) {
       const elapsed = now - anim.startTime;
       if (elapsed > 550) {
-        this.completedAnimTargets.delete(instanceId);
+        this.dishPuzzleManager.clearCompletedGroup(anim.groupId);
+        this.completedDishAnims.delete(instanceId);
         continue;
       }
 
       const progress = elapsed / 550;
-      const target = anim.target;
-      const def = session.ingredients[target.ingredientId];
-      if (!def) continue;
-
-      const targetX = originX + target.anchor.col * cellSize;
-      const targetY = originY - (target.anchor.row + def.height - 1) * cellSize;
-      const targetW = def.width * cellSize;
-      const targetH = def.height * cellSize;
-      const bounce = 1.0 + 0.05 * Math.sin(progress * Math.PI);
-      const alpha = Math.max(0, 1 - Math.max(0, (progress - 0.75) / 0.25));
-
-      this.ctx.save();
-      this.ctx.globalAlpha = alpha;
-      this.ctx.translate(targetX + targetW / 2, targetY + targetH / 2);
-      this.ctx.scale(bounce, bounce);
-      this.ctx.translate(-(targetX + targetW / 2), -(targetY + targetH / 2));
-
-      // Golden celebratory glow plate
-      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
-      this.ctx.shadowColor = 'rgba(232, 184, 92, 0.5)';
-      this.ctx.shadowBlur = 18;
-      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, PastoralTheme.radii.plate);
-      this.ctx.fill();
-
-      this.ctx.strokeStyle = PastoralTheme.colors.honey;
-      this.ctx.lineWidth = 2.5;
-      this.ctx.stroke();
-
-      // Draw slots with fading seams using real cut piece textures
-      const baseColor = def.color || PastoralTheme.colors.tomato;
-      for (const slot of def.slots) {
-        const slotCol = target.anchor.col + slot.relativeCol;
-        const slotRow = target.anchor.row + slot.relativeRow;
-        const slotPos = this.gridToScreen({ col: slotCol, row: slotRow });
-
-        const slotBounds = {
-          x: slotPos.x + 3,
-          y: slotPos.y + 3,
-          width: cellSize - 6,
-          height: cellSize - 6
-        };
-        const pathCommands = PuzzleGeometry.generateSlotPathCommands(slotBounds, slot.edges);
-
-        const pieceImg = DishTextureManager.getPieceImage(target.ingredientId, slot.slotId);
-        if (pieceImg) {
-          const padScreen = cellSize * 0.28;
-          this.ctx.drawImage(
-            pieceImg,
-            slotPos.x - padScreen,
-            slotPos.y - padScreen,
-            cellSize + padScreen * 2,
-            cellSize + padScreen * 2
-          );
-        } else {
-          this.ctx.save();
-          this.ctx.fillStyle = baseColor;
-          this.drawBezierPath(pathCommands);
-          this.ctx.fill();
-          this.ctx.restore();
+      const masterImg = DishTextureManager.getDishMasterImage(anim.dishId);
+      if (masterImg && anim.pieces.length > 0) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of anim.pieces) {
+          const sp = this.gridToScreen(p.boardCoord);
+          minX = Math.min(minX, sp.x);
+          minY = Math.min(minY, sp.y);
+          maxX = Math.max(maxX, sp.x + cellSize);
+          maxY = Math.max(maxY, sp.y + cellSize);
         }
 
-        // Fading seam highlight
-        this.ctx.save();
-        this.ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0, 1 - progress * 1.6)})`;
-        this.ctx.lineWidth = 2;
-        this.drawBezierPath(pathCommands);
-        this.ctx.stroke();
-        this.ctx.restore();
-      }
+        const dishW = maxX - minX;
+        const dishH = maxY - minY;
+        const bounce = 1.0 + 0.05 * Math.sin(progress * Math.PI);
 
-      // Golden shimmer sweep across the plate
-      const shimmerX = targetX - targetW * 0.4 + progress * targetW * 2.2;
-      const shimmerGrad = this.ctx.createLinearGradient(shimmerX, targetY, shimmerX + 50, targetY + targetH);
-      shimmerGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-      shimmerGrad.addColorStop(0.5, 'rgba(253, 230, 138, 0.75)');
-      shimmerGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      this.ctx.fillStyle = shimmerGrad;
-      this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, PastoralTheme.radii.plate);
-      this.ctx.fill();
-
-      // Master Dish Art celebration image dissolves smoothly over the assembled pieces
-      const recipeId = session.orderSystem.currentOrder?.recipeId || 'salad';
-      const masterImg = DishTextureManager.getDishMasterImage(recipeId);
-      if (masterImg) {
         this.ctx.save();
-        this.ctx.globalAlpha = Math.min(1, progress * 1.4);
+        this.ctx.translate(minX + dishW / 2, minY + dishH / 2);
+        this.ctx.scale(bounce, bounce);
+        this.ctx.translate(-(minX + dishW / 2), -(minY + dishH / 2));
+
+        // Golden celebratory plate glow
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        this.ctx.shadowColor = 'rgba(232, 184, 92, 0.6)';
+        this.ctx.shadowBlur = 20;
+        this.roundRect(this.ctx, minX + 2, minY + 2, dishW - 4, dishH - 4, PastoralTheme.radii.plate);
+        this.ctx.fill();
+
+        // Dissolve into full master dish illustration
+        this.ctx.globalAlpha = Math.min(1, progress * 1.5);
         this.ctx.beginPath();
-        this.roundRect(this.ctx, targetX + 4, targetY + 4, targetW - 8, targetH - 8, PastoralTheme.radii.plate);
+        this.roundRect(this.ctx, minX + 4, minY + 4, dishW - 8, dishH - 8, PastoralTheme.radii.plate);
         this.ctx.clip();
-        this.ctx.drawImage(masterImg, targetX + 4, targetY + 4, targetW - 8, targetH - 8);
+        this.ctx.drawImage(masterImg, minX + 4, minY + 4, dishW - 8, dishH - 8);
         this.ctx.restore();
+
+        // Rising steam puffs
+        this.drawSteamPuffs(minX + dishW / 2, minY, progress);
       }
-
-      // Steam puffs rising up
-      this.drawSteamPuffs(targetX + targetW / 2, targetY, progress);
-
-      this.ctx.restore();
     }
 
-    // 4. Loose Pieces (Resting & Smooth Wobbling - ZERO debug text!)
-    for (const piece of session.grid.getAllLoosePieces()) {
-      if (this.draggingPiece && this.draggingPiece.instanceId === piece.instanceId) {
-        continue; // Render dragged piece on topmost layer
+    // 3. Resting Piece Groups
+    const groups = this.dishPuzzleManager.getAllGroups();
+    const padScreen = cellSize * 0.28;
+
+    for (const group of groups) {
+      if (this.draggingGroup && this.draggingGroup.groupId === group.groupId) {
+        continue; // Draw dragging group on topmost layer
       }
 
-      const def = session.ingredients[piece.ingredientId];
-      if (!def) continue;
+      for (const pieceId of group.pieceIds) {
+        const piece = this.dishPuzzleManager.getPiece(pieceId);
+        if (!piece) continue;
 
-      let drawX = 0;
-      let drawY = 0;
+        let drawX = 0;
+        let drawY = 0;
 
-      // Smooth wrong drop wobble
-      const wobble = this.wobblePieces.get(piece.instanceId);
-      if (wobble) {
-        const elapsed = now - wobble.startTime;
-        const targetScreen = this.gridToScreen(piece.coord);
-        if (elapsed < 300) {
-          const t = elapsed / 300;
-          const wobbleOffset = Math.sin(t * Math.PI * 4) * (1 - t) * 10;
-          drawX = wobble.startX + (targetScreen.x - wobble.startX) * t + wobbleOffset;
-          drawY = wobble.startY + (targetScreen.y - wobble.startY) * t;
+        // Smooth wobble animation if dropped wrong
+        const wobble = this.wobblePieces.get(piece.pieceInstanceId);
+        const targetScreen = this.gridToScreen(piece.boardCoord);
+        if (wobble) {
+          const elapsed = now - wobble.startTime;
+          if (elapsed < 300) {
+            const t = elapsed / 300;
+            const wobbleOffset = Math.sin(t * Math.PI * 4) * (1 - t) * 10;
+            drawX = wobble.startX + (targetScreen.x - wobble.startX) * t + wobbleOffset;
+            drawY = wobble.startY + (targetScreen.y - wobble.startY) * t;
+          } else {
+            this.wobblePieces.delete(piece.pieceInstanceId);
+            drawX = targetScreen.x;
+            drawY = targetScreen.y;
+          }
         } else {
-          this.wobblePieces.delete(piece.instanceId);
           drawX = targetScreen.x;
           drawY = targetScreen.y;
         }
-      } else {
-        const screenPos = this.gridToScreen(piece.coord);
-        drawX = screenPos.x;
-        drawY = screenPos.y;
-      }
 
-      const slotDef = def.slots.find(s => s.slotId === piece.slotId);
-      const pieceBounds = {
-        x: drawX + 3,
-        y: drawY + 3,
-        width: cellSize - 6,
-        height: cellSize - 6
-      };
-      const edges = slotDef?.edges || { top: 'flat', right: 'flat', bottom: 'flat', left: 'flat' };
-      const pathCommands = PuzzleGeometry.generateSlotPathCommands(pieceBounds, edges);
-
-      // Render cut piece texture from Master Dish Art
-      const pieceImg = DishTextureManager.getPieceImage(piece.ingredientId, piece.slotId);
-      if (pieceImg) {
-        const padScreen = cellSize * 0.28;
-        this.ctx.save();
-        this.ctx.shadowColor = PastoralTheme.shadows.piece;
-        this.ctx.shadowBlur = 6;
-        this.ctx.shadowOffsetY = 3;
-        this.ctx.drawImage(
-          pieceImg,
-          drawX - padScreen,
-          drawY - padScreen,
-          cellSize + padScreen * 2,
-          cellSize + padScreen * 2
-        );
-        this.ctx.restore();
-      } else {
-        // Fallback procedural piece while texture is loading
-        this.ctx.save();
-        this.ctx.shadowColor = PastoralTheme.shadows.piece;
-        this.ctx.shadowBlur = 6;
-        this.ctx.shadowOffsetY = 3;
-        this.ctx.fillStyle = def.color || PastoralTheme.colors.tomato;
-        this.drawBezierPath(pathCommands);
-        this.ctx.fill();
-        this.ctx.restore();
-
-        this.ctx.save();
-        this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
-        this.ctx.lineWidth = 2.5;
-        this.drawBezierPath(pathCommands);
-        this.ctx.stroke();
-        this.ctx.restore();
-      }
-    }
-
-    // 5. Target Header Pill Badges (Rendered over plate edge so always readable: "温泉蛋牛丼 (2/4)")
-    for (const target of session.grid.getAllTargets()) {
-      const def = session.ingredients[target.ingredientId];
-      if (!def) continue;
-
-      const targetX = originX + target.anchor.col * cellSize;
-      const targetY = originY - (target.anchor.row + def.height - 1) * cellSize;
-      const targetW = def.width * cellSize;
-
-      const labelText = `${def.name} (${target.placedSlotIds.length}/${def.slots.length})`;
-      this.ctx.save();
-      this.ctx.font = `bold ${Math.max(11, Math.round(cellSize * 0.23))}px "Hiragino Maru Gothic ProN", "Yu Gothic UI", sans-serif`;
-      const textW = this.ctx.measureText(labelText).width;
-      const badgeW = textW + 16;
-      const badgeH = 18;
-      const badgeX = targetX + (targetW - badgeW) / 2;
-      const badgeY = targetY - badgeH / 2; // Sits neatly across top rim of dish
-
-      this.ctx.fillStyle = PastoralTheme.colors.paper;
-      this.ctx.shadowColor = 'rgba(70, 55, 40, 0.16)';
-      this.ctx.shadowBlur = 5;
-      this.ctx.shadowOffsetY = 1;
-      this.roundRect(this.ctx, badgeX, badgeY, badgeW, badgeH, 9);
-      this.ctx.fill();
-
-      this.ctx.shadowColor = 'transparent';
-      this.ctx.strokeStyle = PastoralTheme.colors.woodLight;
-      this.ctx.lineWidth = 1.2;
-      this.roundRect(this.ctx, badgeX, badgeY, badgeW, badgeH, 9);
-      this.ctx.stroke();
-
-      this.ctx.fillStyle = PastoralTheme.colors.inkDark;
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(labelText, targetX + targetW / 2, badgeY + badgeH / 2);
-      this.ctx.restore();
-    }
-
-    // 6. Dragging Piece (Topmost Layer: 1.08x scale, elevated shadow, finger lift offset)
-    if (this.draggingPiece) {
-      const def = session.ingredients[this.draggingPiece.ingredientId];
-      if (def) {
-        const slotDef = def.slots.find(s => s.slotId === this.draggingPiece!.slotId);
-        const dragScale = 1.08;
-        const dragSize = cellSize * dragScale;
-        // Finger lift offset (-10px) so player's fingertip doesn't block the piece!
-        const dragX = this.dragPointerPos.x - dragSize / 2;
-        const dragY = this.dragPointerPos.y - dragSize / 2 - 10;
-
-        const pieceBounds = {
-          x: dragX + 3,
-          y: dragY + 3,
-          width: dragSize - 6,
-          height: dragSize - 6
-        };
-        const edges = slotDef?.edges || { top: 'flat', right: 'flat', bottom: 'flat', left: 'flat' };
-        const pathCommands = PuzzleGeometry.generateSlotPathCommands(pieceBounds, edges);
-
-        const pieceImg = DishTextureManager.getPieceImage(this.draggingPiece.ingredientId, this.draggingPiece.slotId);
+        const pieceImg = DishTextureManager.getPieceImage(piece.dishId, piece.slotId);
         if (pieceImg) {
-          const padScreen = dragSize * 0.28;
+          this.ctx.save();
+          this.ctx.shadowColor = PastoralTheme.shadows.piece;
+          this.ctx.shadowBlur = 6;
+          this.ctx.shadowOffsetY = 3;
+          this.ctx.drawImage(
+            pieceImg,
+            drawX - padScreen,
+            drawY - padScreen,
+            cellSize + padScreen * 2,
+            cellSize + padScreen * 2
+          );
+          this.ctx.restore();
+        }
+      }
+    }
+
+    // 4. Dragging Group (Topmost Layer: elevated shadow, rigid multi-piece translation)
+    if (this.draggingGroup) {
+      const group = this.draggingGroup;
+      const refPiece = group.grabPiece;
+      const dragScale = 1.06;
+      const dragCellSize = cellSize * dragScale;
+      const dragPad = dragCellSize * 0.28;
+
+      for (const piece of group.pieces) {
+        const relCol = piece.dishCol - refPiece.dishCol;
+        const relRow = piece.dishRow - refPiece.dishRow;
+
+        const pieceDrawX = (this.dragPointerPos.x - group.grabOffset.x) + relCol * dragCellSize - dragCellSize / 2;
+        const pieceDrawY = (this.dragPointerPos.y - group.grabOffset.y) - relRow * dragCellSize - dragCellSize / 2 - 10;
+
+        const pieceImg = DishTextureManager.getPieceImage(piece.dishId, piece.slotId);
+        if (pieceImg) {
           this.ctx.save();
           this.ctx.shadowColor = PastoralTheme.shadows.pieceLifted;
           this.ctx.shadowBlur = 18;
           this.ctx.shadowOffsetY = 10;
           this.ctx.drawImage(
             pieceImg,
-            dragX - padScreen,
-            dragY - padScreen,
-            dragSize + padScreen * 2,
-            dragSize + padScreen * 2
+            pieceDrawX - dragPad,
+            pieceDrawY - dragPad,
+            dragCellSize + dragPad * 2,
+            dragCellSize + dragPad * 2
           );
-          this.ctx.restore();
-        } else {
-          this.ctx.save();
-          this.ctx.shadowColor = PastoralTheme.shadows.pieceLifted;
-          this.ctx.shadowBlur = 18;
-          this.ctx.shadowOffsetY = 10;
-          this.ctx.fillStyle = def.color || PastoralTheme.colors.tomato;
-          this.drawBezierPath(pathCommands);
-          this.ctx.fill();
-          this.ctx.restore();
-
-          this.ctx.save();
-          this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
-          this.ctx.lineWidth = 3.5;
-          this.drawBezierPath(pathCommands);
-          this.ctx.stroke();
           this.ctx.restore();
         }
       }

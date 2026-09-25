@@ -17,3 +17,6 @@ export * from './pipeline/AssetRegistry';
 export * from './progression/SaveSystem';
 export * from './progression/TutorialDirector';
 export * from './progression/GameFlowManager';
+export * from './data/DishManifest';
+export * from './puzzle/DishPuzzleModel';
+export * from './puzzle/DishPuzzleManager';

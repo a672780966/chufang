@@ -23,7 +23,10 @@ export type CoreEventType =
   | 'BOARD_BLOCKED'
   | 'DAY_CLEARED'
   | 'DAY_FAILED'
-  | 'BOARD_SETTLED';
+  | 'BOARD_SETTLED'
+  | 'DISH_COMPLETED'
+  | 'PIECE_GROUP_MERGED'
+  | 'DISH_CLEARED';
 
 export interface CoreEventMap {
   TARGET_SPAWNED: { target: IngredientTarget; fromAnchor: GridCoord; toAnchor: GridCoord };
@@ -121,6 +124,21 @@ export interface CoreEventMap {
   BOARD_SETTLED: {
     movedTargets: Array<{ instanceId: string; fromAnchor: GridCoord; toAnchor: GridCoord }>;
     movedPieces: Array<{ instanceId: string; fromCoord: GridCoord; toCoord: GridCoord }>;
+  };
+  DISH_COMPLETED: {
+    dishId: string;
+    dishPuzzleInstanceId: string;
+    groupId: string;
+    pieces: any[];
+  };
+  PIECE_GROUP_MERGED: {
+    targetGroupId: string;
+    pieceCount: number;
+  };
+  DISH_CLEARED: {
+    dishId: string;
+    dishPuzzleInstanceId: string;
+    groupId: string;
   };
 }
 
