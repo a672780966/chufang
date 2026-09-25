@@ -33,6 +33,7 @@ export interface DishPuzzleInstance {
   readonly name: string;
   readonly totalPieces: number;
   isCompleted: boolean;
+  spawnedSlots: Set<string>;
 }
 
 /**

@@ -93,47 +93,47 @@ export class DishPuzzleManager {
     const salad = this.createDishInstance('dish_salad');
     const ramen = this.createDishInstance('dish_ramen');
 
-    // Salad Pieces:
-    // Group 1 (2 pieces): (0,0) and (1,0) at board (0,0) and (1,0)
+    // --- Salad (Target Dish for Day 1 - Full 9 pieces solvable in 4 natural drags) ---
+    // Group 1 (4 pieces, pre-connected 2x2 base): (0,0), (1,0), (0,1), (1,1) at board (0..1, 0..1)
     const s_0_0 = this.createPiece(salad.instanceId, 'dish_salad', 0, 0, { col: 0, row: 0 });
     const s_1_0 = this.createPiece(salad.instanceId, 'dish_salad', 1, 0, { col: 1, row: 0 });
-    this.createGroup([s_0_0, s_1_0]);
-
-    // Group 2 (2 pieces): (1,1) and (2,1) at board (5,0) and (6,0)
-    const s_1_1 = this.createPiece(salad.instanceId, 'dish_salad', 1, 1, { col: 5, row: 0 });
-    const s_2_1 = this.createPiece(salad.instanceId, 'dish_salad', 2, 1, { col: 6, row: 0 });
-    this.createGroup([s_1_1, s_2_1]);
-
-    // Salad loose pieces
-    const s_2_0 = this.createPiece(salad.instanceId, 'dish_salad', 2, 0, { col: 2, row: 0 });
-    this.createGroup([s_2_0]);
-
     const s_0_1 = this.createPiece(salad.instanceId, 'dish_salad', 0, 1, { col: 0, row: 1 });
-    this.createGroup([s_0_1]);
+    const s_1_1 = this.createPiece(salad.instanceId, 'dish_salad', 1, 1, { col: 1, row: 1 });
+    this.createGroup([s_0_0, s_1_0, s_0_1, s_1_1]);
 
-    const s_1_2 = this.createPiece(salad.instanceId, 'dish_salad', 1, 2, { col: 3, row: 0 });
+    // Group 2 (2 pieces, vertical duo): (2,0) and (2,1) at board (4,0) and (4,1)
+    const s_2_0 = this.createPiece(salad.instanceId, 'dish_salad', 2, 0, { col: 4, row: 0 });
+    const s_2_1 = this.createPiece(salad.instanceId, 'dish_salad', 2, 1, { col: 4, row: 1 });
+    this.createGroup([s_2_0, s_2_1]);
+
+    // Salad remaining loose pieces:
+    const s_0_2 = this.createPiece(salad.instanceId, 'dish_salad', 0, 2, { col: 3, row: 0 });
+    this.createGroup([s_0_2]);
+
+    const s_1_2 = this.createPiece(salad.instanceId, 'dish_salad', 1, 2, { col: 5, row: 0 });
     this.createGroup([s_1_2]);
 
-    // Breakfast Pieces:
-    // Group 3 (2 pieces): (0,2) and (1,2) at board (3,1) and (4,1)
-    const b_0_2 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 0, 2, { col: 3, row: 1 });
-    const b_1_2 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 1, 2, { col: 4, row: 1 });
+    const s_2_2 = this.createPiece(salad.instanceId, 'dish_salad', 2, 2, { col: 6, row: 0 });
+    this.createGroup([s_2_2]);
+
+    // --- Breakfast Pieces (Scattered obstacles & next opportunities) ---
+    // Group 3 (2 pieces): (0,2) and (1,2) at board (3,2) and (4,2)
+    const b_0_2 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 0, 2, { col: 3, row: 2 });
+    const b_1_2 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 1, 2, { col: 4, row: 2 });
     this.createGroup([b_0_2, b_1_2]);
 
-    // Breakfast loose pieces
-    const b_1_1 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 1, 1, { col: 4, row: 0 });
-    this.createGroup([b_1_1]);
-
-    const b_0_1 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 0, 1, { col: 1, row: 1 });
+    const b_0_1 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 0, 1, { col: 3, row: 1 });
     this.createGroup([b_0_1]);
 
-    // Ramen Pieces:
+    const b_1_1 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 1, 1, { col: 5, row: 2 });
+    this.createGroup([b_1_1]);
+
+    // --- Ramen Pieces (Scattered obstacles & next opportunities) ---
     // Group 4 (2 pieces): (1,0) and (2,0) at board (5,1) and (6,1)
     const r_1_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 1, 0, { col: 5, row: 1 });
     const r_2_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 2, 0, { col: 6, row: 1 });
     this.createGroup([r_1_0, r_2_0]);
 
-    // Ramen loose pieces
     const r_0_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 0, 0, { col: 7, row: 0 });
     this.createGroup([r_0_0]);
 
@@ -151,7 +151,8 @@ export class DishPuzzleManager {
       dishId,
       name: manifest?.name || dishId,
       totalPieces: 9,
-      isCompleted: false
+      isCompleted: false,
+      spawnedSlots: new Set<string>()
     };
     this._instances.set(instanceId, instance);
     return instance;
@@ -168,6 +169,11 @@ export class DishPuzzleManager {
     const slotId = `slot_${dishCol}_${dishRow}`;
     const edges = generateDishSlotEdges(dishCol, dishRow, 3, 3);
     const imagePath = `/assets/dishes/piece_${dishId}_slot_${dishCol}_${dishRow}.png`;
+
+    const inst = this._instances.get(dishPuzzleInstanceId);
+    if (inst) {
+      inst.spawnedSlots.add(`${dishCol}_${dishRow}`);
+    }
 
     const piece: DishPuzzlePiece = {
       pieceInstanceId,
@@ -259,6 +265,9 @@ export class DishPuzzleManager {
 
     // 3. Check for geometric adjacency snapping
     const mergeResult = this.checkAndMergeAdjacency(groupId);
+
+    // 4. Settle any pieces that vacated cells left floating via PieceGroup rigid gravity
+    this.applyGravity();
 
     return {
       success: true,
@@ -356,7 +365,7 @@ export class DishPuzzleManager {
 
   /**
    * Clears a completed 9-piece dish from the board, frees cells, settles gravity,
-   * and spawns new pieces to maintain playability.
+   * and deterministically refills missing pieces to maintain playability.
    */
   clearCompletedGroup(groupId: string): void {
     const group = this._groups.get(groupId);
@@ -380,31 +389,139 @@ export class DishPuzzleManager {
       groupId
     });
 
-    // Settle pieces above down
+    // 1. Settle pieces above down using PieceGroup-based rigid gravity
     this.applyGravity();
+
+    // 2. Refill missing pieces from top spawn zone for active non-completed instances
+    this.refillMissingPieces(3);
   }
 
   /**
-   * Applies discrete gravity on all pieces, allowing them to drop to lowest available row.
+   * Applies PieceGroup-based rigid gravity:
+   * Every connected PieceGroup translates down as an indivisible rigid body.
+   * All member relative coordinates are strictly preserved across gravity steps.
    */
   applyGravity(): boolean {
-    let movedAny = false;
-    for (let c = 0; c < this.columns; c++) {
-      let writeRow = 0;
-      for (let r = 0; r < this.rows; r++) {
-        const pieceId = this._gridCells[r][c];
-        if (pieceId) {
-          if (r !== writeRow) {
-            this._gridCells[r][c] = null;
-            this._gridCells[writeRow][c] = pieceId;
-            const piece = this._pieces.get(pieceId);
-            if (piece) piece.boardCoord.row = writeRow;
-            movedAny = true;
+    let movedAnyOverall = false;
+    let keepSimulating = true;
+
+    while (keepSimulating) {
+      keepSimulating = false;
+
+      // Group groups by their current positions
+      for (const group of this._groups.values()) {
+        const pieces = group.pieceIds.map(id => this._pieces.get(id)!).filter(Boolean);
+        if (pieces.length === 0) continue;
+
+        // Check if this entire group can drop down by 1 row
+        let canDropOneRow = true;
+        for (const p of pieces) {
+          const belowRow = p.boardCoord.row - 1;
+          if (belowRow < 0) {
+            canDropOneRow = false;
+            break;
           }
-          writeRow++;
+          const occupantId = this._gridCells[belowRow][p.boardCoord.col];
+          // Cell below must be either empty, OR occupied by a piece belonging to this SAME group
+          if (occupantId !== null && !group.pieceIds.includes(occupantId)) {
+            canDropOneRow = false;
+            break;
+          }
+        }
+
+        if (canDropOneRow) {
+          // Drop the entire group down by 1 row simultaneously
+          // 1. Clear old cells
+          for (const p of pieces) {
+            if (this._gridCells[p.boardCoord.row][p.boardCoord.col] === p.pieceInstanceId) {
+              this._gridCells[p.boardCoord.row][p.boardCoord.col] = null;
+            }
+          }
+          // 2. Set new cells and update coordinates
+          for (const p of pieces) {
+            p.boardCoord.row -= 1;
+            this._gridCells[p.boardCoord.row][p.boardCoord.col] = p.pieceInstanceId;
+          }
+          movedAnyOverall = true;
+          keepSimulating = true; // Continue simulation until all groups settle
         }
       }
     }
-    return movedAny;
+
+    return movedAnyOverall;
+  }
+
+  /**
+   * Deterministically refills missing pieces from active non-completed DishPuzzleInstances.
+   * Spawns pieces at top row (rows - 1) into available columns and settles them via rigid gravity.
+   * Guarantees zero orphan pieces.
+   */
+  refillMissingPieces(maxPieces: number = 3): DishPuzzlePiece[] {
+    const spawned: DishPuzzlePiece[] = [];
+
+    // Find active non-completed instances
+    const activeInstances = Array.from(this._instances.values()).filter(inst => !inst.isCompleted);
+    if (activeInstances.length === 0) return spawned;
+
+    for (const inst of activeInstances) {
+      if (spawned.length >= maxPieces) break;
+
+      // Find which slots (0..2, 0..2) have not yet been spawned for this instance
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          const slotKey = `${c}_${r}`;
+          if (!inst.spawnedSlots.has(slotKey)) {
+            // Find an available column at top row (rows - 1)
+            let targetCol = -1;
+            let minOccupancy = Infinity;
+            for (let col = 0; col < this.columns; col++) {
+              if (this._gridCells[this.rows - 1][col] === null) {
+                let occ = 0;
+                for (let row = 0; row < this.rows; row++) {
+                  if (this._gridCells[row][col] !== null) occ++;
+                }
+                if (occ < minOccupancy) {
+                  minOccupancy = occ;
+                  targetCol = col;
+                }
+              }
+            }
+
+            if (targetCol !== -1) {
+              const newPiece = this.createPiece(
+                inst.instanceId,
+                inst.dishId,
+                c,
+                r,
+                { col: targetCol, row: this.rows - 1 }
+              );
+              this.createGroup([newPiece]);
+              spawned.push(newPiece);
+
+              this.events.emit('PIECE_SPAWNED', {
+                piece: {
+                  instanceId: newPiece.pieceInstanceId,
+                  ingredientId: newPiece.dishId,
+                  targetInstanceId: newPiece.dishPuzzleInstanceId,
+                  slotId: newPiece.slotId,
+                  coord: newPiece.boardCoord
+                },
+                fromCoord: { col: targetCol, row: this.rows - 1 },
+                toCoord: newPiece.boardCoord
+              });
+
+              if (spawned.length >= maxPieces) break;
+            }
+          }
+        }
+        if (spawned.length >= maxPieces) break;
+      }
+    }
+
+    if (spawned.length > 0) {
+      this.applyGravity();
+    }
+
+    return spawned;
   }
 }

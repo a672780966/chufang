@@ -18,6 +18,7 @@ import { FlowDirector } from '../director/FlowDirector';
 import { DeadlockDetector } from '../detector/DeadlockDetector';
 import { SeededRandom } from '../random/SeededRandom';
 import { DEFAULT_INGREDIENTS, DEFAULT_RECIPES } from '../data/DefaultData';
+import { DishPuzzleManager } from '../puzzle/DishPuzzleManager';
 
 export interface GameSessionState {
   dayNumber: number;
@@ -40,6 +41,7 @@ export class GameSession {
   readonly inventory: PrepInventory = new PrepInventory();
   readonly orderSystem: OrderSystem;
   readonly flowDirector: FlowDirector;
+  readonly dishPuzzleManager: DishPuzzleManager;
   readonly dayConfig: DayConfig;
   readonly daySeed: string | number;
 
@@ -85,6 +87,16 @@ export class GameSession {
       this.events,
       'DISH_ONLY'
     );
+
+    this.dishPuzzleManager = new DishPuzzleManager(this.grid.columns, this.grid.rows, this.events);
+    if (dayConfig.dayNumber === 1) {
+      this.dishPuzzleManager.initDay1Layout();
+    }
+
+    // Connect DishPuzzle completion directly with OrderSystem
+    this.events.on('DISH_COMPLETED', ({ dishId }) => {
+      this.orderSystem.handleCompletedDish(dishId);
+    });
 
     this.initBoard();
   }

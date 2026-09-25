@@ -35,6 +35,7 @@ export class OrderBag {
     return {
       orderId,
       recipeId: recipe.id,
+      dishId: recipe.id.startsWith('dish_') ? recipe.id : `dish_${recipe.id}`,
       dishName: recipe.name,
       emoji: recipe.emoji,
       baseRevenue: recipe.baseRevenue,

@@ -1,7 +1,7 @@
 import { _decorator, Component, Node, EventTouch, Vec3, UITransform, tween, Vec2, input, Input } from 'cc';
 import { GameManager } from '../GameManager';
 import { BoardView } from './BoardView';
-import { LoosePiece, DEFAULT_INGREDIENTS } from '../../game-core/index';
+import { LoosePiece, DEFAULT_INGREDIENTS, DishPuzzlePiece, PieceGroup } from '../../game-core/index';
 import { CocosAudioDirector } from './CocosAudioDirector';
 import { CocosTelemetrySink } from './CocosTelemetrySink';
 
@@ -19,6 +19,10 @@ export class TouchController extends Component {
   private _draggingNode: Node | null = null;
   private _originLocalPos: Vec3 = new Vec3();
   private _snapRadius: number = 95;
+
+  private _draggingDishPiece: DishPuzzlePiece | null = null;
+  private _draggingDishGroup: PieceGroup | null = null;
+  private _dishMemberNodes: { piece: DishPuzzlePiece; node: Node; originPos: Vec3; offset: Vec3 }[] = [];
 
   onLoad() {
     if (!this.boardView) {
@@ -56,9 +60,51 @@ export class TouchController extends Component {
     if (!this.gameManager || this.gameManager.session.isGameOver || !this.boardView) return;
 
     const localPos = this.screenToBoardLocal(event.getUILocation());
-    const loosePieces = this.gameManager.session.grid.getAllLoosePieces();
+    const session = this.gameManager.session;
 
-    // Hit-test loose pieces on board
+    // 1. DishPuzzle mode support
+    if (session.dishPuzzleManager) {
+      const allPieces = session.dishPuzzleManager.getAllPieces();
+      let hitPiece: DishPuzzlePiece | null = null;
+      let minDistance = 55;
+
+      for (const piece of allPieces) {
+        const piecePos = this.boardView.gridToLocalPos(piece.boardCoord);
+        const dist = Vec3.distance(localPos, piecePos);
+        if (dist < minDistance) {
+          minDistance = dist;
+          hitPiece = piece;
+        }
+      }
+
+      if (hitPiece) {
+        const group = session.dishPuzzleManager.getGroupByPieceId(hitPiece.pieceInstanceId);
+        if (group) {
+          this._draggingDishPiece = hitPiece;
+          this._draggingDishGroup = group;
+          this._dishMemberNodes = [];
+
+          for (const pId of group.pieceIds) {
+            const p = session.dishPuzzleManager.getPiece(pId);
+            if (!p) continue;
+            const node = this.boardView.piecesContainer?.getChildByName(`DishPiece_${pId}`);
+            if (node) {
+              node.setSiblingIndex(999);
+              tween(node).to(0.08, { scale: new Vec3(1.15, 1.15, 1) }).start();
+              const originPos = node.position.clone();
+              const offset = new Vec3().set(originPos).subtract(localPos);
+              this._dishMemberNodes.push({ piece: p, node, originPos, offset });
+            }
+          }
+
+          CocosAudioDirector.playPickPiece();
+          return;
+        }
+      }
+    }
+
+    // 2. Fallback LoosePiece mode
+    const loosePieces = session.grid.getAllLoosePieces();
     for (const piece of loosePieces) {
       const piecePos = this.boardView.gridToLocalPos(piece.coord);
       const dist = Vec3.distance(localPos, piecePos);
@@ -73,7 +119,7 @@ export class TouchController extends Component {
           pieceNode.setSiblingIndex(999);
           tween(pieceNode).to(0.08, { scale: new Vec3(1.15, 1.15, 1) }).start();
           CocosAudioDirector.playPickPiece();
-          CocosTelemetrySink.log('piece_drag', this.gameManager.session.dayConfig.dayNumber, {
+          CocosTelemetrySink.log('piece_drag', session.dayConfig.dayNumber, {
             pieceId: piece.instanceId,
             targetId: piece.targetInstanceId
           });
@@ -84,6 +130,14 @@ export class TouchController extends Component {
   }
 
   private onTouchMove(event: EventTouch) {
+    if (this._draggingDishGroup && this._dishMemberNodes.length > 0) {
+      const localPos = this.screenToBoardLocal(event.getUILocation());
+      for (const item of this._dishMemberNodes) {
+        item.node.setPosition(new Vec3(localPos.x + item.offset.x, localPos.y + item.offset.y, 0));
+      }
+      return;
+    }
+
     if (!this._draggingNode || !this._draggingPiece) return;
 
     const localPos = this.screenToBoardLocal(event.getUILocation());
@@ -91,6 +145,41 @@ export class TouchController extends Component {
   }
 
   private onTouchEnd(event: EventTouch) {
+    if (this._draggingDishGroup && this._draggingDishPiece && this._dishMemberNodes.length > 0 && this.boardView && this.gameManager) {
+      const grabItem = this._dishMemberNodes.find(item => item.piece.pieceInstanceId === this._draggingDishPiece!.pieceInstanceId) || this._dishMemberNodes[0];
+      const targetCoord = this.boardView.localPosToGrid(grabItem.node.position);
+      const res = this.gameManager.session.dishPuzzleManager.tryMoveGroup(
+        this._draggingDishGroup.groupId,
+        targetCoord.col,
+        targetCoord.row,
+        this._draggingDishPiece.pieceInstanceId
+      );
+
+      if (res.success) {
+        if (res.merged) {
+          CocosAudioDirector.playSnapPiece();
+        }
+        if (res.completedDish) {
+          CocosAudioDirector.playOrderComplete();
+        }
+        for (const piece of this.gameManager.session.dishPuzzleManager.getAllPieces()) {
+          const node = this.boardView.piecesContainer?.getChildByName(`DishPiece_${piece.pieceInstanceId}`);
+          if (node) {
+            const targetPos = this.boardView.gridToLocalPos(piece.boardCoord);
+            tween(node).to(0.12, { position: targetPos, scale: new Vec3(1, 1, 1) }).start();
+          }
+        }
+      } else {
+        CocosAudioDirector.playWrongDrop();
+        for (const item of this._dishMemberNodes) {
+          tween(item.node).to(0.18, { position: item.originPos, scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
+        }
+      }
+
+      this.clearDragState();
+      return;
+    }
+
     if (!this._draggingNode || !this._draggingPiece || !this.gameManager || !this.boardView) {
       this.clearDragState();
       return;
@@ -149,6 +238,11 @@ export class TouchController extends Component {
   }
 
   private onTouchCancel(event: EventTouch) {
+    if (this._dishMemberNodes.length > 0) {
+      for (const item of this._dishMemberNodes) {
+        tween(item.node).to(0.15, { position: item.originPos, scale: new Vec3(1, 1, 1) }).start();
+      }
+    }
     if (this._draggingNode) {
       const origin = this._originLocalPos.clone();
       tween(this._draggingNode)
@@ -161,5 +255,8 @@ export class TouchController extends Component {
   private clearDragState() {
     this._draggingPiece = null;
     this._draggingNode = null;
+    this._draggingDishPiece = null;
+    this._draggingDishGroup = null;
+    this._dishMemberNodes = [];
   }
 }

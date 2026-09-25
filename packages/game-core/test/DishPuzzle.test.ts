@@ -5,7 +5,9 @@ import {
   arePiecesDishAdjacent,
   arePiecesGeometricallyAligned,
   generateDishSlotEdges,
-  GOLD_SAMPLE_DISH_MANIFEST
+  GOLD_SAMPLE_DISH_MANIFEST,
+  GameSession,
+  DEFAULT_DAYS
 } from '../src/index';
 
 describe('DishPuzzle Domain Model & Adjacency Engine', () => {
@@ -177,5 +179,139 @@ describe('DishPuzzle Domain Model & Adjacency Engine', () => {
     manager.clearCompletedGroup(p22.groupId);
     assert.ok(clearedEventFired, 'DISH_CLEARED event must fire');
     assert.strictEqual(manager.getAllPieces().length, 0, 'Board should have all 9 pieces cleared');
+  });
+
+  it('should execute genuine playable path completing 9-piece salad dish on Day 1 without mocks or bypasses', () => {
+    const manager = new DishPuzzleManager(8, 12);
+    manager.initDay1Layout();
+
+    // Verify initial layout of dish_salad
+    const saladPieces = manager.getAllPieces().filter(p => p.dishId === 'dish_salad');
+    assert.strictEqual(saladPieces.length, 9, 'Day 1 layout must contain all 9 salad pieces');
+
+    // Group 1: (0,0), (1,0), (0,1), (1,1) at board (0..1, 0..1)
+    const p00 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 0)!;
+    const g1 = manager.getGroupByPieceId(p00.pieceInstanceId)!;
+    assert.strictEqual(g1.pieceIds.length, 4, 'Base salad group has 4 pieces');
+
+    // Group 2: (2,0), (2,1) at board (4,0), (4,1)
+    const p20 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 0)!;
+    const g2 = manager.getGroupByPieceId(p20.pieceInstanceId)!;
+    assert.strictEqual(g2.pieceIds.length, 2, 'Vertical duo salad group has 2 pieces');
+
+    // Move 1: Drag Group 2 from (4,0) to (2,0) -> snaps to base group!
+    const res1 = manager.tryMoveGroup(g2.groupId, 2, 0, p20.pieceInstanceId);
+    assert.ok(res1.success, 'Move 1 should succeed');
+    assert.ok(res1.merged, 'Move 1 should merge with base group');
+    const gMerged1 = manager.getGroupByPieceId(p00.pieceInstanceId)!;
+    assert.strictEqual(gMerged1.pieceIds.length, 6, 'Merged group should have 6 pieces');
+
+    // Move 2: Drag piece (0,2) from (3,0) to (0,2) -> snaps to merged group!
+    const p02 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 2)!;
+    const g02 = manager.getGroupByPieceId(p02.pieceInstanceId)!;
+    const res2 = manager.tryMoveGroup(g02.groupId, 0, 2, p02.pieceInstanceId);
+    assert.ok(res2.success, 'Move 2 should succeed');
+    assert.ok(res2.merged, 'Move 2 should merge');
+    const gMerged2 = manager.getGroupByPieceId(p00.pieceInstanceId)!;
+    assert.strictEqual(gMerged2.pieceIds.length, 7, 'Merged group should have 7 pieces');
+
+    // Move 3: Drag piece (1,2) from (5,0) to (1,2) -> snaps (near complete 8 pieces)!
+    const p12 = saladPieces.find(p => p.dishCol === 1 && p.dishRow === 2)!;
+    const g12 = manager.getGroupByPieceId(p12.pieceInstanceId)!;
+    const res3 = manager.tryMoveGroup(g12.groupId, 1, 2, p12.pieceInstanceId);
+    assert.ok(res3.success, 'Move 3 should succeed');
+    assert.ok(res3.merged, 'Move 3 should merge');
+    const gMerged3 = manager.getGroupByPieceId(p00.pieceInstanceId)!;
+    assert.strictEqual(gMerged3.pieceIds.length, 8, 'Merged group should have 8 pieces');
+
+    // Move 4: Drag piece (2,2) from (6,0) to (2,2) -> FINAL SNAP -> DISH_COMPLETED!
+    let dishCompletedEmitted = false;
+    let completedDishPayload: any = null;
+    manager.events.on('DISH_COMPLETED', (payload: any) => {
+      dishCompletedEmitted = true;
+      completedDishPayload = payload;
+    });
+
+    const p22 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 2)!;
+    const g22 = manager.getGroupByPieceId(p22.pieceInstanceId)!;
+    const res4 = manager.tryMoveGroup(g22.groupId, 2, 2, p22.pieceInstanceId);
+    assert.ok(res4.success, 'Move 4 should succeed');
+    assert.ok(res4.merged, 'Move 4 should merge');
+    assert.ok(res4.completedDish, 'Move 4 should complete the dish');
+    assert.ok(dishCompletedEmitted, 'DISH_COMPLETED event must be emitted');
+    assert.strictEqual(completedDishPayload.dishId, 'dish_salad');
+    assert.strictEqual(completedDishPayload.pieces.length, 9);
+
+    // Now clear the completed dish and verify rigid gravity + deterministic refill
+    let dishClearedEmitted = false;
+    manager.events.on('DISH_CLEARED', () => { dishClearedEmitted = true; });
+
+    manager.clearCompletedGroup(p00.groupId);
+    assert.ok(dishClearedEmitted, 'DISH_CLEARED event must be emitted');
+
+    // Salad pieces should be completely cleared
+    const remainingSalad = manager.getAllPieces().filter(p => p.dishId === 'dish_salad');
+    assert.strictEqual(remainingSalad.length, 0, 'Completed salad pieces must be completely cleared');
+
+    // Verify all remaining pieces belong to valid active instances (zero orphan pieces)
+    const remainingPieces = manager.getAllPieces();
+    assert.ok(remainingPieces.length > 0, 'Remaining pieces from other dishes should still exist');
+    for (const p of remainingPieces) {
+      assert.ok(p.dishPuzzleInstanceId, 'Every piece must have a valid dishPuzzleInstanceId');
+      assert.ok(['dish_breakfast', 'dish_ramen'].includes(p.dishId), 'Piece must belong to breakfast or ramen');
+    }
+  });
+
+  it('should enforce PieceGroup-based rigid gravity preserving member relative coordinates', () => {
+    const manager = new DishPuzzleManager(8, 12);
+    const inst = manager.createDishInstance('dish_breakfast');
+
+    // Create an L-shaped 3-piece group at row 5..6
+    // (0,0) at (2,5), (1,0) at (3,5), (0,1) at (2,6)
+    const p1 = manager.createPiece(inst.instanceId, 'dish_breakfast', 0, 0, { col: 2, row: 5 });
+    const p2 = manager.createPiece(inst.instanceId, 'dish_breakfast', 1, 0, { col: 3, row: 5 });
+    const p3 = manager.createPiece(inst.instanceId, 'dish_breakfast', 0, 1, { col: 2, row: 6 });
+    const group = manager.createGroup([p1, p2, p3]);
+
+    const initialRelCol12 = p2.boardCoord.col - p1.boardCoord.col; // +1
+    const initialRelRow12 = p2.boardCoord.row - p1.boardCoord.row; // 0
+    const initialRelCol13 = p3.boardCoord.col - p1.boardCoord.col; // 0
+    const initialRelRow13 = p3.boardCoord.row - p1.boardCoord.row; // +1
+
+    // Apply rigid gravity
+    const moved = manager.applyGravity();
+    assert.ok(moved, 'Group should have dropped down to floor');
+
+    // p1 should now be at row 0 (floor), p2 at (3,0), p3 at (2,1)
+    assert.strictEqual(p1.boardCoord.col, 2);
+    assert.strictEqual(p1.boardCoord.row, 0);
+    assert.strictEqual(p2.boardCoord.col, 3);
+    assert.strictEqual(p2.boardCoord.row, 0);
+    assert.strictEqual(p3.boardCoord.col, 2);
+    assert.strictEqual(p3.boardCoord.row, 1);
+
+    // Relative coordinates must be 100% preserved
+    assert.strictEqual(p2.boardCoord.col - p1.boardCoord.col, initialRelCol12);
+    assert.strictEqual(p2.boardCoord.row - p1.boardCoord.row, initialRelRow12);
+    assert.strictEqual(p3.boardCoord.col - p1.boardCoord.col, initialRelCol13);
+    assert.strictEqual(p3.boardCoord.row - p1.boardCoord.row, initialRelRow13);
+  });
+
+  it('should couple DishPuzzle completions with OrderSystem and PreparedDishBuffer', () => {
+    const session = new GameSession(DEFAULT_DAYS[0], 1001);
+    assert.strictEqual(session.orderSystem.currentOrder?.dishId, 'dish_salad');
+    assert.strictEqual(session.orderSystem.preparedDishBuffer.length, 0);
+
+    // 1. Emit completion for a non-matching dish (dish_breakfast)
+    session.orderSystem.handleCompletedDish('dish_breakfast');
+    assert.strictEqual(session.orderSystem.preparedDishBuffer.length, 1);
+    assert.strictEqual(session.orderSystem.preparedDishBuffer[0], 'dish_breakfast');
+    assert.strictEqual(session.orderSystem.currentOrder?.dishId, 'dish_salad', 'Current order remains salad');
+    assert.strictEqual(session.revenue, 0, 'No revenue gained for buffered dish yet');
+
+    // 2. Emit completion for matching dish (dish_salad)
+    session.orderSystem.handleCompletedDish('dish_salad');
+    assert.ok(session.revenue > 0, 'Revenue gained for fulfilling order');
+    assert.strictEqual(session.orderSystem.ordersFulfilledCount, 1);
   });
 });

@@ -13,6 +13,8 @@ export class OrderSystem {
   private _businessGoal: number;
   private _cascadeChain: number = 0;
   private _ordersFulfilledCount: number = 0;
+  private _preparedDishBuffer: string[] = [];
+  readonly maxPreparedBuffer: number = 2;
 
   constructor(
     dayConfig: DayConfig,
@@ -45,6 +47,10 @@ export class OrderSystem {
 
   get ordersFulfilledCount(): number {
     return this._ordersFulfilledCount;
+  }
+
+  get preparedDishBuffer(): readonly string[] {
+    return this._preparedDishBuffer;
   }
 
   get isGoalReached(): boolean {
@@ -231,23 +237,101 @@ export class OrderSystem {
   }
 
   /**
-   * Directly fulfills a dish puzzle, incrementing revenue and order count cleanly.
+   * Helper to normalize recipeId and dishId.
+   * e.g. 'salad' <-> 'dish_salad', 'breakfast' <-> 'dish_breakfast', 'ramen' <-> 'dish_ramen'
    */
-  fulfillDish(dishId: string, revenue: number): void {
-    this._totalRevenue += revenue;
-    this._ordersFulfilledCount++;
+  private matchesDish(orderRecipeId: string, completedDishId: string): boolean {
+    if (orderRecipeId === completedDishId) return true;
+    const strippedRecipe = orderRecipeId.replace(/^dish_/, '');
+    const strippedCompleted = completedDishId.replace(/^dish_/, '');
+    return strippedRecipe === strippedCompleted;
+  }
 
-    this._events.emit('REVENUE_CHANGED', {
-      currentRevenue: this._totalRevenue,
-      businessGoal: this._businessGoal,
-      delta: revenue
-    });
+  /**
+   * Processes a completed dish through the official OrderSystem flow:
+   * DISH_COMPLETED -> serve/reserve -> ORDER_COMPLETED -> REVENUE_CHANGED -> next order / cascade
+   */
+  handleCompletedDish(dishId: string): { served: boolean; buffered: boolean; order?: Order } {
+    if (!this._currentOrder) {
+      if (this._preparedDishBuffer.length < this.maxPreparedBuffer) {
+        this._preparedDishBuffer.push(dishId);
+        return { served: false, buffered: true };
+      }
+      return { served: false, buffered: false };
+    }
 
-    if (this.isGoalReached) {
-      this._events.emit('BUSINESS_GOAL_REACHED', {
-        finalRevenue: this._totalRevenue,
-        businessGoal: this._businessGoal
+    // Check if matching current order
+    if (this.matchesDish(this._currentOrder.recipeId, dishId)) {
+      const order = this._currentOrder;
+      order.isFulfilled = true;
+
+      this._cascadeChain++;
+      if (this._cascadeChain === 2) {
+        this._events.emit('CASCADE_STARTED', { startOrder: order });
+      }
+
+      const multiplier = this.getCascadeMultiplier(this._cascadeChain);
+      const earned = Math.round(order.baseRevenue * multiplier);
+
+      this._totalRevenue += earned;
+      this._ordersFulfilledCount++;
+
+      this._events.emit('ORDER_COMPLETED', {
+        order,
+        revenueAwarded: earned,
+        chainIndex: this._cascadeChain
       });
+
+      if (this._cascadeChain >= 2) {
+        this._events.emit('CASCADE_STEP', {
+          chainIndex: this._cascadeChain,
+          completedOrder: order,
+          multiplier,
+          revenue: earned
+        });
+      }
+
+      this._events.emit('REVENUE_CHANGED', {
+        currentRevenue: this._totalRevenue,
+        businessGoal: this._businessGoal,
+        delta: earned
+      });
+
+      if (this.isGoalReached) {
+        this._events.emit('BUSINESS_GOAL_REACHED', {
+          finalRevenue: this._totalRevenue,
+          businessGoal: this._businessGoal
+        });
+      }
+
+      // Advance to next order
+      this._currentOrder = this._orderBag.advanceToNextOrder();
+      if (this._currentOrder) {
+        this._events.emit('ORDER_CREATED', {
+          order: this._currentOrder,
+          orderIndex: this._orderBag.getCurrentOrderIndex()
+        });
+
+        // Check if next order can immediately be fulfilled from PreparedDishBuffer!
+        const bufIdx = this._preparedDishBuffer.findIndex(d => this.matchesDish(this._currentOrder!.recipeId, d));
+        if (bufIdx !== -1) {
+          const bufferedDish = this._preparedDishBuffer.splice(bufIdx, 1)[0];
+          this.handleCompletedDish(bufferedDish);
+        } else {
+          this._cascadeChain = 0;
+        }
+      } else {
+        this._cascadeChain = 0;
+      }
+
+      return { served: true, buffered: false, order };
+    } else {
+      // Dish does not match current order: enter PreparedDishBuffer
+      if (this._preparedDishBuffer.length < this.maxPreparedBuffer) {
+        this._preparedDishBuffer.push(dishId);
+        return { served: false, buffered: true };
+      }
+      return { served: false, buffered: false };
     }
   }
 }

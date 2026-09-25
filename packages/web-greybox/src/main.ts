@@ -40,9 +40,6 @@ class WebGameApp {
   private wobblePieces = new Map<string, { startTime: number; startX: number; startY: number }>();
   private completedDishAnims = new Map<string, { startTime: number; dishId: string; pieces: DishPuzzlePiece[]; groupId: string }>();
 
-  private activeDishes: string[] = ['dish_salad', 'dish_breakfast', 'dish_ramen'];
-  private currentDishOrderIndex: number = 0;
-
   constructor() {
     SaveSystem.setStorage(new WebStorageAdapter());
     DishTextureManager.init();
@@ -279,9 +276,8 @@ class WebGameApp {
     const session = this.flow.startDay(dayNumber);
     WebTelemetrySink.log('day_start', dayNumber);
 
-    // Initialize True DishPuzzle domain with Day 1 layout (Breakfast, Salad, Ramen)
-    this.dishPuzzleManager = new DishPuzzleManager(session.grid.columns, session.grid.rows, session.events);
-    this.dishPuzzleManager.initDay1Layout();
+    // Initialize True DishPuzzle domain with Day 1 layout
+    this.dishPuzzleManager = session.dishPuzzleManager;
 
     setTimeout(() => {
       this.flow.beginPlaying();
@@ -292,6 +288,10 @@ class WebGameApp {
     session.events.on('ORDER_COMPLETED', () => {
       AudioDirector.playOrderComplete();
       AudioDirector.playRevenueGain();
+      this.updateHUD();
+    });
+    session.events.on('REVENUE_CHANGED', () => {
+      this.updateHUD();
     });
     session.events.on('BOARD_SETTLED', () => AudioDirector.playBoardSettling());
     session.events.on('DAY_CLEARED', () => AudioDirector.playDayClear());
@@ -321,66 +321,66 @@ class WebGameApp {
       fill.style.width = `${pct}%`;
     }
 
-    // B. Hanging Thermal Receipt - True Master Dish Art Order
-    const curDishId = this.activeDishes[this.currentDishOrderIndex] || 'dish_salad';
+    // B. Hanging Thermal Receipt - True Master Dish Art Order from OrderSystem
+    const currentOrder = session.orderSystem.currentOrder;
+    const curDishId = currentOrder?.dishId || (currentOrder?.recipeId.startsWith('dish_') ? currentOrder.recipeId : `dish_${currentOrder?.recipeId}`) || 'dish_salad';
     const manifest = GOLD_SAMPLE_DISH_MANIFEST[curDishId];
     const orderIdNum = document.getElementById('order-id-num');
     const orderIdDish = document.getElementById('order-id-dish');
     const orderRevenue = document.getElementById('order-revenue');
     const checklist = document.getElementById('receipt-checklist');
 
-    if (orderIdNum) orderIdNum.textContent = '#1001';
-    if (orderIdDish) orderIdDish.textContent = manifest?.name || '田园沙拉';
+    if (orderIdNum) {
+      const rawId = currentOrder?.orderId || '#1001';
+      orderIdNum.textContent = rawId.startsWith('#') ? rawId : `#${rawId.replace('order_', '')}`;
+    }
+    if (orderIdDish) orderIdDish.textContent = manifest?.name || currentOrder?.dishName || '田园沙拉';
     const dishThumb = document.getElementById('receipt-dish-thumb') as HTMLImageElement;
     if (dishThumb) {
       dishThumb.src = manifest?.masterAsset || '/assets/dishes/dish_salad_master.jpg';
     }
-    if (orderRevenue) orderRevenue.textContent = `¥${manifest?.orderRevenue || 70}`;
+    if (orderRevenue) {
+      orderRevenue.textContent = `¥${manifest?.orderRevenue || currentOrder?.baseRevenue || 70}`;
+    }
 
     if (checklist) {
+      // Day 1 HUD: No explicit (2/9) or (4/9) badges. Visual puzzle state conveys completion.
       checklist.innerHTML = '';
-      // Status badges for the 3 active dishes on the board
-      for (const dId of this.activeDishes) {
-        const dManifest = GOLD_SAMPLE_DISH_MANIFEST[dId];
-        const groups = this.dishPuzzleManager
-          ? this.dishPuzzleManager.getAllGroups().filter(g => g.dishId === dId)
-          : [];
-        const maxGroupSize = groups.reduce((max, g) => Math.max(max, g.pieceIds.length), 0);
-        const isCurrent = dId === curDishId;
-
-        const badge = document.createElement('div');
-        badge.textContent = `${dManifest?.name || dId} (${maxGroupSize}/9)`;
-        badge.style.padding = '3px 8px';
-        badge.style.borderRadius = '8px';
-        badge.style.fontSize = '12px';
-        badge.style.fontWeight = isCurrent ? 'bold' : 'normal';
-        badge.style.color = isCurrent ? '#FFFFFF' : 'var(--ink-main)';
-        badge.style.background = isCurrent ? 'var(--sage-dark)' : 'rgba(238, 230, 216, 0.7)';
-        badge.style.border = isCurrent ? '1.5px solid var(--sage-main)' : '1px solid rgba(180, 160, 140, 0.3)';
-        checklist.appendChild(badge);
+      if (manifest?.category) {
+        const catBadge = document.createElement('div');
+        catBadge.textContent = manifest.category;
+        catBadge.style.padding = '3px 8px';
+        catBadge.style.fontSize = '12px';
+        catBadge.style.color = 'var(--ink-muted)';
+        checklist.appendChild(catBadge);
       }
     }
 
-    // Next Order Hint
+    // C. Next Order Preview (Stage 2 Gated: Day 1 hidden)
     const nextHint = document.getElementById('next-order-hint');
     const nextLabel = document.getElementById('next-order-label');
-    const nextDishId = this.activeDishes[(this.currentDishOrderIndex + 1) % this.activeDishes.length];
-    const nextManifest = GOLD_SAMPLE_DISH_MANIFEST[nextDishId];
+    const preview = session.orderSystem.getNextOrderPreview();
+    const isDay1 = session.dayConfig.dayNumber === 1;
 
     if (nextHint && nextLabel) {
-      nextHint.style.display = 'inline-flex';
-      nextLabel.textContent = `下道料理: ${nextManifest?.name || '暖汤拉面'}`;
+      if (isDay1 || preview.mode === 'NONE' || !preview.dishName) {
+        nextHint.style.display = 'none';
+      } else {
+        nextHint.style.display = 'inline-flex';
+        const nextDishId = preview.dishId || 'dish_salad';
+        const nextManifest = GOLD_SAMPLE_DISH_MANIFEST[nextDishId];
+        nextLabel.textContent = `下道料理: ${nextManifest?.name || preview.dishName}`;
+      }
     }
 
-    // D. Serving Tray (2 slots for prepared dishes)
+    // D. Serving Tray (2 slots bound to session.orderSystem.preparedDishBuffer)
     const slot0 = document.getElementById('tray-slot-0');
     const slot1 = document.getElementById('tray-slot-1');
-    const stock = session.inventory.getAllAvailable();
-    const stockEntries = Object.entries(stock).filter(([_, c]) => c > 0);
+    const buffer = session.orderSystem.preparedDishBuffer;
     if (slot0) {
-      if (stockEntries[0]) {
-        const ing = DEFAULT_INGREDIENTS[stockEntries[0][0]];
-        slot0.textContent = ing?.name || '备用';
+      if (buffer[0]) {
+        const dManifest = GOLD_SAMPLE_DISH_MANIFEST[buffer[0]];
+        slot0.textContent = dManifest?.name || buffer[0];
         slot0.className = 'tray-dish-slot occupied';
       } else {
         slot0.textContent = '空';
@@ -388,9 +388,9 @@ class WebGameApp {
       }
     }
     if (slot1) {
-      if (stockEntries[1]) {
-        const ing = DEFAULT_INGREDIENTS[stockEntries[1][0]];
-        slot1.textContent = ing?.name || '备用';
+      if (buffer[1]) {
+        const dManifest = GOLD_SAMPLE_DISH_MANIFEST[buffer[1]];
+        slot1.textContent = dManifest?.name || buffer[1];
         slot1.className = 'tray-dish-slot occupied';
       } else {
         slot1.textContent = '空';
@@ -605,21 +605,18 @@ class WebGameApp {
         AudioDirector.playOrderComplete();
         AudioDirector.playRevenueGain();
 
-        // 550ms completion celebration
+        // 550ms completion celebration with all 9 pieces of completed dish
+        const finalGroup = this.dishPuzzleManager.getGroup(group.groupId);
+        const finalPieces = finalGroup
+          ? finalGroup.pieceIds.map(id => this.dishPuzzleManager.getPiece(id)!).filter(Boolean)
+          : group.pieces;
+
         this.completedDishAnims.set(moveResult.completedDish.instanceId, {
           startTime: performance.now(),
           dishId: moveResult.completedDish.dishId,
-          pieces: group.pieces,
+          pieces: finalPieces,
           groupId: group.groupId
         });
-
-        const manifest = GOLD_SAMPLE_DISH_MANIFEST[moveResult.completedDish.dishId];
-        const rev = manifest?.orderRevenue || 70;
-        if (this.flow.session) {
-          this.flow.session.orderSystem.fulfillDish(moveResult.completedDish.dishId, rev);
-        }
-        // Advance current target dish
-        this.currentDishOrderIndex = (this.currentDishOrderIndex + 1) % this.activeDishes.length;
       }
     } else {
       AudioDirector.playWrongDrop();
@@ -739,6 +736,7 @@ class WebGameApp {
       if (elapsed > 550) {
         this.dishPuzzleManager.clearCompletedGroup(anim.groupId);
         this.completedDishAnims.delete(instanceId);
+        this.updateHUD();
         continue;
       }
 

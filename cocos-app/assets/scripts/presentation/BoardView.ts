@@ -56,9 +56,26 @@ export class BoardView extends Component {
     return new Vec3(x, y, 0);
   }
 
+  localPosToGrid(pos: Vec3): GridCoord {
+    const uiTransform = this.node.getComponent(UITransform);
+    const originX = uiTransform ? -uiTransform.width / 2 : 0;
+    const originY = uiTransform ? -uiTransform.height / 2 : 0;
+
+    const col = Math.floor((pos.x - originX) / this._cellWidth);
+    const row = Math.floor((pos.y - originY) / this._cellHeight);
+    return { col, row };
+  }
+
   renderInitialBoard() {
     this.targetsContainer?.removeAllChildren();
     this.piecesContainer?.removeAllChildren();
+
+    if (this._session.dishPuzzleManager) {
+      for (const piece of this._session.dishPuzzleManager.getAllPieces()) {
+        this.createDishPieceNode(piece);
+      }
+      return;
+    }
 
     for (const target of this._session.grid.getAllTargets()) {
       this.createTargetNode(target);
@@ -203,7 +220,9 @@ export class BoardView extends Component {
     }
 
     // Standard Cocos bundle resource path for raster piece cutouts
-    const assetPath = `textures/pieces/${dishOrIngId}/${slotId}/spriteFrame`;
+    const dishPath = `textures/dishes/piece_${dishOrIngId}_slot_${slotId}/spriteFrame`;
+    const piecePath = `textures/pieces/${dishOrIngId}/${slotId}/spriteFrame`;
+    const assetPath = dishOrIngId.startsWith('dish_') ? dishPath : piecePath;
     if (resources && typeof resources.load === 'function') {
       resources.load(assetPath, SpriteFrame, (err, sf) => {
         if (!err && sf) {

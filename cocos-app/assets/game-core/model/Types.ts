@@ -118,6 +118,7 @@ export interface OrderItemProgress {
 export interface Order {
   orderId: string;
   recipeId: string;
+  dishId?: string;
   dishName: string;
   emoji: string;
   baseRevenue: number;
