@@ -288,6 +288,19 @@ class WebGameApp {
     session.events.on('ORDER_COMPLETED', () => {
       AudioDirector.playOrderComplete();
       AudioDirector.playRevenueGain();
+
+      const paper = document.getElementById('receipt-paper');
+      if (paper) {
+        paper.style.transition = 'transform 0.15s ease-out, opacity 0.15s ease-out';
+        paper.style.transform = 'translateY(-10px) scale(0.98)';
+        paper.style.opacity = '0.7';
+        setTimeout(() => {
+          paper.style.transform = 'translateY(0) scale(1)';
+          paper.style.opacity = '1';
+          AudioDirector.playReceiptPrint();
+        }, 150);
+      }
+
       this.updateHUD();
     });
     session.events.on('REVENUE_CHANGED', () => {
@@ -602,9 +615,6 @@ class WebGameApp {
         AudioDirector.playSnapPiece();
       }
       if (moveResult.completedDish) {
-        AudioDirector.playOrderComplete();
-        AudioDirector.playRevenueGain();
-
         // 550ms completion celebration with all 9 pieces of completed dish
         const finalGroup = this.dishPuzzleManager.getGroup(group.groupId);
         const finalPieces = finalGroup

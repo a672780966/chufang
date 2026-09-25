@@ -26,7 +26,8 @@ export type CoreEventType =
   | 'BOARD_SETTLED'
   | 'DISH_COMPLETED'
   | 'PIECE_GROUP_MERGED'
-  | 'DISH_CLEARED';
+  | 'DISH_CLEARED'
+  | 'DISH_SERVED';
 
 export interface CoreEventMap {
   TARGET_SPAWNED: { target: IngredientTarget; fromAnchor: GridCoord; toAnchor: GridCoord };
@@ -136,6 +137,11 @@ export interface CoreEventMap {
     pieceCount: number;
   };
   DISH_CLEARED: {
+    dishId: string;
+    dishPuzzleInstanceId: string;
+    groupId: string;
+  };
+  DISH_SERVED: {
     dishId: string;
     dishPuzzleInstanceId: string;
     groupId: string;

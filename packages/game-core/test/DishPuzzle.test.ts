@@ -314,4 +314,78 @@ describe('DishPuzzle Domain Model & Adjacency Engine', () => {
     assert.ok(session.revenue > 0, 'Revenue gained for fulfilling order');
     assert.strictEqual(session.orderSystem.ordersFulfilledCount, 1);
   });
+
+  it('should complete Full Day Loop on Day 1 through 3 consecutive salad orders reaching business goal', () => {
+    const session = new GameSession(DEFAULT_DAYS[0], 2026);
+    assert.strictEqual(session.orderSystem.businessGoal, 200);
+    assert.strictEqual(session.orderSystem.totalRevenue, 0);
+
+    let dayClearedFired = false;
+    session.events.on('DAY_CLEARED', () => {
+      dayClearedFired = true;
+    });
+
+    const solveActiveSalad = () => {
+      const manager = session.dishPuzzleManager;
+      const salad = Array.from(manager.getAllPieces())
+        .map(p => manager['_instances'].get(p.dishPuzzleInstanceId)!)
+        .find(inst => inst && inst.dishId === 'dish_salad' && !inst.isCompleted)!;
+      assert.ok(salad, 'Active salad instance must exist');
+
+      const saladPieces = manager.getAllPieces().filter(p => p.dishPuzzleInstanceId === salad.instanceId);
+      const p00 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 0)!;
+
+      // Move 1: Duo (2,0) & (2,1)
+      const p20 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 0)!;
+      const g20 = manager.getGroupByPieceId(p20.pieceInstanceId)!;
+      manager.tryMoveGroup(g20.groupId, 2, 0, p20.pieceInstanceId);
+
+      // Move 2: (0,2)
+      const p02 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 2)!;
+      const g02 = manager.getGroupByPieceId(p02.pieceInstanceId)!;
+      manager.tryMoveGroup(g02.groupId, 0, 2, p02.pieceInstanceId);
+
+      // Move 3: (1,2)
+      const p12 = saladPieces.find(p => p.dishCol === 1 && p.dishRow === 2)!;
+      const g12 = manager.getGroupByPieceId(p12.pieceInstanceId)!;
+      manager.tryMoveGroup(g12.groupId, 1, 2, p12.pieceInstanceId);
+
+      // Move 4: (2,2)
+      const p22 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 2)!;
+      const g22 = manager.getGroupByPieceId(p22.pieceInstanceId)!;
+      const res4 = manager.tryMoveGroup(g22.groupId, 2, 2, p22.pieceInstanceId);
+      assert.ok(res4.completedDish, 'Move 4 should complete the dish');
+
+      // Clear completed group -> triggers DISH_SERVED -> fulfills order & spawns next if needed
+      manager.clearCompletedGroup(p00.groupId);
+      return salad;
+    };
+
+    // --- Order 1: Salad 1 ---
+    assert.strictEqual(session.orderSystem.currentOrder?.orderId, '#1001');
+    assert.strictEqual(session.orderSystem.currentOrder?.dishId, 'dish_salad');
+
+    const inst1 = solveActiveSalad();
+    assert.strictEqual(session.revenue, 70);
+    assert.strictEqual(session.orderSystem.ordersFulfilledCount, 1);
+    assert.strictEqual(session.orderSystem.currentOrder?.orderId, '#1002');
+
+    // --- Order 2: Salad 2 ---
+    const inst2 = solveActiveSalad();
+    assert.ok(inst2.instanceId !== inst1.instanceId, 'Must create a new instance, not resurrect old');
+    assert.strictEqual(session.revenue, 140);
+    assert.strictEqual(session.orderSystem.ordersFulfilledCount, 2);
+    assert.strictEqual(session.orderSystem.currentOrder?.orderId, '#1003');
+
+    // --- Order 3: Salad 3 ---
+    const inst3 = solveActiveSalad();
+    assert.ok(inst3.instanceId !== inst2.instanceId, 'Must create fresh 3rd instance');
+    assert.strictEqual(session.revenue, 210);
+    assert.strictEqual(session.orderSystem.ordersFulfilledCount, 3);
+    assert.ok(session.orderSystem.isGoalReached, 'Business goal (200) must be reached at 210');
+
+    // Goal reached: order advancement must halt
+    assert.ok(dayClearedFired, 'DAY_CLEARED must be emitted');
+    assert.strictEqual(session.orderSystem.currentOrder, null, 'Must stop advancing orders when goal reached');
+  });
 });

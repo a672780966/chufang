@@ -298,13 +298,16 @@ export class OrderSystem {
       });
 
       if (this.isGoalReached) {
+        this._currentOrder = null;
         this._events.emit('BUSINESS_GOAL_REACHED', {
           finalRevenue: this._totalRevenue,
           businessGoal: this._businessGoal
         });
+        this._cascadeChain = 0;
+        return { served: true, buffered: false, order };
       }
 
-      // Advance to next order
+      // Advance to next order only when business goal not yet reached
       this._currentOrder = this._orderBag.advanceToNextOrder();
       if (this._currentOrder) {
         this._events.emit('ORDER_CREATED', {

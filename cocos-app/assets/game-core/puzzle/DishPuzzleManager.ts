@@ -371,6 +371,9 @@ export class DishPuzzleManager {
     const group = this._groups.get(groupId);
     if (!group) return;
 
+    const dishId = group.dishId;
+    const dishPuzzleInstanceId = group.dishPuzzleInstanceId;
+
     // Remove pieces from grid
     for (const pieceId of group.pieceIds) {
       const piece = this._pieces.get(pieceId);
@@ -384,16 +387,97 @@ export class DishPuzzleManager {
     this._groups.delete(groupId);
 
     this.events.emit('DISH_CLEARED', {
-      dishId: group.dishId,
-      dishPuzzleInstanceId: group.dishPuzzleInstanceId,
+      dishId,
+      dishPuzzleInstanceId,
       groupId
     });
 
     // 1. Settle pieces above down using PieceGroup-based rigid gravity
     this.applyGravity();
 
-    // 2. Refill missing pieces from top spawn zone for active non-completed instances
-    this.refillMissingPieces(3);
+    // 2. Emit DISH_SERVED: marks serving transition (cleared from board -> ready for next order)
+    this.events.emit('DISH_SERVED', {
+      dishId,
+      dishPuzzleInstanceId,
+      groupId
+    });
+  }
+
+  /**
+   * Spawns a deterministic, unblocked Day 1 Salad layout for a new instance.
+   * Guarantees complete 9 pieces, zero orphan pieces, and 4 natural drag moves.
+   */
+  spawnDay1SaladLayout(saladInst: DishPuzzleInstance): void {
+    // 1. Group 1: 2x2 base (4 pieces)
+    const s_0_0 = this.createPiece(saladInst.instanceId, 'dish_salad', 0, 0, { col: 0, row: 0 });
+    const s_1_0 = this.createPiece(saladInst.instanceId, 'dish_salad', 1, 0, { col: 1, row: 0 });
+    const s_0_1 = this.createPiece(saladInst.instanceId, 'dish_salad', 0, 1, { col: 0, row: 1 });
+    const s_1_1 = this.createPiece(saladInst.instanceId, 'dish_salad', 1, 1, { col: 1, row: 1 });
+    this.createGroup([s_0_0, s_1_0, s_0_1, s_1_1]);
+
+    // 2. Group 2: vertical duo (2 pieces) in col 4
+    let col4Row = 0;
+    while (col4Row < this.rows && this._gridCells[col4Row][4] !== null) col4Row++;
+    const s_2_0 = this.createPiece(saladInst.instanceId, 'dish_salad', 2, 0, { col: 4, row: col4Row });
+    const s_2_1 = this.createPiece(saladInst.instanceId, 'dish_salad', 2, 1, { col: 4, row: col4Row + 1 });
+    this.createGroup([s_2_0, s_2_1]);
+
+    // 3. Loose piece (0,2) in col 3
+    let col3Row = 0;
+    while (col3Row < this.rows && this._gridCells[col3Row][3] !== null) col3Row++;
+    const s_0_2 = this.createPiece(saladInst.instanceId, 'dish_salad', 0, 2, { col: 3, row: col3Row });
+    this.createGroup([s_0_2]);
+
+    // 4. Loose piece (1,2) in col 5
+    let col5Row = 0;
+    while (col5Row < this.rows && this._gridCells[col5Row][5] !== null) col5Row++;
+    const s_1_2 = this.createPiece(saladInst.instanceId, 'dish_salad', 1, 2, { col: 5, row: col5Row });
+    this.createGroup([s_1_2]);
+
+    // 5. Loose piece (2,2) in col 6
+    let col6Row = 0;
+    while (col6Row < this.rows && this._gridCells[col6Row][6] !== null) col6Row++;
+    const s_2_2 = this.createPiece(saladInst.instanceId, 'dish_salad', 2, 2, { col: 6, row: col6Row });
+    this.createGroup([s_2_2]);
+
+    this.applyGravity();
+
+    // Emit spawn events for the presentation layer
+    for (const p of [s_0_0, s_1_0, s_0_1, s_1_1, s_2_0, s_2_1, s_0_2, s_1_2, s_2_2]) {
+      this.events.emit('PIECE_SPAWNED', {
+        piece: {
+          instanceId: p.pieceInstanceId,
+          ingredientId: p.dishId,
+          targetInstanceId: p.dishPuzzleInstanceId,
+          slotId: p.slotId,
+          coord: p.boardCoord
+        },
+        fromCoord: { col: p.boardCoord.col, row: this.rows - 1 },
+        toCoord: p.boardCoord
+      });
+    }
+  }
+
+  /**
+   * Ensures there is an active, unfinished DishPuzzleInstance for the given dishId.
+   * If all instances of this dish are completed, creates a new instance with a fresh instanceId.
+   * Never resurrects or reuses completed instances.
+   */
+  ensureActiveDishInstance(dishId: string): DishPuzzleInstance {
+    const existing = Array.from(this._instances.values()).find(
+      inst => inst.dishId === dishId && !inst.isCompleted
+    );
+    if (existing) {
+      return existing;
+    }
+
+    const newInst = this.createDishInstance(dishId);
+    if (dishId === 'dish_salad') {
+      this.spawnDay1SaladLayout(newInst);
+    } else {
+      this.refillMissingPieces(9);
+    }
+    return newInst;
   }
 
   /**
