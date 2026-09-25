@@ -99,6 +99,16 @@ export class GameSession {
       if (!this.orderSystem.isGoalReached && this.orderSystem.currentOrder) {
         const neededDishId = this.orderSystem.currentOrder.dishId || (this.orderSystem.currentOrder.recipeId.startsWith('dish_') ? this.orderSystem.currentOrder.recipeId : `dish_${this.orderSystem.currentOrder.recipeId}`);
         this.dishPuzzleManager.ensureActiveDishInstance(neededDishId);
+        this.dishPuzzleManager.maintainActiveDishPool();
+        this.dishPuzzleManager.schedulePieceAcrossActiveDishes(2, neededDishId);
+      }
+    });
+
+    // When pieces merge, supply pieces across active dishes if space is available
+    this.events.on('PIECE_GROUP_MERGED', () => {
+      if (!this._isGameOver && this.dishPuzzleManager.getAllPieces().length < 24) {
+        const curDish = this.orderSystem.currentOrder?.dishId;
+        this.dishPuzzleManager.schedulePieceAcrossActiveDishes(1, curDish);
       }
     });
 

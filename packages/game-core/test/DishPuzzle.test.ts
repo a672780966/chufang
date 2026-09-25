@@ -479,4 +479,105 @@ describe('DishPuzzle Domain Model & Adjacency Engine', () => {
       assert.ok(['dish_breakfast', 'dish_salad', 'dish_ramen'].includes(p.dishId));
     }
   });
+
+  it('should satisfy 45%~65% vertical span and multi-dish compositions in Day 1 initial layout', () => {
+    const manager = new DishPuzzleManager(8, 12);
+    manager.initDay1Layout();
+
+    const pieces = manager.getAllPieces();
+    assert.strictEqual(pieces.length, 17, 'Day 1 starts with 17 pieces (9 salad, 4 breakfast, 4 ramen)');
+
+    // Calculate vertical span
+    let minRow = Infinity;
+    let maxRow = -Infinity;
+    for (const p of pieces) {
+      if (p.boardCoord.row < minRow) minRow = p.boardCoord.row;
+      if (p.boardCoord.row > maxRow) maxRow = p.boardCoord.row;
+    }
+
+    const verticalSpanRows = (maxRow - minRow) + 1;
+    const verticalSpanRatio = verticalSpanRows / 12;
+
+    // Must be between 45% and 65% (58.3% for rows 0..6)
+    assert.ok(
+      verticalSpanRatio >= 0.45 && verticalSpanRatio <= 0.65,
+      `Vertical span ratio ${verticalSpanRatio.toFixed(3)} must be between 0.45 and 0.65`
+    );
+
+    // Verify all 3 dishes are present with distinct recognizable groups
+    const saladPieces = pieces.filter(p => p.dishId === 'dish_salad');
+    const breakfastPieces = pieces.filter(p => p.dishId === 'dish_breakfast');
+    const ramenPieces = pieces.filter(p => p.dishId === 'dish_ramen');
+
+    assert.strictEqual(saladPieces.length, 9);
+    assert.strictEqual(breakfastPieces.length, 4);
+    assert.strictEqual(ramenPieces.length, 4);
+
+    // Salad pieces span bottom to mid rows (0..3)
+    const saladMaxRow = Math.max(...saladPieces.map(p => p.boardCoord.row));
+    assert.ok(saladMaxRow <= 3, 'Salad pieces stay within assembly reach');
+
+    // Breakfast and Ramen extend to mid and upper-mid rows (4..6)
+    const higherRows = pieces.filter(p => p.boardCoord.row >= 4);
+    assert.ok(higherRows.length >= 6, 'At least 6 pieces should populate mid-to-high rows 4..6');
+  });
+
+  it('should maintain exactly 3 active unfinished DishPuzzleInstances when a dish is completed and cleared', () => {
+    const manager = new DishPuzzleManager(8, 12);
+    manager.initDay1Layout();
+
+    let activeInsts = manager.maintainActiveDishPool();
+    assert.strictEqual(activeInsts.length, 3, 'Must maintain 3 active instances');
+
+    // Complete salad
+    const saladPieces = manager.getAllPieces().filter(p => p.dishId === 'dish_salad');
+    const p20 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 0)!;
+    const g2 = manager.getGroupByPieceId(p20.pieceInstanceId)!;
+    manager.tryMoveGroup(g2.groupId, 2, 0, p20.pieceInstanceId);
+
+    const p02 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 2)!;
+    const g02 = manager.getGroupByPieceId(p02.pieceInstanceId)!;
+    manager.tryMoveGroup(g02.groupId, 0, 2, p02.pieceInstanceId);
+
+    const p12 = saladPieces.find(p => p.dishCol === 1 && p.dishRow === 2)!;
+    const g12 = manager.getGroupByPieceId(p12.pieceInstanceId)!;
+    manager.tryMoveGroup(g12.groupId, 1, 2, p12.pieceInstanceId);
+
+    const p22 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 2)!;
+    const g22 = manager.getGroupByPieceId(p22.pieceInstanceId)!;
+    const res = manager.tryMoveGroup(g22.groupId, 2, 2, p22.pieceInstanceId);
+    assert.ok(res.completedDish);
+
+    // Clear completed salad
+    const p00 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 0)!;
+    manager.clearCompletedGroup(p00.groupId);
+
+    // Active instances must still be 3 (new salad instance created to replace completed one)
+    const remainingActive = Array.from(manager['_instances'].values()).filter(i => !i.isCompleted);
+    assert.strictEqual(remainingActive.length, 3, 'Must maintain 3 active instances after clearing');
+    assert.ok(remainingActive.some(i => i.dishId === 'dish_salad'));
+    assert.ok(remainingActive.some(i => i.dishId === 'dish_breakfast'));
+    assert.ok(remainingActive.some(i => i.dishId === 'dish_ramen'));
+  });
+
+  it('should supply pieces with starvation protection boosting neglected dishes', () => {
+    const manager = new DishPuzzleManager(8, 12);
+    manager.initDay1Layout();
+
+    // Repeatedly schedule 1 piece with currentOrderDishId = 'dish_breakfast'
+    // Ramen is not the current order, so its starvation counter should escalate and eventually trigger ramen spawn
+    const spawnedDishes: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const batch = manager.schedulePieceAcrossActiveDishes(1, 'dish_breakfast');
+      if (batch.length > 0) {
+        spawnedDishes.push(batch[0].dishId);
+      }
+    }
+
+    assert.ok(spawnedDishes.length > 0, 'Pieces should be spawned');
+    assert.ok(
+      spawnedDishes.includes('dish_ramen'),
+      'Ramen must receive pieces due to starvation protection even when currentOrder is breakfast'
+    );
+  });
 });

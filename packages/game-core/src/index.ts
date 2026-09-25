@@ -20,3 +20,4 @@ export * from './progression/GameFlowManager';
 export * from './data/DishManifest';
 export * from './puzzle/DishPuzzleModel';
 export * from './puzzle/DishPuzzleManager';
+export * from './puzzle/DishPieceSupplyScheduler';

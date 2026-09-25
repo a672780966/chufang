@@ -5,8 +5,8 @@
  *   Piece -> Piece -> Group -> Dish -> Clear
  */
 
-import { GridCoord } from '../model/Types';
-import { EventEmitter } from '../model/Events';
+import { GridCoord } from '../model/Types.js';
+import { EventEmitter } from '../model/Events.js';
 import {
   DishPuzzlePiece,
   PieceGroup,
@@ -14,8 +14,9 @@ import {
   arePiecesDishAdjacent,
   arePiecesGeometricallyAligned,
   generateDishSlotEdges
-} from './DishPuzzleModel';
-import { GOLD_SAMPLE_DISH_MANIFEST } from '../data/DishManifest';
+} from './DishPuzzleModel.js';
+import { GOLD_SAMPLE_DISH_MANIFEST } from '../data/DishManifest.js';
+import { DishPieceSupplyScheduler } from './DishPieceSupplyScheduler.js';
 
 export interface MoveGroupResult {
   success: boolean;
@@ -37,6 +38,7 @@ export class DishPuzzleManager {
   private _instanceCounter: number = 1;
   private _pieceCounter: number = 1;
   private _groupCounter: number = 1;
+  private _scheduler = new DishPieceSupplyScheduler();
 
   constructor(columns: number = 8, rows: number = 12, events?: EventEmitter) {
     this.columns = columns;
@@ -76,12 +78,15 @@ export class DishPuzzleManager {
 
   /**
    * Initializes the Day 1 board layout containing pieces and partially connected groups
-   * from all 3 Gold Sample dishes (Breakfast, Salad, Ramen).
+   * from all 3 Gold Sample dishes (Breakfast, Salad, Ramen) spanning across rows 0 to 6
+   * (58.3% vertical span), with distinct identifiable partial groups.
+   * DOES NOT collapse to the bottom via premature global gravity.
    */
   initDay1Layout(): void {
     this._pieces.clear();
     this._groups.clear();
     this._instances.clear();
+    this._scheduler.cleanupInstances([]);
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.columns; c++) {
         this._gridCells[r][c] = null;
@@ -93,7 +98,7 @@ export class DishPuzzleManager {
     const salad = this.createDishInstance('dish_salad');
     const ramen = this.createDishInstance('dish_ramen');
 
-    // --- Salad (Target Dish for Day 1 - Full 9 pieces solvable in 4 natural drags) ---
+    // --- 1. Salad (Target Dish for Day 1 - Full 9 pieces solvable in 4 natural drags) ---
     // Group 1 (4 pieces, pre-connected 2x2 base): (0,0), (1,0), (0,1), (1,1) at board (0..1, 0..1)
     const s_0_0 = this.createPiece(salad.instanceId, 'dish_salad', 0, 0, { col: 0, row: 0 });
     const s_1_0 = this.createPiece(salad.instanceId, 'dish_salad', 1, 0, { col: 1, row: 0 });
@@ -101,9 +106,9 @@ export class DishPuzzleManager {
     const s_1_1 = this.createPiece(salad.instanceId, 'dish_salad', 1, 1, { col: 1, row: 1 });
     this.createGroup([s_0_0, s_1_0, s_0_1, s_1_1]);
 
-    // Group 2 (2 pieces, vertical duo): (2,0) and (2,1) at board (4,0) and (4,1)
-    const s_2_0 = this.createPiece(salad.instanceId, 'dish_salad', 2, 0, { col: 4, row: 0 });
-    const s_2_1 = this.createPiece(salad.instanceId, 'dish_salad', 2, 1, { col: 4, row: 1 });
+    // Group 2 (2 pieces, vertical duo): (2,0) and (2,1) at board (4,2) and (4,3)
+    const s_2_0 = this.createPiece(salad.instanceId, 'dish_salad', 2, 0, { col: 4, row: 2 });
+    const s_2_1 = this.createPiece(salad.instanceId, 'dish_salad', 2, 1, { col: 4, row: 3 });
     this.createGroup([s_2_0, s_2_1]);
 
     // Salad remaining loose pieces:
@@ -113,34 +118,60 @@ export class DishPuzzleManager {
     const s_1_2 = this.createPiece(salad.instanceId, 'dish_salad', 1, 2, { col: 5, row: 0 });
     this.createGroup([s_1_2]);
 
-    const s_2_2 = this.createPiece(salad.instanceId, 'dish_salad', 2, 2, { col: 6, row: 0 });
+    const s_2_2 = this.createPiece(salad.instanceId, 'dish_salad', 2, 2, { col: 6, row: 2 });
     this.createGroup([s_2_2]);
 
-    // --- Breakfast Pieces (Scattered obstacles & next opportunities) ---
-    // Group 3 (2 pieces): (0,2) and (1,2) at board (3,2) and (4,2)
-    const b_0_2 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 0, 2, { col: 3, row: 2 });
-    const b_1_2 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 1, 2, { col: 4, row: 2 });
+    // --- 2. Breakfast Pieces (Scattered mid/upper partial groups) ---
+    // Group 3 (2 pieces horizontal duo): (0,2) and (1,2) at board (3,4) and (4,4)
+    const b_0_2 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 0, 2, { col: 3, row: 4 });
+    const b_1_2 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 1, 2, { col: 4, row: 4 });
     this.createGroup([b_0_2, b_1_2]);
 
-    const b_0_1 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 0, 1, { col: 3, row: 1 });
+    const b_0_1 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 0, 1, { col: 3, row: 5 });
     this.createGroup([b_0_1]);
 
-    const b_1_1 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 1, 1, { col: 5, row: 2 });
+    const b_1_1 = this.createPiece(breakfast.instanceId, 'dish_breakfast', 1, 1, { col: 4, row: 5 });
     this.createGroup([b_1_1]);
 
-    // --- Ramen Pieces (Scattered obstacles & next opportunities) ---
-    // Group 4 (2 pieces): (1,0) and (2,0) at board (5,1) and (6,1)
-    const r_1_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 1, 0, { col: 5, row: 1 });
-    const r_2_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 2, 0, { col: 6, row: 1 });
+    // --- 3. Ramen Pieces (Scattered mid/upper partial groups reaching row 6) ---
+    // Group 4 (2 pieces horizontal duo): (1,0) and (2,0) at board (6,4) and (7,4)
+    const r_1_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 1, 0, { col: 6, row: 4 });
+    const r_2_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 2, 0, { col: 7, row: 4 });
     this.createGroup([r_1_0, r_2_0]);
 
-    const r_0_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 0, 0, { col: 7, row: 0 });
+    const r_0_0 = this.createPiece(ramen.instanceId, 'dish_ramen', 0, 0, { col: 7, row: 5 });
     this.createGroup([r_0_0]);
 
-    const r_1_1 = this.createPiece(ramen.instanceId, 'dish_ramen', 1, 1, { col: 7, row: 1 });
+    const r_1_1 = this.createPiece(ramen.instanceId, 'dish_ramen', 1, 1, { col: 6, row: 6 });
     this.createGroup([r_1_1]);
 
-    this.applyGravity();
+    // Stage 4.1: NO global gravity collapse on initialization.
+    // Preserves vertical span across rows 0 to 6 (58.3% coverage).
+  }
+
+  /**
+   * Ensures the board always maintains 3 active unfinished DishPuzzleInstances.
+   * On Day 1: maintains 'dish_salad', 'dish_breakfast', 'dish_ramen'.
+   */
+  maintainActiveDishPool(targetDishes: string[] = ['dish_salad', 'dish_breakfast', 'dish_ramen']): DishPuzzleInstance[] {
+    // Only maintain multi-dish pool if this manager is running a multi-dish session
+    if (this._instances.size < 2) {
+      return Array.from(this._instances.values()).filter(i => !i.isCompleted);
+    }
+
+    const activeInstances: DishPuzzleInstance[] = [];
+
+    for (const dishId of targetDishes) {
+      let inst = Array.from(this._instances.values()).find(
+        i => i.dishId === dishId && !i.isCompleted
+      );
+      if (!inst) {
+        inst = this.createDishInstance(dishId);
+      }
+      activeInstances.push(inst);
+    }
+
+    return activeInstances;
   }
 
   createDishInstance(dishId: string): DishPuzzleInstance {
@@ -218,6 +249,7 @@ export class DishPuzzleManager {
   /**
    * Attempts to move an entire PieceGroup so its anchor piece sits at targetAnchor.
    * If valid, relocates all member pieces rigid-body style, then triggers adjacency check.
+   * Does NOT trigger premature global gravity.
    */
   tryMoveGroup(groupId: string, targetCol: number, targetRow: number, referencePieceId?: string): MoveGroupResult {
     const group = this._groups.get(groupId);
@@ -256,7 +288,7 @@ export class DishPuzzleManager {
       }
     }
 
-    // 2. Set new positions
+    // 2. Set new grid cells and update piece coords
     for (const item of newCoords) {
       item.piece.boardCoord.col = item.col;
       item.piece.boardCoord.row = item.row;
@@ -265,9 +297,6 @@ export class DishPuzzleManager {
 
     // 3. Check for geometric adjacency snapping
     const mergeResult = this.checkAndMergeAdjacency(groupId);
-
-    // 4. Settle any pieces that vacated cells left floating via PieceGroup rigid gravity
-    this.applyGravity();
 
     return {
       success: true,
@@ -364,8 +393,8 @@ export class DishPuzzleManager {
   }
 
   /**
-   * Clears a completed 9-piece dish from the board, frees cells, settles gravity,
-   * and deterministically refills missing pieces to maintain playability.
+   * Clears a completed 9-piece dish from the board, frees cells, triggers Completion Reflow,
+   * emits DISH_SERVED, and maintains the 3-dish active pool.
    */
   clearCompletedGroup(groupId: string): void {
     const group = this._groups.get(groupId);
@@ -392,7 +421,7 @@ export class DishPuzzleManager {
       groupId
     });
 
-    // 1. Settle pieces above down using PieceGroup-based rigid gravity
+    // 1. Completion Reflow: apply rigid group gravity when a dish clears!
     this.applyGravity();
 
     // 2. Emit DISH_SERVED: marks serving transition (cleared from board -> ready for next order)
@@ -401,6 +430,9 @@ export class DishPuzzleManager {
       dishPuzzleInstanceId,
       groupId
     });
+
+    // 3. Maintain active pool of 3 dishes
+    this.maintainActiveDishPool();
   }
 
   /**
@@ -440,8 +472,6 @@ export class DishPuzzleManager {
     const s_2_2 = this.createPiece(saladInst.instanceId, 'dish_salad', 2, 2, { col: 6, row: col6Row });
     this.createGroup([s_2_2]);
 
-    this.applyGravity();
-
     // Emit typed DISH_PIECE_SPAWNED events for presentation layer
     for (const p of [s_0_0, s_1_0, s_0_1, s_1_1, s_2_0, s_2_1, s_0_2, s_1_2, s_2_2]) {
       this.events.emit('DISH_PIECE_SPAWNED', {
@@ -454,24 +484,19 @@ export class DishPuzzleManager {
 
   /**
    * Ensures there is an active, unfinished DishPuzzleInstance for the given dishId.
-   * If all instances of this dish are completed, creates a new instance with a fresh instanceId.
-   * Never resurrects or reuses completed instances.
    */
   ensureActiveDishInstance(dishId: string): DishPuzzleInstance {
-    const existing = Array.from(this._instances.values()).find(
+    let existing = Array.from(this._instances.values()).find(
       inst => inst.dishId === dishId && !inst.isCompleted
     );
-    if (existing) {
-      return existing;
+    if (!existing) {
+      existing = this.createDishInstance(dishId);
     }
-
-    const newInst = this.createDishInstance(dishId);
-    if (dishId === 'dish_salad') {
-      this.spawnDay1SaladLayout(newInst);
-    } else {
-      this.refillMissingPieces(9);
+    if (dishId === 'dish_salad' && existing.spawnedSlots.size === 0) {
+      this.spawnDay1SaladLayout(existing);
     }
-    return newInst;
+    this.maintainActiveDishPool();
+    return existing;
   }
 
   /**
@@ -530,71 +555,123 @@ export class DishPuzzleManager {
   }
 
   /**
-   * Deterministically refills missing pieces from active non-completed DishPuzzleInstances.
-   * Spawns pieces at top row (rows - 1) into available columns and settles them via rigid gravity.
-   * Guarantees zero orphan pieces.
+   * Spawns and settles a piece locally within a target column.
+   * Places the piece directly on top of the highest occupied row in targetCol.
+   * DOES NOT trigger global gravity that would collapse other columns/groups.
    */
-  refillMissingPieces(maxPieces: number = 3): DishPuzzlePiece[] {
-    const spawned: DishPuzzlePiece[] = [];
+  localSettlePiece(
+    instance: DishPuzzleInstance,
+    slotCol: number,
+    slotRow: number,
+    preferredCol?: number
+  ): DishPuzzlePiece | null {
+    let targetCol = preferredCol !== undefined && preferredCol >= 0 && preferredCol < this.columns ? preferredCol : -1;
+    if (targetCol !== -1 && this._gridCells[this.rows - 1][targetCol] !== null) {
+      targetCol = -1;
+    }
 
-    // Find active non-completed instances
-    const activeInstances = Array.from(this._instances.values()).filter(inst => !inst.isCompleted);
-    if (activeInstances.length === 0) return spawned;
-
-    for (const inst of activeInstances) {
-      if (spawned.length >= maxPieces) break;
-
-      // Find which slots (0..2, 0..2) have not yet been spawned for this instance
-      for (let r = 0; r < 3; r++) {
-        for (let c = 0; c < 3; c++) {
-          const slotKey = `${c}_${r}`;
-          if (!inst.spawnedSlots.has(slotKey)) {
-            // Find an available column at top row (rows - 1)
-            let targetCol = -1;
-            let minOccupancy = Infinity;
-            for (let col = 0; col < this.columns; col++) {
-              if (this._gridCells[this.rows - 1][col] === null) {
-                let occ = 0;
-                for (let row = 0; row < this.rows; row++) {
-                  if (this._gridCells[row][col] !== null) occ++;
-                }
-                if (occ < minOccupancy) {
-                  minOccupancy = occ;
-                  targetCol = col;
-                }
-              }
-            }
-
-            if (targetCol !== -1) {
-              const newPiece = this.createPiece(
-                inst.instanceId,
-                inst.dishId,
-                c,
-                r,
-                { col: targetCol, row: this.rows - 1 }
-              );
-              this.createGroup([newPiece]);
-              spawned.push(newPiece);
-
-              this.events.emit('DISH_PIECE_SPAWNED', {
-                piece: newPiece,
-                fromCoord: { col: targetCol, row: this.rows - 1 },
-                toCoord: newPiece.boardCoord
-              });
-
-              if (spawned.length >= maxPieces) break;
-            }
+    if (targetCol === -1) {
+      // Strictly prioritize columns 3..7 to keep columns 0..2 reserved for active dish assembly
+      const candidateCols = [3, 4, 5, 6, 7];
+      let minHeight = Infinity;
+      for (const c of candidateCols) {
+        if (this._gridCells[this.rows - 1][c] === null) {
+          let h = 0;
+          for (let r = 0; r < this.rows; r++) {
+            if (this._gridCells[r][c] !== null) h = r + 1;
+          }
+          // Avoid exceeding danger line (row 10)
+          if (h < 10 && h < minHeight) {
+            minHeight = h;
+            targetCol = c;
           }
         }
-        if (spawned.length >= maxPieces) break;
+      }
+      if (targetCol === -1) {
+        for (const c of candidateCols) {
+          if (this._gridCells[this.rows - 1][c] === null) {
+            targetCol = c;
+            break;
+          }
+        }
+      }
+      // If columns 3..7 are completely full, fallback to [2, 1, 0] as last resort
+      if (targetCol === -1) {
+        for (const c of [2, 1, 0]) {
+          if (this._gridCells[this.rows - 1][c] === null) {
+            targetCol = c;
+            break;
+          }
+        }
       }
     }
 
-    if (spawned.length > 0) {
-      this.applyGravity();
+    if (targetCol === -1) return null; // Board full
+
+    // Find lowest free row in targetCol
+    let settleRow = 0;
+    while (settleRow < this.rows && this._gridCells[settleRow][targetCol] !== null) {
+      settleRow++;
+    }
+    if (settleRow >= this.rows) return null;
+
+    const piece = this.createPiece(
+      instance.instanceId,
+      instance.dishId,
+      slotCol,
+      slotRow,
+      { col: targetCol, row: settleRow }
+    );
+    this.createGroup([piece]);
+
+    this.events.emit('DISH_PIECE_SPAWNED', {
+      piece,
+      fromCoord: { col: targetCol, row: this.rows - 1 },
+      toCoord: { col: targetCol, row: settleRow }
+    });
+
+    return piece;
+  }
+
+  /**
+   * Schedules and spawns pieces across active unfinished instances using soft priorities and starvation protection.
+   * Spawns using localSettlePiece, avoiding premature global collapse.
+   */
+  schedulePieceAcrossActiveDishes(
+    batchCount: number = 1,
+    currentOrderDishId?: string
+  ): DishPuzzlePiece[] {
+    this.maintainActiveDishPool();
+    const activeInstances = Array.from(this._instances.values()).filter(i => !i.isCompleted);
+    const spawned: DishPuzzlePiece[] = [];
+
+    for (let i = 0; i < batchCount; i++) {
+      const candidate = this._scheduler.selectNextCandidate(
+        activeInstances,
+        (id) => this.getMissingSlots(id),
+        currentOrderDishId
+      );
+      if (!candidate) break;
+
+      const piece = this.localSettlePiece(
+        candidate.instance,
+        candidate.slot.col,
+        candidate.slot.row
+      );
+      if (piece) {
+        spawned.push(piece);
+      }
     }
 
     return spawned;
+  }
+
+  /**
+   * Deterministically refills missing pieces from active non-completed DishPuzzleInstances
+   * via multi-dish scheduler.
+   */
+  refillMissingPieces(maxPieces: number = 3, currentOrderDishId?: string): DishPuzzlePiece[] {
+    return this.schedulePieceAcrossActiveDishes(maxPieces, currentOrderDishId);
   }
 
   /**
@@ -618,11 +695,11 @@ export class DishPuzzleManager {
    * Deterministically refills missing pieces across all active instances until completeness
    * (9/9 pieces spawned for each active instance) or until no more pieces can be placed.
    */
-  refillAllMissingPieces(): DishPuzzlePiece[] {
+  refillAllMissingPieces(currentOrderDishId?: string): DishPuzzlePiece[] {
     const allSpawned: DishPuzzlePiece[] = [];
     let batch: DishPuzzlePiece[];
     do {
-      batch = this.refillMissingPieces(3);
+      batch = this.schedulePieceAcrossActiveDishes(3, currentOrderDishId);
       allSpawned.push(...batch);
     } while (batch.length > 0);
     return allSpawned;
