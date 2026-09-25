@@ -175,7 +175,7 @@ export class BoardView extends Component {
     const centerY = ((ingDef.height - 1) * this._cellHeight) / 2 + (this._cellHeight * 0.5) + 12;
     titleNode.setPosition(new Vec3(centerX, centerY, 0));
     const titleLbl = titleNode.addComponent(Label);
-    titleLbl.string = `${ingDef.emoji || '🍱'} ${ingDef.name} (${target.placedSlotIds.length}/${ingDef.slots.length})`;
+    titleLbl.string = `${ingDef.name} (${target.placedSlotIds.length}/${ingDef.slots.length})`;
     titleLbl.fontSize = 13;
     titleLbl.lineHeight = 16;
     titleLbl.color = PastoralTheme.ccColors.inkMain;

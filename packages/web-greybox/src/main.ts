@@ -18,6 +18,7 @@ import { AudioDirector } from './audio/AudioDirector.js';
 import { WebStorageAdapter } from './storage/WebStorageAdapter.js';
 import { WebTelemetrySink } from './telemetry/WebTelemetrySink.js';
 import { PastoralTheme } from './theme/PastoralTheme.js';
+import { DishTextureManager } from './pipeline/DishTextureManager.js';
 
 class WebGameApp {
   private flow!: GameFlowManager;
@@ -39,6 +40,7 @@ class WebGameApp {
 
   constructor() {
     SaveSystem.setStorage(new WebStorageAdapter());
+    DishTextureManager.init();
     this.initFlow();
     this.initDOM();
     this.startRenderLoop();
@@ -332,7 +334,11 @@ class WebGameApp {
 
     if (order) {
       if (orderIdNum) orderIdNum.textContent = `${order.orderId}`;
-      if (orderIdDish) orderIdDish.textContent = `${order.emoji} ${order.dishName}`;
+      if (orderIdDish) orderIdDish.textContent = `${order.dishName}`;
+      const dishThumb = document.getElementById('receipt-dish-thumb') as HTMLImageElement;
+      if (dishThumb) {
+        dishThumb.src = DishTextureManager.DISH_MASTERS[order.recipeId] || '/assets/dishes/dish_salad_master.jpg';
+      }
       if (orderRevenue) orderRevenue.textContent = `¥${order.baseRevenue}`;
 
       if (checklist) {
@@ -356,7 +362,7 @@ class WebGameApp {
     if (nextHint && nextLabel) {
       if (session.dayConfig.dayNumber >= 7 && nextPreview.dishId) {
         nextHint.style.display = 'inline-flex';
-        nextLabel.textContent = `${nextPreview.emoji} ${nextPreview.dishName}`;
+        nextLabel.textContent = `${nextPreview.dishName}`;
       } else {
         nextHint.style.display = 'none';
       }
@@ -370,7 +376,7 @@ class WebGameApp {
     if (slot0) {
       if (stockEntries[0]) {
         const ing = DEFAULT_INGREDIENTS[stockEntries[0][0]];
-        slot0.textContent = ing?.emoji || '🍱';
+        slot0.textContent = ing?.name || '备用';
         slot0.className = 'tray-dish-slot occupied';
       } else {
         slot0.textContent = '空';
@@ -380,7 +386,7 @@ class WebGameApp {
     if (slot1) {
       if (stockEntries[1]) {
         const ing = DEFAULT_INGREDIENTS[stockEntries[1][0]];
-        slot1.textContent = ing?.emoji || '🍱';
+        slot1.textContent = ing?.name || '备用';
         slot1.className = 'tray-dish-slot occupied';
       } else {
         slot1.textContent = '空';
@@ -761,22 +767,27 @@ class WebGameApp {
         const pathCommands = PuzzleGeometry.generateSlotPathCommands(slotBounds, slot.edges);
 
         if (isPlaced) {
-          // Completed slot: Authentic ingredient color + delicate cardboard seam line
-          this.ctx.save();
-          this.ctx.fillStyle = baseColor;
-          this.drawBezierPath(pathCommands);
-          this.ctx.fill();
-
-          this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
-          this.ctx.lineWidth = 2;
-          this.ctx.stroke();
-
-          // Ingredient center icon
-          this.ctx.font = `${Math.round(cellSize * 0.38)}px sans-serif`;
-          this.ctx.textAlign = 'center';
-          this.ctx.textBaseline = 'middle';
-          this.ctx.fillText(def.emoji || '🍱', slotPos.x + cellSize / 2, slotPos.y + cellSize / 2);
-          this.ctx.restore();
+          // Completed slot: Authentic cut piece image texture from Master Dish Art!
+          const pieceImg = DishTextureManager.getPieceImage(target.ingredientId, slot.slotId);
+          if (pieceImg) {
+            const padScreen = cellSize * 0.28;
+            this.ctx.drawImage(
+              pieceImg,
+              slotPos.x - padScreen,
+              slotPos.y - padScreen,
+              cellSize + padScreen * 2,
+              cellSize + padScreen * 2
+            );
+          } else {
+            this.ctx.save();
+            this.ctx.fillStyle = baseColor;
+            this.drawBezierPath(pathCommands);
+            this.ctx.fill();
+            this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
+            this.ctx.lineWidth = 2;
+            this.ctx.stroke();
+            this.ctx.restore();
+          }
         } else {
           // Missing slot: Recessed socket (ZERO debug text!)
           this.ctx.save();
@@ -857,7 +868,7 @@ class WebGameApp {
       this.ctx.lineWidth = 2.5;
       this.ctx.stroke();
 
-      // Draw slots with fading seams
+      // Draw slots with fading seams using real cut piece textures
       const baseColor = def.color || PastoralTheme.colors.tomato;
       for (const slot of def.slots) {
         const slotCol = target.anchor.col + slot.relativeCol;
@@ -872,13 +883,29 @@ class WebGameApp {
         };
         const pathCommands = PuzzleGeometry.generateSlotPathCommands(slotBounds, slot.edges);
 
-        this.ctx.save();
-        this.ctx.fillStyle = baseColor;
-        this.drawBezierPath(pathCommands);
-        this.ctx.fill();
+        const pieceImg = DishTextureManager.getPieceImage(target.ingredientId, slot.slotId);
+        if (pieceImg) {
+          const padScreen = cellSize * 0.28;
+          this.ctx.drawImage(
+            pieceImg,
+            slotPos.x - padScreen,
+            slotPos.y - padScreen,
+            cellSize + padScreen * 2,
+            cellSize + padScreen * 2
+          );
+        } else {
+          this.ctx.save();
+          this.ctx.fillStyle = baseColor;
+          this.drawBezierPath(pathCommands);
+          this.ctx.fill();
+          this.ctx.restore();
+        }
 
+        // Fading seam highlight
+        this.ctx.save();
         this.ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0, 1 - progress * 1.6)})`;
         this.ctx.lineWidth = 2;
+        this.drawBezierPath(pathCommands);
         this.ctx.stroke();
         this.ctx.restore();
       }
@@ -893,11 +920,18 @@ class WebGameApp {
       this.roundRect(this.ctx, targetX + 2, targetY + 2, targetW - 4, targetH - 4, PastoralTheme.radii.plate);
       this.ctx.fill();
 
-      // Big completed food emoji
-      this.ctx.font = `${Math.round(Math.min(targetW, targetH) * 0.44)}px sans-serif`;
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(def.emoji || '🍱', targetX + targetW / 2, targetY + targetH / 2);
+      // Master Dish Art celebration image dissolves smoothly over the assembled pieces
+      const recipeId = session.orderSystem.currentOrder?.recipeId || 'salad';
+      const masterImg = DishTextureManager.getDishMasterImage(recipeId);
+      if (masterImg) {
+        this.ctx.save();
+        this.ctx.globalAlpha = Math.min(1, progress * 1.4);
+        this.ctx.beginPath();
+        this.roundRect(this.ctx, targetX + 4, targetY + 4, targetW - 8, targetH - 8, PastoralTheme.radii.plate);
+        this.ctx.clip();
+        this.ctx.drawImage(masterImg, targetX + 4, targetY + 4, targetW - 8, targetH - 8);
+        this.ctx.restore();
+      }
 
       // Steam puffs rising up
       this.drawSteamPuffs(targetX + targetW / 2, targetY, progress);
@@ -948,39 +982,43 @@ class WebGameApp {
       const edges = slotDef?.edges || { top: 'flat', right: 'flat', bottom: 'flat', left: 'flat' };
       const pathCommands = PuzzleGeometry.generateSlotPathCommands(pieceBounds, edges);
 
-      // Warm cardboard drop shadow
-      this.ctx.save();
-      this.ctx.shadowColor = PastoralTheme.shadows.piece;
-      this.ctx.shadowBlur = 6;
-      this.ctx.shadowOffsetY = 3;
+      // Render cut piece texture from Master Dish Art
+      const pieceImg = DishTextureManager.getPieceImage(piece.ingredientId, piece.slotId);
+      if (pieceImg) {
+        const padScreen = cellSize * 0.28;
+        this.ctx.save();
+        this.ctx.shadowColor = PastoralTheme.shadows.piece;
+        this.ctx.shadowBlur = 6;
+        this.ctx.shadowOffsetY = 3;
+        this.ctx.drawImage(
+          pieceImg,
+          drawX - padScreen,
+          drawY - padScreen,
+          cellSize + padScreen * 2,
+          cellSize + padScreen * 2
+        );
+        this.ctx.restore();
+      } else {
+        // Fallback procedural piece while texture is loading
+        this.ctx.save();
+        this.ctx.shadowColor = PastoralTheme.shadows.piece;
+        this.ctx.shadowBlur = 6;
+        this.ctx.shadowOffsetY = 3;
+        this.ctx.fillStyle = def.color || PastoralTheme.colors.tomato;
+        this.drawBezierPath(pathCommands);
+        this.ctx.fill();
+        this.ctx.restore();
 
-      // Piece Fill
-      this.ctx.fillStyle = def.color || PastoralTheme.colors.tomato;
-      this.drawBezierPath(pathCommands);
-      this.ctx.fill();
-      this.ctx.restore();
-
-      // Cardboard puzzle edge outline
-      this.ctx.save();
-      this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
-      this.ctx.lineWidth = 2.5;
-      this.drawBezierPath(pathCommands);
-      this.ctx.stroke();
-
-      // Inner subtle highlight stroke
-      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-      this.ctx.lineWidth = 1;
-      this.ctx.stroke();
-
-      // Delicious food emoji (no debug text badges!)
-      this.ctx.font = `${Math.round(cellSize * 0.42)}px sans-serif`;
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(def.emoji || '🍱', drawX + cellSize / 2, drawY + cellSize / 2);
-      this.ctx.restore();
+        this.ctx.save();
+        this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
+        this.ctx.lineWidth = 2.5;
+        this.drawBezierPath(pathCommands);
+        this.ctx.stroke();
+        this.ctx.restore();
+      }
     }
 
-    // 5. Target Header Pill Badges (Rendered over plate edge so always readable: "🍱 温泉蛋牛丼 (2/4)")
+    // 5. Target Header Pill Badges (Rendered over plate edge so always readable: "温泉蛋牛丼 (2/4)")
     for (const target of session.grid.getAllTargets()) {
       const def = session.ingredients[target.ingredientId];
       if (!def) continue;
@@ -989,7 +1027,7 @@ class WebGameApp {
       const targetY = originY - (target.anchor.row + def.height - 1) * cellSize;
       const targetW = def.width * cellSize;
 
-      const labelText = `${def.emoji || '🍱'} ${def.name} (${target.placedSlotIds.length}/${def.slots.length})`;
+      const labelText = `${def.name} (${target.placedSlotIds.length}/${def.slots.length})`;
       this.ctx.save();
       this.ctx.font = `bold ${Math.max(11, Math.round(cellSize * 0.23))}px "Hiragino Maru Gothic ProN", "Yu Gothic UI", sans-serif`;
       const textW = this.ctx.measureText(labelText).width;
@@ -1038,27 +1076,38 @@ class WebGameApp {
         const edges = slotDef?.edges || { top: 'flat', right: 'flat', bottom: 'flat', left: 'flat' };
         const pathCommands = PuzzleGeometry.generateSlotPathCommands(pieceBounds, edges);
 
-        this.ctx.save();
-        this.ctx.shadowColor = PastoralTheme.shadows.pieceLifted;
-        this.ctx.shadowBlur = 18;
-        this.ctx.shadowOffsetY = 10;
+        const pieceImg = DishTextureManager.getPieceImage(this.draggingPiece.ingredientId, this.draggingPiece.slotId);
+        if (pieceImg) {
+          const padScreen = dragSize * 0.28;
+          this.ctx.save();
+          this.ctx.shadowColor = PastoralTheme.shadows.pieceLifted;
+          this.ctx.shadowBlur = 18;
+          this.ctx.shadowOffsetY = 10;
+          this.ctx.drawImage(
+            pieceImg,
+            dragX - padScreen,
+            dragY - padScreen,
+            dragSize + padScreen * 2,
+            dragSize + padScreen * 2
+          );
+          this.ctx.restore();
+        } else {
+          this.ctx.save();
+          this.ctx.shadowColor = PastoralTheme.shadows.pieceLifted;
+          this.ctx.shadowBlur = 18;
+          this.ctx.shadowOffsetY = 10;
+          this.ctx.fillStyle = def.color || PastoralTheme.colors.tomato;
+          this.drawBezierPath(pathCommands);
+          this.ctx.fill();
+          this.ctx.restore();
 
-        this.ctx.fillStyle = def.color || PastoralTheme.colors.tomato;
-        this.drawBezierPath(pathCommands);
-        this.ctx.fill();
-        this.ctx.restore();
-
-        this.ctx.save();
-        this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
-        this.ctx.lineWidth = 3.5;
-        this.drawBezierPath(pathCommands);
-        this.ctx.stroke();
-
-        this.ctx.font = `${Math.round(dragSize * 0.44)}px sans-serif`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(def.emoji || '🍱', dragX + dragSize / 2, dragY + dragSize / 2);
-        this.ctx.restore();
+          this.ctx.save();
+          this.ctx.strokeStyle = PastoralTheme.colors.cardboard;
+          this.ctx.lineWidth = 3.5;
+          this.drawBezierPath(pathCommands);
+          this.ctx.stroke();
+          this.ctx.restore();
+        }
       }
     }
   }

@@ -1,0 +1,175 @@
+{
+  "dishId": "dish_breakfast",
+  "name": "春日早餐盘",
+  "cols": 3,
+  "rows": 3,
+  "pieceWidth": 533,
+  "pieceHeight": 533,
+  "cellWidth": 341.3333333333333,
+  "cellHeight": 341.3333333333333,
+  "padding": 96,
+  "pieces": [
+    {
+      "slotId": "slot_0_0",
+      "col": 0,
+      "row": 0,
+      "edges": {
+        "top": "tab",
+        "bottom": "flat",
+        "left": "flat",
+        "right": "tab"
+      },
+      "atlasRect": {
+        "x": 0,
+        "y": 1066,
+        "width": 533,
+        "height": 533
+      },
+      "imageFile": "piece_dish_breakfast_slot_0_0.png"
+    },
+    {
+      "slotId": "slot_1_0",
+      "col": 1,
+      "row": 0,
+      "edges": {
+        "top": "blank",
+        "bottom": "flat",
+        "left": "blank",
+        "right": "blank"
+      },
+      "atlasRect": {
+        "x": 533,
+        "y": 1066,
+        "width": 533,
+        "height": 533
+      },
+      "imageFile": "piece_dish_breakfast_slot_1_0.png"
+    },
+    {
+      "slotId": "slot_2_0",
+      "col": 2,
+      "row": 0,
+      "edges": {
+        "top": "tab",
+        "bottom": "flat",
+        "left": "tab",
+        "right": "flat"
+      },
+      "atlasRect": {
+        "x": 1066,
+        "y": 1066,
+        "width": 533,
+        "height": 533
+      },
+      "imageFile": "piece_dish_breakfast_slot_2_0.png"
+    },
+    {
+      "slotId": "slot_0_1",
+      "col": 0,
+      "row": 1,
+      "edges": {
+        "top": "tab",
+        "bottom": "blank",
+        "left": "flat",
+        "right": "blank"
+      },
+      "atlasRect": {
+        "x": 0,
+        "y": 533,
+        "width": 533,
+        "height": 533
+      },
+      "imageFile": "piece_dish_breakfast_slot_0_1.png"
+    },
+    {
+      "slotId": "slot_1_1",
+      "col": 1,
+      "row": 1,
+      "edges": {
+        "top": "blank",
+        "bottom": "tab",
+        "left": "tab",
+        "right": "tab"
+      },
+      "atlasRect": {
+        "x": 533,
+        "y": 533,
+        "width": 533,
+        "height": 533
+      },
+      "imageFile": "piece_dish_breakfast_slot_1_1.png"
+    },
+    {
+      "slotId": "slot_2_1",
+      "col": 2,
+      "row": 1,
+      "edges": {
+        "top": "tab",
+        "bottom": "blank",
+        "left": "blank",
+        "right": "flat"
+      },
+      "atlasRect": {
+        "x": 1066,
+        "y": 533,
+        "width": 533,
+        "height": 533
+      },
+      "imageFile": "piece_dish_breakfast_slot_2_1.png"
+    },
+    {
+      "slotId": "slot_0_2",
+      "col": 0,
+      "row": 2,
+      "edges": {
+        "top": "flat",
+        "bottom": "blank",
+        "left": "flat",
+        "right": "tab"
+      },
+      "atlasRect": {
+        "x": 0,
+        "y": 0,
+        "width": 533,
+        "height": 533
+      },
+      "imageFile": "piece_dish_breakfast_slot_0_2.png"
+    },
+    {
+      "slotId": "slot_1_2",
+      "col": 1,
+      "row": 2,
+      "edges": {
+        "top": "flat",
+        "bottom": "tab",
+        "left": "blank",
+        "right": "blank"
+      },
+      "atlasRect": {
+        "x": 533,
+        "y": 0,
+        "width": 533,
+        "height": 533
+      },
+      "imageFile": "piece_dish_breakfast_slot_1_2.png"
+    },
+    {
+      "slotId": "slot_2_2",
+      "col": 2,
+      "row": 2,
+      "edges": {
+        "top": "flat",
+        "bottom": "blank",
+        "left": "tab",
+        "right": "flat"
+      },
+      "atlasRect": {
+        "x": 1066,
+        "y": 0,
+        "width": 533,
+        "height": 533
+      },
+      "imageFile": "piece_dish_breakfast_slot_2_2.png"
+    }
+  ]
+}

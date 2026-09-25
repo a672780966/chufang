@@ -91,4 +91,52 @@ describe('Stage 3 Procedural Puzzle Pipeline & Asset Registry', () => {
       assert.ok(r.requirements.length >= 2, `Recipe ${recipeId} must have at least 2 ingredients`);
     }
   });
+
+  it('should deliver valid raster master dish art, cut pieces, and texture atlases for Gold Sample dishes', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const dishes = ['dish_breakfast', 'dish_salad', 'dish_ramen'];
+    const webAssetDir = path.resolve(process.cwd(), 'packages/web-greybox/public/assets/dishes');
+    const cocosAssetDir = path.resolve(process.cwd(), 'cocos-app/assets/textures/dishes');
+
+    assert.ok(fs.existsSync(webAssetDir), 'Web greybox dishes asset dir must exist');
+    assert.ok(fs.existsSync(cocosAssetDir), 'Cocos textures dishes asset dir must exist');
+
+    for (const dishId of dishes) {
+      // 1. Verify Master Dish Art image exists and has non-zero size
+      const masterWeb = path.join(webAssetDir, `${dishId}_master.jpg`);
+      const masterCocos = path.join(cocosAssetDir, `${dishId}_master.jpg`);
+      assert.ok(fs.existsSync(masterWeb), `Master image for ${dishId} must exist in web assets`);
+      assert.ok(fs.existsSync(masterCocos), `Master image for ${dishId} must exist in cocos assets`);
+      assert.ok(fs.statSync(masterWeb).size > 10000, `Master image for ${dishId} must be a valid high-res image`);
+
+      // 2. Verify all 9 cut pieces exist
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          const pieceFile = `piece_${dishId}_slot_${c}_${r}.png`;
+          const pieceWeb = path.join(webAssetDir, pieceFile);
+          const pieceCocos = path.join(cocosAssetDir, pieceFile);
+          assert.ok(fs.existsSync(pieceWeb), `Cut piece ${pieceFile} must exist in web assets`);
+          assert.ok(fs.existsSync(pieceCocos), `Cut piece ${pieceFile} must exist in cocos assets`);
+          assert.ok(fs.statSync(pieceWeb).size > 1000, `Cut piece ${pieceFile} must have non-trivial PNG content`);
+        }
+      }
+
+      // 3. Verify Atlas PNG and JSON
+      const atlasPng = path.join(webAssetDir, `atlas_${dishId}.png`);
+      const atlasJson = path.join(webAssetDir, `atlas_${dishId}.json`);
+      assert.ok(fs.existsSync(atlasPng), `Atlas PNG for ${dishId} must exist`);
+      assert.ok(fs.existsSync(atlasJson), `Atlas JSON for ${dishId} must exist`);
+
+      const atlasData = JSON.parse(fs.readFileSync(atlasJson, 'utf-8'));
+      assert.strictEqual(atlasData.dishId, dishId);
+      assert.strictEqual(atlasData.pieces.length, 9, 'Atlas must contain 9 pieces for 3x3 dish');
+      for (const piece of atlasData.pieces) {
+        assert.ok(piece.slotId);
+        assert.ok(piece.atlasRect && piece.atlasRect.width > 0 && piece.atlasRect.height > 0);
+        assert.ok(piece.edges);
+      }
+    }
+  });
 });

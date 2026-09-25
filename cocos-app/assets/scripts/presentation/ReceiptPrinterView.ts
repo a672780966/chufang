@@ -193,7 +193,7 @@ export class ReceiptPrinterView extends Component {
     if (!order) return;
 
     if (this.dishNameLabel) {
-      this.dishNameLabel.string = `${order.orderId} ${order.emoji} ${order.dishName}`;
+      this.dishNameLabel.string = `${order.orderId} ${order.dishName}`;
     }
     if (this.revenueLabel) {
       this.revenueLabel.string = `+¥${order.baseRevenue}`;
@@ -202,8 +202,8 @@ export class ReceiptPrinterView extends Component {
       const lines = order.items.map(item => {
         const def = DEFAULT_INGREDIENTS[item.ingredientId];
         const isDone = item.reserved >= item.needed;
-        const name = def ? `${def.emoji}${def.name}` : item.ingredientId;
-        return `${isDone ? '✅' : '⬜'} ${name}(${item.reserved}/${item.needed})`;
+        const name = def ? def.name : item.ingredientId;
+        return `${isDone ? '●' : '○'} ${name}(${item.reserved}/${item.needed})`;
       });
       this.checklistLabel.string = lines.join('   ');
     }
@@ -212,7 +212,7 @@ export class ReceiptPrinterView extends Component {
       if (this._session.dayConfig.dayNumber >= 7) {
         const preview = this._session.orderSystem.getNextOrderPreview();
         if (preview && preview.dishName) {
-          this.nextOrderLabel.string = `下一单预告: ${preview.emoji || '🍽️'} ${preview.dishName}`;
+          this.nextOrderLabel.string = `下一单预告: ${preview.dishName}`;
         } else {
           this.nextOrderLabel.string = '营业目标达成在即！';
         }
