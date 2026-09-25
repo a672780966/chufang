@@ -21,12 +21,18 @@ import { WebStorageAdapter } from './storage/WebStorageAdapter.js';
 import { WebTelemetrySink } from './telemetry/WebTelemetrySink.js';
 import { PastoralTheme } from './theme/PastoralTheme.js';
 import { DishTextureManager } from './pipeline/DishTextureManager.js';
+import { GameFeelProfile } from './theme/GameFeelProfile.js';
+import { PresentationStateMachine } from './pipeline/PresentationStateMachine.js';
 
 class WebGameApp {
   private flow!: GameFlowManager;
   private canvas!: HTMLCanvasElement;
   private ctx!: CanvasRenderingContext2D;
   private currentTutorialCue: DragTutorialCue | null = null;
+
+  // Presentation State Machine & Physical Animation
+  private stateMachine = new PresentationStateMachine();
+  private recentSnapFlares = new Map<string, { startTime: number; minX: number; minY: number; maxX: number; maxY: number }>();
 
   // DishPuzzle Domain & Touch State
   private dishPuzzleManager!: DishPuzzleManager;
@@ -187,11 +193,34 @@ class WebGameApp {
       this.flow.restartCurrentDay();
     });
 
+    // Prep Tray Slots: tap to serve buffered dish to matching order
+    const slot0 = document.getElementById('tray-slot-0');
+    const slot1 = document.getElementById('tray-slot-1');
+    slot0?.addEventListener('click', () => this.handleTrayServe(0));
+    slot1?.addEventListener('click', () => this.handleTrayServe(1));
+
     // Pointer Interaction on Board Canvas
     this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
     this.canvas.addEventListener('pointermove', (e) => this.onPointerMove(e));
     this.canvas.addEventListener('pointerup', (e) => this.onPointerUp(e));
     this.canvas.addEventListener('pointercancel', (e) => this.onPointerUp(e));
+  }
+
+  private handleTrayServe(slotIdx: number): void {
+    const session = this.flow?.session;
+    if (!session) return;
+    const buffer = session.orderSystem.preparedDishBuffer;
+    const dishId = buffer[slotIdx];
+    if (!dishId) return;
+
+    const currentOrder = session.orderSystem.currentOrder;
+    const neededDishId = currentOrder?.dishId || (currentOrder?.recipeId.startsWith('dish_') ? currentOrder.recipeId : `dish_${currentOrder?.recipeId}`);
+    if (dishId === neededDishId) {
+      AudioDirector.playPrepDishServe();
+      session.orderSystem.handleCompletedDish(dishId);
+      this.triggerRevenueFlyer('+¥70');
+      this.updateHUD();
+    }
   }
 
   private resizeCanvas(): void {
@@ -271,6 +300,8 @@ class WebGameApp {
     this.draggingGroup = null;
     this.wobblePieces.clear();
     this.completedDishAnims.clear();
+    this.recentSnapFlares.clear();
+    this.stateMachine.reset();
     this.resizeCanvas();
 
     const session = this.flow.startDay(dayNumber);
@@ -284,23 +315,8 @@ class WebGameApp {
     }, 250);
 
     // Bind session audio & visual cues
-    session.events.on('PIECE_PLACED', () => AudioDirector.playSnapPiece());
+    session.events.on('PIECE_PLACED', () => AudioDirector.playPieceSnap());
     session.events.on('ORDER_COMPLETED', () => {
-      AudioDirector.playOrderComplete();
-      AudioDirector.playRevenueGain();
-
-      const paper = document.getElementById('receipt-paper');
-      if (paper) {
-        paper.style.transition = 'transform 0.15s ease-out, opacity 0.15s ease-out';
-        paper.style.transform = 'translateY(-10px) scale(0.98)';
-        paper.style.opacity = '0.7';
-        setTimeout(() => {
-          paper.style.transform = 'translateY(0) scale(1)';
-          paper.style.opacity = '1';
-          AudioDirector.playReceiptPrint();
-        }, 150);
-      }
-
       this.updateHUD();
     });
     session.events.on('REVENUE_CHANGED', () => {
@@ -357,7 +373,6 @@ class WebGameApp {
     }
 
     if (checklist) {
-      // Day 1 HUD: No explicit (2/9) or (4/9) badges. Visual puzzle state conveys completion.
       checklist.innerHTML = '';
       if (manifest?.category) {
         const catBadge = document.createElement('div');
@@ -396,7 +411,7 @@ class WebGameApp {
         slot0.textContent = dManifest?.name || buffer[0];
         slot0.className = 'tray-dish-slot occupied';
       } else {
-        slot0.textContent = '空';
+        slot0.innerHTML = '<span class="tray-slot-empty">🍽</span>';
         slot0.className = 'tray-dish-slot';
       }
     }
@@ -406,7 +421,7 @@ class WebGameApp {
         slot1.textContent = dManifest?.name || buffer[1];
         slot1.className = 'tray-dish-slot occupied';
       } else {
-        slot1.textContent = '空';
+        slot1.innerHTML = '<span class="tray-slot-empty">🍽</span>';
         slot1.className = 'tray-dish-slot';
       }
     }
@@ -440,7 +455,6 @@ class WebGameApp {
       return;
     }
 
-    // Position indicator over candidate loose piece
     const screenPos = this.gridToScreen(cue.fromCoord);
     const cellSize = this.getCellSize();
     indicator.style.display = 'block';
@@ -450,10 +464,20 @@ class WebGameApp {
 
   private showDayCompleteModal(record: any): void {
     const modal = document.getElementById('modal-victory') as HTMLElement;
+    const dayTitle = document.getElementById('victory-day-title');
+    const totalRev = document.getElementById('victory-total-revenue');
+    const totalOrders = document.getElementById('victory-total-orders');
+    const completion = document.getElementById('victory-dish-completion');
     const summary = document.getElementById('victory-summary');
+
+    if (dayTitle) dayTitle.textContent = `DAY ${String(record.dayNumber).padStart(2, '0')}`;
+    if (totalRev) totalRev.textContent = `¥${record.revenueAchieved}`;
+    if (totalOrders) totalOrders.textContent = `${record.ordersCompleted} 单`;
+    if (completion) completion.textContent = '100% 达成';
     if (summary) {
-      summary.innerHTML = `<strong>DAY ${record.dayNumber} 完成！</strong><br>营业额: ¥${record.revenueAchieved} / ¥${record.businessGoal}<br>完成订单: ${record.ordersCompleted} 单 | 连续出餐最高 ×${record.maxCascadeStreak}`;
+      summary.innerHTML = `DAY ${String(record.dayNumber).padStart(2, '0')} 营业结束<br>营业额: ¥${record.revenueAchieved} / ¥${record.businessGoal} | 料理准时送出！`;
     }
+
     modal.style.display = 'flex';
   }
 
@@ -474,7 +498,6 @@ class WebGameApp {
     const availH = Math.max(100, (rect.height > 0 ? rect.height : 600) - padding * 2);
     const cellSize = Math.min(availW / cols, availH / rows);
     const originX = ((rect.width > 0 ? rect.width : 400) - cols * cellSize) / 2;
-    // Vertically center board inside wrapper: row 0 is bottom, row rows-1 is top
     const originY = ((rect.height > 0 ? rect.height : 600) + rows * cellSize) / 2 - cellSize;
     return { originX, originY, cellSize };
   }
@@ -499,7 +522,6 @@ class WebGameApp {
 
   /**
    * Directly translates PuzzleGeometry Bezier commands into Canvas 2D path commands.
-   * Runs natively at 60 FPS with zero async image latency.
    */
   private drawBezierPath(commands: BezierCommand[]): void {
     this.ctx.beginPath();
@@ -530,10 +552,9 @@ class WebGameApp {
     ctx.closePath();
   }
 
-
   // --- Touch & Pointer Handling ---
   private onPointerDown(e: PointerEvent): void {
-    if (this.flow.isInputLocked || !this.dishPuzzleManager) return;
+    if (this.flow.isInputLocked || this.stateMachine.isInputLocked() || !this.dishPuzzleManager) return;
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -541,7 +562,6 @@ class WebGameApp {
     const { cellSize } = this.getBoardOrigin();
     const allPieces = this.dishPuzzleManager.getAllPieces();
 
-    // Check hit on any piece: exact bounding box first, then distance
     let hitPiece: DishPuzzlePiece | null = null;
     for (const piece of allPieces) {
       const sp = this.gridToScreen(piece.boardCoord);
@@ -579,7 +599,8 @@ class WebGameApp {
           }
         };
         this.dragPointerPos = { x, y };
-        AudioDirector.playPickPiece();
+        this.stateMachine.transitionTo('DRAGGING');
+        AudioDirector.playPiecePick();
         try { this.canvas.setPointerCapture(e.pointerId); } catch {}
       }
     }
@@ -594,11 +615,13 @@ class WebGameApp {
   private onPointerUp(e: PointerEvent): void {
     if (!this.draggingGroup || !this.dishPuzzleManager) {
       this.draggingGroup = null;
+      if (this.stateMachine.getState() === 'DRAGGING') {
+        this.stateMachine.transitionTo('IDLE');
+      }
       return;
     }
 
     const group = this.draggingGroup;
-    // Calculate drop cell from grabPiece center position
     const grabCenterX = this.dragPointerPos.x - group.grabOffset.x;
     const grabCenterY = this.dragPointerPos.y - group.grabOffset.y;
     const targetCoord = this.screenToGrid(grabCenterX, grabCenterY);
@@ -611,11 +634,11 @@ class WebGameApp {
     );
 
     if (moveResult.success) {
-      if (moveResult.merged) {
-        AudioDirector.playSnapPiece();
-      }
       if (moveResult.completedDish) {
-        // 550ms completion celebration with all 9 pieces of completed dish
+        // Climax Final Ceremony & Serve Transition
+        AudioDirector.playFinalSnap();
+        this.stateMachine.transitionTo('FINAL_CEREMONY');
+
         const finalGroup = this.dishPuzzleManager.getGroup(group.groupId);
         const finalPieces = finalGroup
           ? finalGroup.pieceIds.map(id => this.dishPuzzleManager.getPiece(id)!).filter(Boolean)
@@ -627,9 +650,33 @@ class WebGameApp {
           pieces: finalPieces,
           groupId: group.groupId
         });
+      } else if (moveResult.merged) {
+        // Normal piece snap with radiant seam flare
+        AudioDirector.playPieceSnap();
+        this.stateMachine.transitionTo('IDLE');
+
+        const finalGroup = this.dishPuzzleManager.getGroup(group.groupId);
+        const pieces = finalGroup ? finalGroup.pieceIds.map(id => this.dishPuzzleManager.getPiece(id)!).filter(Boolean) : group.pieces;
+        const { cellSize } = this.getBoardOrigin();
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of pieces) {
+          const sp = this.gridToScreen(p.boardCoord);
+          minX = Math.min(minX, sp.x);
+          minY = Math.min(minY, sp.y);
+          maxX = Math.max(maxX, sp.x + cellSize);
+          maxY = Math.max(maxY, sp.y + cellSize);
+        }
+        this.recentSnapFlares.set(group.groupId, {
+          startTime: performance.now(),
+          minX, minY, maxX, maxY
+        });
+      } else {
+        AudioDirector.playPieceDrop();
+        this.stateMachine.transitionTo('IDLE');
       }
     } else {
       AudioDirector.playWrongDrop();
+      this.stateMachine.transitionTo('IDLE');
       this.wobblePieces.set(group.grabPiece.pieceInstanceId, {
         startTime: performance.now(),
         startX: this.dragPointerPos.x,
@@ -640,6 +687,108 @@ class WebGameApp {
     this.draggingGroup = null;
     try { this.canvas.releasePointerCapture(e.pointerId); } catch {}
     this.updateHUD();
+  }
+
+  // --- Serve Arrival & Settlement Flow ---
+  private triggerDishServeArrival(dishId: string, groupId: string): void {
+    AudioDirector.playDishServe();
+
+    // 1. Camera micro-pulse
+    const container = document.getElementById('game-container');
+    if (container) {
+      container.classList.remove('camera-pulse');
+      void container.offsetWidth;
+      container.classList.add('camera-pulse');
+      setTimeout(() => container.classList.remove('camera-pulse'), 300);
+    }
+
+    // 2. Receipt thumbnail pop
+    const thumb = document.getElementById('receipt-dish-thumb');
+    if (thumb) {
+      thumb.style.transform = `scale(${GameFeelProfile.serve.receiptThumbnailPopScale})`;
+      setTimeout(() => { thumb.style.transform = 'scale(1)'; }, 180);
+    }
+
+    // 3. Receipt cinnabar seal stamp
+    const stamp = document.getElementById('receipt-seal-stamp');
+    if (stamp) {
+      stamp.classList.add('stamped');
+      AudioDirector.playReceiptStamp();
+    }
+
+    // 4. Price pop
+    const priceTag = document.getElementById('order-revenue');
+    if (priceTag) {
+      priceTag.style.transform = 'scale(1.18) rotate(-2deg)';
+      setTimeout(() => { priceTag.style.transform = 'scale(1) rotate(-2deg)'; }, 180);
+    }
+
+    // 5. Clear completed group from board (triggers DISH_SERVED -> order fulfillment)
+    this.dishPuzzleManager.clearCompletedGroup(groupId);
+
+    // 6. Flying revenue particle
+    const manifest = GOLD_SAMPLE_DISH_MANIFEST[dishId];
+    const revenueAmount = manifest?.orderRevenue || 70;
+    this.triggerRevenueFlyer(`+¥${revenueAmount}`);
+
+    // 7. Tear paper and roll next receipt
+    setTimeout(() => {
+      AudioDirector.playReceiptTear();
+      const paper = document.getElementById('receipt-paper');
+      if (paper) {
+        paper.style.transition = 'transform 0.16s ease-out, opacity 0.16s ease-out';
+        paper.style.transform = 'translateY(-12px)';
+        paper.style.opacity = '0.7';
+        setTimeout(() => {
+          if (stamp) stamp.classList.remove('stamped');
+          paper.style.transform = 'translateY(0)';
+          paper.style.opacity = '1';
+          AudioDirector.playReceiptPrint();
+        }, 160);
+      }
+      this.stateMachine.transitionTo('IDLE');
+    }, 220);
+
+    this.updateHUD();
+  }
+
+  private triggerRevenueFlyer(amountText: string): void {
+    const particle = document.getElementById('revenue-flying-particle');
+    const receiptPrice = document.getElementById('order-revenue');
+    const revenueCounter = document.getElementById('revenue-display');
+    if (!particle || !receiptPrice || !revenueCounter) return;
+
+    const startRect = receiptPrice.getBoundingClientRect();
+    const endRect = revenueCounter.getBoundingClientRect();
+    const containerRect = document.getElementById('game-container')?.getBoundingClientRect() || { left: 0, top: 0 };
+
+    const startX = startRect.left - containerRect.left;
+    const startY = startRect.top - containerRect.top;
+    const endX = endRect.left - containerRect.left + endRect.width / 2;
+    const endY = endRect.top - containerRect.top + endRect.height / 2;
+
+    particle.textContent = amountText;
+    particle.style.transition = 'none';
+    particle.style.left = `${startX}px`;
+    particle.style.top = `${startY}px`;
+    particle.style.opacity = '1';
+    particle.style.transform = 'scale(1.2)';
+
+    void particle.offsetWidth;
+
+    particle.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease, left 0.4s ease, top 0.4s ease';
+    particle.style.left = `${endX}px`;
+    particle.style.top = `${endY}px`;
+    particle.style.transform = 'scale(0.8)';
+    particle.style.opacity = '0';
+
+    setTimeout(() => {
+      AudioDirector.playRevenueGain();
+      if (revenueCounter) {
+        revenueCounter.style.transform = 'scale(1.15)';
+        setTimeout(() => { revenueCounter.style.transform = 'scale(1)'; }, 150);
+      }
+    }, 380);
   }
 
   // --- Render Loop (60 FPS) ---
@@ -653,7 +802,7 @@ class WebGameApp {
 
   private drawSteamPuffs(centerX: number, topY: number, progress: number): void {
     this.ctx.save();
-    const alpha = Math.max(0, (1 - progress) * 0.8);
+    const alpha = Math.max(0, (1 - progress) * 0.85);
     this.ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
     this.ctx.lineWidth = 2.5;
     this.ctx.lineCap = 'round';
@@ -698,18 +847,15 @@ class WebGameApp {
     const boardY = originY - (rows - 1) * cellSize;
 
     this.ctx.save();
-    // Warm Linen mat fill
     this.ctx.fillStyle = PastoralTheme.colors.bgLinen;
     this.roundRect(this.ctx, boardX, boardY, boardW, boardH, PastoralTheme.radii.board);
     this.ctx.fill();
 
-    // Soft wood trim border
     this.ctx.strokeStyle = PastoralTheme.colors.woodLight;
     this.ctx.lineWidth = 4;
     this.roundRect(this.ctx, boardX, boardY, boardW, boardH, PastoralTheme.radii.board);
     this.ctx.stroke();
 
-    // Delicate inner border line
     this.ctx.strokeStyle = 'rgba(139, 99, 71, 0.12)';
     this.ctx.lineWidth = 1.5;
     this.roundRect(this.ctx, boardX + 3, boardY + 3, boardW - 6, boardH - 6, PastoralTheme.radii.board - 2);
@@ -726,7 +872,7 @@ class WebGameApp {
       }
     }
 
-    // Top subtle divider line
+    // Top danger zone divider
     const dangerZonePos = this.gridToScreen({ col: 0, row: 10 });
     this.ctx.setLineDash([8, 6]);
     this.ctx.strokeStyle = 'rgba(180, 160, 140, 0.35)';
@@ -740,17 +886,15 @@ class WebGameApp {
 
     if (!this.dishPuzzleManager) return;
 
-    // 2. Dish Completion Celebrations (550ms: glow, seam fading, smooth master art fade in)
+    // 2. Dish Completion Ceremonies & Serve Flight (680ms total)
     for (const [instanceId, anim] of this.completedDishAnims.entries()) {
       const elapsed = now - anim.startTime;
-      if (elapsed > 550) {
-        this.dishPuzzleManager.clearCompletedGroup(anim.groupId);
+      if (elapsed >= GameFeelProfile.serve.totalAnimDurationMs) {
+        this.triggerDishServeArrival(anim.dishId, anim.groupId);
         this.completedDishAnims.delete(instanceId);
-        this.updateHUD();
         continue;
       }
 
-      const progress = elapsed / 550;
       const masterImg = DishTextureManager.getDishMasterImage(anim.dishId);
       if (masterImg && anim.pieces.length > 0) {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -764,40 +908,155 @@ class WebGameApp {
 
         const dishW = maxX - minX;
         const dishH = maxY - minY;
-        const bounce = 1.0 + 0.05 * Math.sin(progress * Math.PI);
+        const centerX = minX + dishW / 2;
+        const centerY = minY + dishH / 2;
 
-        this.ctx.save();
-        this.ctx.translate(minX + dishW / 2, minY + dishH / 2);
-        this.ctx.scale(bounce, bounce);
-        this.ctx.translate(-(minX + dishW / 2), -(minY + dishH / 2));
+        // Phase 3 & 4: Master Dish Reveal, Shimmer, and Title Pill (260 ~ 480ms)
+        if (elapsed >= 260 && elapsed < 480) {
+          const tReveal = (elapsed - 260) / 220;
 
-        // Golden celebratory plate glow
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        this.ctx.shadowColor = 'rgba(232, 184, 92, 0.6)';
-        this.ctx.shadowBlur = 20;
-        this.roundRect(this.ctx, minX + 2, minY + 2, dishW - 4, dishH - 4, PastoralTheme.radii.plate);
-        this.ctx.fill();
+          // Subtle board dim
+          this.ctx.save();
+          this.ctx.fillStyle = `rgba(31, 26, 23, ${GameFeelProfile.finalCeremony.boardDimAlpha * Math.min(1, tReveal * 1.5)})`;
+          this.roundRect(this.ctx, boardX, boardY, boardW, boardH, PastoralTheme.radii.board);
+          this.ctx.fill();
+          this.ctx.restore();
 
-        // Dissolve into full master dish illustration
-        this.ctx.globalAlpha = Math.min(1, progress * 1.5);
-        this.ctx.beginPath();
-        this.roundRect(this.ctx, minX + 4, minY + 4, dishW - 8, dishH - 8, PastoralTheme.radii.plate);
-        this.ctx.clip();
-        this.ctx.drawImage(masterImg, minX + 4, minY + 4, dishW - 8, dishH - 8);
-        this.ctx.restore();
+          // Golden plate glow
+          this.ctx.save();
+          this.ctx.fillStyle = '#FFFFFF';
+          this.ctx.shadowColor = GameFeelProfile.finalCeremony.plateGlowColor;
+          this.ctx.shadowBlur = GameFeelProfile.finalCeremony.plateGlowBlur;
+          this.roundRect(this.ctx, minX + 2, minY + 2, dishW - 4, dishH - 4, PastoralTheme.radii.plate);
+          this.ctx.fill();
 
-        // Rising steam puffs
-        this.drawSteamPuffs(minX + dishW / 2, minY, progress);
+          // Master artwork
+          this.ctx.globalAlpha = Math.min(1, tReveal * 1.6);
+          this.ctx.beginPath();
+          this.roundRect(this.ctx, minX + 4, minY + 4, dishW - 8, dishH - 8, PastoralTheme.radii.plate);
+          this.ctx.clip();
+          this.ctx.drawImage(masterImg, minX + 4, minY + 4, dishW - 8, dishH - 8);
+
+          // Diagonal shimmer sheen sweep
+          const shimmerT = (elapsed - 260) / 220;
+          const shimmerX = minX - dishW + (dishW * 3) * shimmerT;
+          const shimmerGrad = this.ctx.createLinearGradient(shimmerX, minY, shimmerX + 50, minY + dishH);
+          shimmerGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+          shimmerGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.45)');
+          shimmerGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          this.ctx.fillStyle = shimmerGrad;
+          this.ctx.fillRect(minX, minY, dishW, dishH);
+          this.ctx.restore();
+
+          // Rising steam puffs
+          this.drawSteamPuffs(centerX, minY, tReveal);
+        }
+
+        // Phase 4: Floating Title Pill (320 ~ 580ms)
+        if (elapsed >= 320 && elapsed < 580) {
+          const tTitle = (elapsed - 320) / 260;
+          const titleAlpha = Math.sin(tTitle * Math.PI);
+          const titleY = minY - 14 + GameFeelProfile.finalCeremony.titleLiftPx * tTitle;
+          const manifest = GOLD_SAMPLE_DISH_MANIFEST[anim.dishId];
+          const dishTitleText = `${manifest?.name || '料理'} 完成！`;
+
+          this.ctx.save();
+          this.ctx.globalAlpha = titleAlpha;
+          this.ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+          const textMetrics = this.ctx.measureText(dishTitleText);
+          const pillW = textMetrics.width + 24;
+          const pillH = 28;
+          const pillX = centerX - pillW / 2;
+
+          this.ctx.fillStyle = 'rgba(255, 253, 247, 0.95)';
+          this.ctx.shadowColor = 'rgba(65, 45, 30, 0.25)';
+          this.ctx.shadowBlur = 8;
+          this.ctx.shadowOffsetY = 3;
+          this.roundRect(this.ctx, pillX, titleY - pillH / 2, pillW, pillH, 14);
+          this.ctx.fill();
+
+          this.ctx.strokeStyle = PastoralTheme.colors.woodLight;
+          this.ctx.lineWidth = 1.5;
+          this.roundRect(this.ctx, pillX, titleY - pillH / 2, pillW, pillH, 14);
+          this.ctx.stroke();
+
+          this.ctx.fillStyle = PastoralTheme.colors.inkMain;
+          this.ctx.textAlign = 'center';
+          this.ctx.textBaseline = 'middle';
+          this.ctx.fillText(dishTitleText, centerX, titleY);
+          this.ctx.restore();
+        }
+
+        // Phase 5: Serve Bezier Flight (480 ~ 680ms)
+        if (elapsed >= 480) {
+          const tFlight = Math.min(1, (elapsed - 480) / 200);
+          const thumb = document.getElementById('receipt-dish-thumb');
+          const canvasRect = this.canvas.getBoundingClientRect();
+          const thumbRect = thumb ? thumb.getBoundingClientRect() : { left: canvasRect.left + 50, top: canvasRect.top - 50, width: 38, height: 38 };
+          const targetX = thumbRect.left - canvasRect.left + thumbRect.width / 2;
+          const targetY = thumbRect.top - canvasRect.top + thumbRect.height / 2;
+
+          const cpX = (centerX + targetX) / 2 - 25;
+          const cpY = Math.min(centerY, targetY) - 45;
+
+          const curX = (1 - tFlight) * (1 - tFlight) * centerX + 2 * (1 - tFlight) * tFlight * cpX + tFlight * tFlight * targetX;
+          const curY = (1 - tFlight) * (1 - tFlight) * (centerY - 14) + 2 * (1 - tFlight) * tFlight * cpY + tFlight * tFlight * targetY;
+
+          const curScale = 1.0 + (GameFeelProfile.serve.flightScaleEnd - 1.0) * tFlight;
+          const curW = dishW * curScale;
+          const curH = dishH * curScale;
+          const curTilt = Math.sin(tFlight * Math.PI) * (GameFeelProfile.serve.flightMaxTiltDeg * Math.PI / 180);
+
+          this.ctx.save();
+          this.ctx.translate(curX, curY);
+          this.ctx.rotate(curTilt);
+          this.ctx.translate(-curX, -curY);
+
+          this.ctx.save();
+          this.ctx.shadowColor = 'rgba(55, 38, 22, 0.3)';
+          this.ctx.shadowBlur = 16 * (1 - tFlight * 0.5);
+          this.ctx.shadowOffsetY = 8 * (1 - tFlight * 0.5);
+          this.ctx.fillStyle = '#FFFFFF';
+          this.roundRect(this.ctx, curX - curW / 2, curY - curH / 2, curW, curH, PastoralTheme.radii.plate * curScale);
+          this.ctx.fill();
+          this.ctx.restore();
+
+          this.ctx.save();
+          this.roundRect(this.ctx, curX - curW / 2 + 2, curY - curH / 2 + 2, curW - 4, curH - 4, PastoralTheme.radii.plate * curScale);
+          this.ctx.clip();
+          this.ctx.drawImage(masterImg, curX - curW / 2 + 2, curY - curH / 2 + 2, curW - 4, curH - 4);
+          this.ctx.restore();
+
+          this.ctx.restore();
+        }
       }
     }
 
-    // 3. Resting Piece Groups
+    // 3. Normal Snap Seam Flares (110ms)
+    for (const [groupId, flare] of this.recentSnapFlares.entries()) {
+      const elapsed = now - flare.startTime;
+      if (elapsed > GameFeelProfile.snap.seamGlowDurationMs) {
+        this.recentSnapFlares.delete(groupId);
+        continue;
+      }
+      const alpha = 1.0 - elapsed / GameFeelProfile.snap.seamGlowDurationMs;
+      this.ctx.save();
+      this.ctx.strokeStyle = `rgba(255, 245, 192, ${alpha * 0.95})`;
+      this.ctx.lineWidth = GameFeelProfile.snap.seamGlowWidth;
+      this.ctx.shadowColor = 'rgba(255, 245, 192, 0.8)';
+      this.ctx.shadowBlur = 10;
+      this.roundRect(this.ctx, flare.minX - 2, flare.minY - 2, (flare.maxX - flare.minX) + 4, (flare.maxY - flare.minY) + 4, 8);
+      this.ctx.stroke();
+      this.ctx.restore();
+    }
+
+    // 4. Resting Piece Groups (3-Layer Physical Cardboard: Contact Shadow -> Cardboard Bevel -> Top Artwork)
     const groups = this.dishPuzzleManager.getAllGroups();
     const padScreen = cellSize * 0.28;
 
     for (const group of groups) {
       if (this.draggingGroup && this.draggingGroup.groupId === group.groupId) {
-        continue; // Draw dragging group on topmost layer
+        continue; // Handled in dragging layer
       }
 
       for (const pieceId of group.pieceIds) {
@@ -807,7 +1066,6 @@ class WebGameApp {
         let drawX = 0;
         let drawY = 0;
 
-        // Smooth wobble animation if dropped wrong
         const wobble = this.wobblePieces.get(piece.pieceInstanceId);
         const targetScreen = this.gridToScreen(piece.boardCoord);
         if (wobble) {
@@ -827,12 +1085,38 @@ class WebGameApp {
           drawY = targetScreen.y;
         }
 
+        const bounds = { x: drawX, y: drawY, width: cellSize, height: cellSize };
+        const pathCmds = PuzzleGeometry.generateSlotPathCommands(bounds, piece.edges);
+
+        // Layer 1: Physical Contact Shadow
+        this.ctx.save();
+        this.ctx.shadowColor = GameFeelProfile.piece.restingShadowColor;
+        this.ctx.shadowOffsetY = GameFeelProfile.piece.restingShadowOffsetY;
+        this.ctx.shadowBlur = GameFeelProfile.piece.restingShadowBlur;
+        this.ctx.fillStyle = 'rgba(55, 38, 22, 0.08)';
+        this.drawBezierPath(pathCmds);
+        this.ctx.fill();
+        this.ctx.restore();
+
+        // Layer 2: Warm Cardboard Side Edge / Bevel
+        this.ctx.save();
+        const bevelGrad = this.ctx.createLinearGradient(drawX, drawY, drawX + cellSize, drawY + cellSize);
+        bevelGrad.addColorStop(0, GameFeelProfile.piece.edgeColorTop);
+        bevelGrad.addColorStop(0.5, GameFeelProfile.piece.edgeColorSide);
+        bevelGrad.addColorStop(1, GameFeelProfile.piece.edgeColorBottom);
+        this.ctx.strokeStyle = bevelGrad;
+        this.ctx.lineWidth = GameFeelProfile.piece.strokeWidth;
+        this.ctx.lineJoin = 'round';
+        this.drawBezierPath(pathCmds);
+        this.ctx.stroke();
+        this.ctx.restore();
+
+        // Layer 3: Top Artwork with subtle bevel inner highlight
         const pieceImg = DishTextureManager.getPieceImage(piece.dishId, piece.slotId);
         if (pieceImg) {
           this.ctx.save();
-          this.ctx.shadowColor = PastoralTheme.shadows.piece;
-          this.ctx.shadowBlur = 6;
-          this.ctx.shadowOffsetY = 3;
+          this.drawBezierPath(pathCmds);
+          this.ctx.clip();
           this.ctx.drawImage(
             pieceImg,
             drawX - padScreen,
@@ -840,32 +1124,73 @@ class WebGameApp {
             cellSize + padScreen * 2,
             cellSize + padScreen * 2
           );
+          const rimGrad = this.ctx.createLinearGradient(drawX, drawY, drawX + cellSize * 0.4, drawY + cellSize * 0.4);
+          rimGrad.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+          rimGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          this.ctx.fillStyle = rimGrad;
+          this.ctx.fillRect(drawX, drawY, cellSize * 0.4, cellSize * 0.4);
           this.ctx.restore();
         }
       }
     }
 
-    // 4. Dragging Group (Topmost Layer: elevated shadow, rigid multi-piece translation)
+    // 5. Dragging Group (Topmost Layer: elevated shadow, visual lift -8px, subtle 1.2° tilt)
     if (this.draggingGroup) {
       const group = this.draggingGroup;
       const refPiece = group.grabPiece;
-      const dragScale = 1.06;
+      const isSingle = group.pieces.length === 1;
+      const dragScale = isSingle ? GameFeelProfile.piece.singleLiftScale : GameFeelProfile.piece.groupLiftScale;
       const dragCellSize = cellSize * dragScale;
       const dragPad = dragCellSize * 0.28;
+      const visualLiftY = GameFeelProfile.piece.visualLiftY;
+
+      const refCenterX = this.dragPointerPos.x - group.grabOffset.x;
+      const refCenterY = this.dragPointerPos.y - group.grabOffset.y + visualLiftY;
+
+      this.ctx.save();
+      this.ctx.translate(refCenterX, refCenterY);
+      this.ctx.rotate((GameFeelProfile.piece.fingerTiltDeg * Math.PI) / 180);
+      this.ctx.translate(-refCenterX, -refCenterY);
 
       for (const piece of group.pieces) {
         const relCol = piece.dishCol - refPiece.dishCol;
         const relRow = piece.dishRow - refPiece.dishRow;
 
-        const pieceDrawX = (this.dragPointerPos.x - group.grabOffset.x) + relCol * dragCellSize - dragCellSize / 2;
-        const pieceDrawY = (this.dragPointerPos.y - group.grabOffset.y) - relRow * dragCellSize - dragCellSize / 2 - 10;
+        const pieceDrawX = refCenterX + relCol * dragCellSize - dragCellSize / 2;
+        const pieceDrawY = refCenterY - relRow * dragCellSize - dragCellSize / 2;
 
+        const bounds = { x: pieceDrawX, y: pieceDrawY, width: dragCellSize, height: dragCellSize };
+        const pathCmds = PuzzleGeometry.generateSlotPathCommands(bounds, piece.edges);
+
+        // Layer 1: Lifted Contact Shadow
+        this.ctx.save();
+        this.ctx.shadowColor = GameFeelProfile.piece.liftedShadowColor;
+        this.ctx.shadowOffsetY = GameFeelProfile.piece.liftedShadowOffsetY;
+        this.ctx.shadowBlur = GameFeelProfile.piece.liftedShadowBlur;
+        this.ctx.fillStyle = 'rgba(55, 38, 22, 0.18)';
+        this.drawBezierPath(pathCmds);
+        this.ctx.fill();
+        this.ctx.restore();
+
+        // Layer 2: Cardboard Bevel
+        this.ctx.save();
+        const bevelGrad = this.ctx.createLinearGradient(pieceDrawX, pieceDrawY, pieceDrawX + dragCellSize, pieceDrawY + dragCellSize);
+        bevelGrad.addColorStop(0, GameFeelProfile.piece.edgeColorTop);
+        bevelGrad.addColorStop(0.5, GameFeelProfile.piece.edgeColorSide);
+        bevelGrad.addColorStop(1, GameFeelProfile.piece.edgeColorBottom);
+        this.ctx.strokeStyle = bevelGrad;
+        this.ctx.lineWidth = GameFeelProfile.piece.strokeWidth * dragScale;
+        this.ctx.lineJoin = 'round';
+        this.drawBezierPath(pathCmds);
+        this.ctx.stroke();
+        this.ctx.restore();
+
+        // Layer 3: Top Artwork
         const pieceImg = DishTextureManager.getPieceImage(piece.dishId, piece.slotId);
         if (pieceImg) {
           this.ctx.save();
-          this.ctx.shadowColor = PastoralTheme.shadows.pieceLifted;
-          this.ctx.shadowBlur = 18;
-          this.ctx.shadowOffsetY = 10;
+          this.drawBezierPath(pathCmds);
+          this.ctx.clip();
           this.ctx.drawImage(
             pieceImg,
             pieceDrawX - dragPad,
@@ -873,9 +1198,15 @@ class WebGameApp {
             dragCellSize + dragPad * 2,
             dragCellSize + dragPad * 2
           );
+          const rimGrad = this.ctx.createLinearGradient(pieceDrawX, pieceDrawY, pieceDrawX + dragCellSize * 0.4, pieceDrawY + dragCellSize * 0.4);
+          rimGrad.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+          rimGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          this.ctx.fillStyle = rimGrad;
+          this.ctx.fillRect(pieceDrawX, pieceDrawY, dragCellSize * 0.4, dragCellSize * 0.4);
           this.ctx.restore();
         }
       }
+      this.ctx.restore();
     }
   }
 }

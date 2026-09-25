@@ -684,6 +684,162 @@
       background: #B3AAA0;
       box-shadow: none;
     }
+
+    /* ==========================================================================
+       Stage 4: Game Feel & Presentation Enhancements
+       ========================================================================== */
+    .receipt-seal-stamp {
+      position: absolute;
+      top: 6px;
+      right: 68px;
+      width: 48px;
+      height: 48px;
+      border: 2px solid rgba(192, 72, 56, 0.92);
+      color: rgba(192, 72, 56, 0.92);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 15px;
+      letter-spacing: 2px;
+      transform: rotate(-12deg) scale(0);
+      pointer-events: none;
+      transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+      opacity: 0;
+      box-shadow: inset 0 0 0 1px rgba(192, 72, 56, 0.92);
+      text-shadow: 0 0 1px rgba(192, 72, 56, 0.5);
+      z-index: 12;
+      background: rgba(255, 253, 247, 0.7);
+    }
+    .receipt-seal-stamp.stamped {
+      opacity: 1;
+      transform: rotate(-8deg) scale(1);
+    }
+
+    .revenue-flying-particle {
+      position: absolute;
+      font-size: 17px;
+      font-weight: 900;
+      color: #E8B85C;
+      text-shadow: 0 1px 4px rgba(65, 45, 30, 0.35);
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease;
+    }
+
+    .camera-pulse {
+      animation: camera-micro-pulse 0.28s ease-out;
+    }
+    @keyframes camera-micro-pulse {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.008); }
+      100% { transform: scale(1); }
+    }
+
+    /* Daily Ledger Journal Modal */
+    .ledger-journal-page {
+      background: #FFFDF8 url('data:image/svg+xml;utf8,<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="19.5" x2="20" y2="19.5" stroke="%23F0E6D8" stroke-width="1"/></svg>') !important;
+      border: 2px solid var(--wood-light) !important;
+      box-shadow: 0 12px 36px rgba(55, 38, 22, 0.25), inset 0 0 0 1px #FFFFFF !important;
+      max-width: 360px !important;
+    }
+    .ledger-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .ledger-title-pill {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--wood-deep);
+      background: #F4EDE2;
+      padding: 3px 10px;
+      border-radius: 12px;
+      border: 1px solid #E8DCB8;
+    }
+    .ledger-seal-stamp {
+      border: 2px solid #C04838;
+      color: #C04838;
+      padding: 2px 7px;
+      font-size: 12px;
+      font-weight: 900;
+      border-radius: 4px;
+      transform: rotate(5deg);
+      letter-spacing: 1px;
+      box-shadow: inset 0 0 0 1px #C04838;
+    }
+    .ledger-day-title {
+      font-size: 26px;
+      font-weight: 900;
+      color: var(--wood-deep);
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+    .ledger-metrics-table {
+      background: #FAF6EF;
+      border-radius: 14px;
+      border: 1px dashed #D8CBB8;
+      padding: 12px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: left;
+    }
+    .ledger-metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--ink-secondary);
+    }
+    .ledger-metric-value {
+      font-weight: 800;
+      color: var(--ink-main);
+    }
+    .ledger-metric-value.gold {
+      color: #D97706;
+      font-size: 17px;
+    }
+    .ledger-flavor-text {
+      font-size: 12px !important;
+      color: var(--ink-secondary) !important;
+      font-style: italic;
+      margin-bottom: 16px !important;
+      line-height: 1.5 !important;
+    }
+
+    .tray-dish-slot {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #FAF6F0;
+      border: 1.5px dashed #D5CBB9;
+      box-shadow: inset 0 1px 3px rgba(70,55,40,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      color: #B5A896;
+      position: relative;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+      cursor: pointer;
+    }
+    .tray-dish-slot.occupied {
+      border-style: solid;
+      border-color: var(--sage-main);
+      background: #FFFFFF;
+      box-shadow: 0 2px 6px rgba(108,133,94,0.25);
+      font-size: 18px;
+    }
+    .tray-slot-empty {
+      font-size: 14px;
+      opacity: 0.45;
+    }
   </style>
 </head>
 <body>
@@ -743,6 +899,7 @@
       <!-- B. Hanging Thermal Receipt Paper -->
       <div id="receipt-section">
         <div id="receipt-paper">
+          <div id="receipt-seal-stamp" class="receipt-seal-stamp">完 成</div>
           <div class="receipt-header-row">
             <div style="display: flex; align-items: center; gap: 8px;">
               <img id="receipt-dish-thumb" src="/assets/dishes/dish_salad_master.jpg" alt="Dish" style="width: 38px; height: 38px; border-radius: 8px; object-fit: cover; border: 1.5px solid var(--wood-light); box-shadow: 0 2px 4px rgba(70,55,40,0.15);" />
@@ -767,6 +924,9 @@
         </div>
       </div>
 
+      <!-- Flying Revenue Particle -->
+      <div id="revenue-flying-particle" class="revenue-flying-particle">+¥70</div>
+
       <div id="danger-banner">⚠️ 厨房忙碌中，请尽快拼合出餐腾出台面~</div>
       <div id="cascade-banner">⚡ 连续出餐！今日厨房好忙~</div>
 
@@ -782,8 +942,12 @@
       <div id="bottom-bar">
         <div class="serving-tray" id="inventory-tray">
           <span class="tray-label">今日备餐:</span>
-          <div class="tray-dish-slot" id="tray-slot-0">空</div>
-          <div class="tray-dish-slot" id="tray-slot-1">空</div>
+          <div class="tray-dish-slot" id="tray-slot-0" title="备餐盘 1">
+            <span class="tray-slot-empty">🍽</span>
+          </div>
+          <div class="tray-dish-slot" id="tray-slot-1" title="备餐盘 2">
+            <span class="tray-slot-empty">🍽</span>
+          </div>
         </div>
         <div class="aux-btn-group">
           <button class="btn-wood-circle" id="btn-audio" title="音乐音效">🔊</button>
@@ -795,17 +959,35 @@
     <!-- ======================================================================
          Modals
          ====================================================================== -->
-    <!-- Victory Modal: 今天辛苦啦 (Day Clear) -->
+    <!-- Victory Modal: 今天辛苦啦 (Day Clear Daily Ledger Journal) -->
     <div class="modal-overlay" id="modal-victory">
-      <div class="modal-card-paper">
-        <h2>🍵 今天辛苦啦</h2>
-        <p id="victory-summary">
+      <div class="modal-card-paper ledger-journal-page">
+        <div class="ledger-header">
+          <div class="ledger-title-pill">📖 今日营业日报</div>
+          <div class="ledger-seal-stamp">大繁盛</div>
+        </div>
+        <div class="ledger-day-title" id="victory-day-title">DAY 01</div>
+        <div class="ledger-metrics-table">
+          <div class="ledger-metric-row">
+            <span class="ledger-metric-label">今日营业总额</span>
+            <span class="ledger-metric-value gold" id="victory-total-revenue">¥210</span>
+          </div>
+          <div class="ledger-metric-row">
+            <span class="ledger-metric-label">料理完成单数</span>
+            <span class="ledger-metric-value" id="victory-total-orders">3 单</span>
+          </div>
+          <div class="ledger-metric-row">
+            <span class="ledger-metric-label">手账完成度</span>
+            <span class="ledger-metric-value" id="victory-dish-completion">100% 达成</span>
+          </div>
+        </div>
+        <p id="victory-summary" class="ledger-flavor-text">
           DAY 01 营业结束<br>
           营业额达标，料理准时送出！
         </p>
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <button class="btn-wood-main" id="btn-next-day">明天继续营业 ➔</button>
-          <button class="btn-paper-secondary" id="btn-victory-menu" style="width: 100%;">返回小铺大厅</button>
+          <button class="btn-paper-secondary" id="btn-victory-menu" style="width: 100%;">合上手账 (返回大厅)</button>
         </div>
       </div>
     </div>
