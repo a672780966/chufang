@@ -24,7 +24,6 @@ import { DishTextureManager } from './pipeline/DishTextureManager.js';
 import { GameFeelProfile } from './theme/GameFeelProfile.js';
 import { PresentationStateMachine } from './pipeline/PresentationStateMachine.js';
 import { CatActorPlayer } from './actor/CatActorPlayer.js';
-import { PrinterActorPlayer } from './actor/PrinterActorPlayer.js';
 
 class WebGameApp {
   private flow!: GameFlowManager;
@@ -32,10 +31,10 @@ class WebGameApp {
   private ctx!: CanvasRenderingContext2D;
   private currentTutorialCue: DragTutorialCue | null = null;
 
-  // Cat & Printer Ambient Actors
+  // Cat Ambient Actor
   public catActor!: CatActorPlayer;
-  public printerActor!: PrinterActorPlayer;
   private catReturnIdleTimer: number | null = null;
+  private lastCatLayout = { left: -1, top: -1, size: -1 };
 
   // Presentation State Machine & Physical Animation
   private stateMachine = new PresentationStateMachine();
@@ -215,12 +214,19 @@ class WebGameApp {
     // Mount Runtime Cat & Printer Actors
     const catSlot = document.getElementById('cat-actor-slot');
     if (catSlot) {
-      this.catActor = new CatActorPlayer(catSlot, { renderMode: 'spritesheet' });
+      this.catActor = new CatActorPlayer(catSlot, { renderMode: 'spritesheet', cropSquare: true });
     }
-    const printerSlot = document.getElementById('printer-actor-slot');
-    if (printerSlot) {
-      this.printerActor = new PrinterActorPlayer(printerSlot);
-    }
+    const catMount = document.getElementById('cat-actor-mount');
+    catMount?.addEventListener('click', () => {
+      if (this.catActor && this.catActor.getState() === 'IDLE') {
+        const action = Math.random() > 0.5 ? 'COOK_CHOP' : 'COOK_STIR';
+        this.catActor.onEvent(action);
+        if (this.catReturnIdleTimer) clearTimeout(this.catReturnIdleTimer);
+        this.catReturnIdleTimer = window.setTimeout(() => {
+          this.catActor?.onEvent('ORDER_WAITING');
+        }, 1200);
+      }
+    });
   }
 
   private handleTrayServe(slotIdx: number): void {
@@ -254,6 +260,8 @@ class WebGameApp {
       this.ctx.resetTransform();
       this.ctx.scale(dpr, dpr);
     }
+    const { originX, originY, cellSize } = this.getBoardOrigin();
+    this.updateCatActorLayout(originX, originY, cellSize);
   }
 
   private handlePhaseTransition(phase: string, _prev: string): void {
@@ -267,7 +275,6 @@ class WebGameApp {
       gameView.classList.add('view-hidden');
       this.renderMenuDayGrid();
       this.catActor?.onEvent('ORDER_WAITING');
-      this.printerActor?.playState('IDLE');
     } else {
       menuView.classList.add('view-hidden');
       gameView.classList.remove('view-hidden');
@@ -335,11 +342,9 @@ class WebGameApp {
 
     // Bind session audio & actor visual cues
     this.catActor?.onEvent('ORDER_WAITING');
-    this.printerActor?.printNewOrder();
 
     session.events.on('PIECE_PLACED', () => AudioDirector.playPieceSnap());
     session.events.on('ORDER_CREATED', () => {
-      this.printerActor?.printNewOrder();
       this.updateHUD();
     });
     session.events.on('ORDER_COMPLETED', () => {
@@ -529,6 +534,29 @@ class WebGameApp {
     const originX = ((rect.width > 0 ? rect.width : 400) - cols * cellSize) / 2;
     const originY = ((rect.height > 0 ? rect.height : 600) + rows * cellSize) / 2 - cellSize;
     return { originX, originY, cellSize };
+  }
+
+  private updateCatActorLayout(originX: number, originY: number, cellSize: number): void {
+    const mount = document.getElementById('cat-actor-mount');
+    if (!mount) return;
+    if (cellSize <= 0) return;
+
+    // Cat Actor visual size ≈ 3x3 dish (columns 5..7, rows 0..2)
+    const left = Math.round(originX + 5 * cellSize);
+    const top = Math.round(originY - 2 * cellSize);
+    const size = Math.round(3 * cellSize);
+
+    if (
+      this.lastCatLayout.left !== left ||
+      this.lastCatLayout.top !== top ||
+      this.lastCatLayout.size !== size
+    ) {
+      this.lastCatLayout = { left, top, size };
+      mount.style.left = `${left}px`;
+      mount.style.top = `${top}px`;
+      mount.style.width = `${size}px`;
+      mount.style.height = `${size}px`;
+    }
   }
 
   private getCellSize(): number {
@@ -896,6 +924,7 @@ class WebGameApp {
     if (!session || this.flow.phase === 'MAIN_MENU') return;
 
     const { originX, originY, cellSize } = this.getBoardOrigin();
+    this.updateCatActorLayout(originX, originY, cellSize);
     const cols = session.grid.columns;
     const rows = session.grid.rows;
     const now = performance.now();
@@ -921,10 +950,11 @@ class WebGameApp {
     this.roundRect(this.ctx, boardX + 3, boardY + 3, boardW - 6, boardH - 6, PastoralTheme.radii.board - 2);
     this.ctx.stroke();
 
-    // Subtle tactile dot guides at cell centers (NO rigid grid boxes)
+    // Subtle tactile dot guides at cell centers (NO rigid grid boxes, skipping reserved cells)
     this.ctx.fillStyle = 'rgba(180, 160, 140, 0.22)';
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
+        if (this.dishPuzzleManager?.isCellReserved(c, r)) continue;
         const pt = this.gridToScreen({ col: c, row: r });
         this.ctx.beginPath();
         this.ctx.arc(pt.x + cellSize / 2, pt.y + cellSize / 2, 2, 0, Math.PI * 2);

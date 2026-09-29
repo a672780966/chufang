@@ -77,6 +77,14 @@ export class DishPuzzleManager {
   }
 
   /**
+   * Cat Actor 3x3 visual reserved region at bottom-right corner (columns 5..7, rows 0..2).
+   * Non-gameplay board mask: no pieces spawn here, and groups cannot move into here.
+   */
+  isCellReserved(col: number, row: number): boolean {
+    return col >= this.columns - 3 && row < 3;
+  }
+
+  /**
    * Initializes the Day 1 board layout containing pieces and partially connected groups
    * from all 3 Gold Sample dishes (Breakfast, Salad, Ramen) spanning across rows 0 to 6
    * (58.3% vertical span), with distinct identifiable partial groups.
@@ -111,14 +119,14 @@ export class DishPuzzleManager {
     const s_2_1 = this.createPiece(salad.instanceId, 'dish_salad', 2, 1, { col: 4, row: 3 });
     this.createGroup([s_2_0, s_2_1]);
 
-    // Salad remaining loose pieces:
+    // Salad remaining loose pieces (placed at row 3, cleanly above the 3x3 Cat reserved region at bottom-right):
     const s_0_2 = this.createPiece(salad.instanceId, 'dish_salad', 0, 2, { col: 3, row: 0 });
     this.createGroup([s_0_2]);
 
-    const s_1_2 = this.createPiece(salad.instanceId, 'dish_salad', 1, 2, { col: 5, row: 0 });
+    const s_1_2 = this.createPiece(salad.instanceId, 'dish_salad', 1, 2, { col: 5, row: 3 });
     this.createGroup([s_1_2]);
 
-    const s_2_2 = this.createPiece(salad.instanceId, 'dish_salad', 2, 2, { col: 6, row: 2 });
+    const s_2_2 = this.createPiece(salad.instanceId, 'dish_salad', 2, 2, { col: 6, row: 3 });
     this.createGroup([s_2_2]);
 
     // --- 2. Breakfast Pieces (Scattered mid/upper partial groups) ---
@@ -271,6 +279,10 @@ export class DishPuzzleManager {
 
       if (c < 0 || c >= this.columns || r < 0 || r >= this.rows) {
         return { success: false, merged: false, reason: 'OUT_OF_BOUNDS' };
+      }
+
+      if (this.isCellReserved(c, r)) {
+        return { success: false, merged: false, reason: 'CELL_RESERVED' };
       }
 
       const occupantId = this._gridCells[r][c];
@@ -460,15 +472,15 @@ export class DishPuzzleManager {
     const s_0_2 = this.createPiece(saladInst.instanceId, 'dish_salad', 0, 2, { col: 3, row: col3Row });
     this.createGroup([s_0_2]);
 
-    // 4. Loose piece (1,2) in col 5
+    // 4. Loose piece (1,2) in col 5 (above the 3x3 Cat reserved region)
     let col5Row = 0;
-    while (col5Row < this.rows && this._gridCells[col5Row][5] !== null) col5Row++;
+    while (col5Row < this.rows && (this.isCellReserved(5, col5Row) || this._gridCells[col5Row][5] !== null)) col5Row++;
     const s_1_2 = this.createPiece(saladInst.instanceId, 'dish_salad', 1, 2, { col: 5, row: col5Row });
     this.createGroup([s_1_2]);
 
-    // 5. Loose piece (2,2) in col 6
+    // 5. Loose piece (2,2) in col 6 (above the 3x3 Cat reserved region)
     let col6Row = 0;
-    while (col6Row < this.rows && this._gridCells[col6Row][6] !== null) col6Row++;
+    while (col6Row < this.rows && (this.isCellReserved(6, col6Row) || this._gridCells[col6Row][6] !== null)) col6Row++;
     const s_2_2 = this.createPiece(saladInst.instanceId, 'dish_salad', 2, 2, { col: 6, row: col6Row });
     this.createGroup([s_2_2]);
 
@@ -521,6 +533,10 @@ export class DishPuzzleManager {
         for (const p of pieces) {
           const belowRow = p.boardCoord.row - 1;
           if (belowRow < 0) {
+            canDropOneRow = false;
+            break;
+          }
+          if (this.isCellReserved(p.boardCoord.col, belowRow)) {
             canDropOneRow = false;
             break;
           }
@@ -608,9 +624,12 @@ export class DishPuzzleManager {
 
     if (targetCol === -1) return null; // Board full
 
-    // Find lowest free row in targetCol
+    // Find lowest free row in targetCol (skipping reserved cells)
     let settleRow = 0;
-    while (settleRow < this.rows && this._gridCells[settleRow][targetCol] !== null) {
+    while (
+      settleRow < this.rows &&
+      (this.isCellReserved(targetCol, settleRow) || this._gridCells[settleRow][targetCol] !== null)
+    ) {
       settleRow++;
     }
     if (settleRow >= this.rows) return null;

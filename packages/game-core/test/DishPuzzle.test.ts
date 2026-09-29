@@ -580,4 +580,31 @@ describe('DishPuzzle Domain Model & Adjacency Engine', () => {
       'Ramen must receive pieces due to starvation protection even when currentOrder is breakfast'
     );
   });
+
+  it('should enforce 3x3 bottom-right Cat reserved region (mask) rejecting piece moves and preventing gravity entry', () => {
+    const manager = new DishPuzzleManager(8, 12);
+    // Verify mask coordinates: cols 5..7, rows 0..2 are reserved
+    for (let c = 0; c < 8; c++) {
+      for (let r = 0; r < 12; r++) {
+        const expected = c >= 5 && r < 3;
+        assert.strictEqual(manager.isCellReserved(c, r), expected, `isCellReserved(${c}, ${r}) should be ${expected}`);
+      }
+    }
+
+    // Try moving a piece into the reserved region (e.g. col 5, row 0)
+    const inst = manager.createDishInstance('dish_breakfast');
+    const p = manager.createPiece(inst.instanceId, 'dish_breakfast', 0, 0, { col: 5, row: 3 });
+    const g = manager.createGroup([p]);
+
+    // Move to (5, 2) which is inside reserved region
+    const moveRes = manager.tryMoveGroup(g.groupId, 5, 2);
+    assert.strictEqual(moveRes.success, false);
+    assert.strictEqual(moveRes.reason, 'CELL_RESERVED');
+    assert.strictEqual(p.boardCoord.row, 3, 'Piece must not move into reserved cell');
+
+    // Verify gravity stops piece above row 2 in columns 5..7
+    manager.applyGravity();
+    assert.strictEqual(p.boardCoord.row, 3, 'Gravity must settle piece on row 3 above reserved region');
+  });
 });
+

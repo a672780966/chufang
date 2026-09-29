@@ -34,6 +34,9 @@ export interface CatActorPlayerOptions {
   renderMode?: 'spritesheet' | 'webp';
   basePath?: string;
   onStateChange?: (state: CatActorState) => void;
+  cropSquare?: boolean;
+  cropOffsetY?: number;
+  cropHeight?: number;
 }
 
 export class CatActorPlayer {
@@ -49,6 +52,9 @@ export class CatActorPlayer {
   private renderMode: 'spritesheet' | 'webp';
   private basePath: string;
   private onStateChange?: (state: CatActorState) => void;
+  private cropSquare: boolean;
+  private cropOffsetY: number;
+  private cropHeight: number;
 
   // Spritesheet animation data
   private sheets: Map<CatActorState, HTMLImageElement> = new Map();
@@ -65,6 +71,9 @@ export class CatActorPlayer {
     this.renderMode = options.renderMode || 'spritesheet';
     this.basePath = options.basePath || '/assets/actor_pack/cat';
     this.onStateChange = options.onStateChange;
+    this.cropSquare = options.cropSquare !== false;
+    this.cropOffsetY = options.cropOffsetY ?? 110;
+    this.cropHeight = options.cropHeight ?? 400;
 
     this.initDOM();
     this.preloadAssets().then(() => {
@@ -83,11 +92,11 @@ export class CatActorPlayer {
     // Canvas for Spritesheet mode
     this.canvas = document.createElement('canvas');
     this.canvas.width = 400;
-    this.canvas.height = 672;
+    this.canvas.height = this.cropSquare ? this.cropHeight : 672;
     this.canvas.style.width = '100%';
     this.canvas.style.height = '100%';
     this.canvas.style.display = this.renderMode === 'spritesheet' ? 'block' : 'none';
-    this.canvas.style.objectFit = 'contain';
+    this.canvas.style.objectFit = 'cover';
     this.ctx = this.canvas.getContext('2d', { alpha: true })!;
     this.container.appendChild(this.canvas);
 
@@ -96,7 +105,8 @@ export class CatActorPlayer {
     this.webpImg.style.width = '100%';
     this.webpImg.style.height = '100%';
     this.webpImg.style.display = this.renderMode === 'webp' ? 'block' : 'none';
-    this.webpImg.style.objectFit = 'contain';
+    this.webpImg.style.objectFit = 'cover';
+    this.webpImg.style.objectPosition = 'center 46%';
     this.container.appendChild(this.webpImg);
 
     // Transition FX overlay (80-120ms steam puff / flash)
@@ -291,11 +301,19 @@ export class CatActorPlayer {
     if (!meta || !sheet || !meta.frames[this.currentFrameIndex]) return;
 
     const fInfo = meta.frames[this.currentFrameIndex].frame;
-    this.ctx.drawImage(
-      sheet,
-      fInfo.x, fInfo.y, fInfo.w, fInfo.h,
-      0, 0, this.canvas.width, this.canvas.height
-    );
+    if (this.cropSquare) {
+      this.ctx.drawImage(
+        sheet,
+        fInfo.x, fInfo.y + this.cropOffsetY, fInfo.w, this.cropHeight,
+        0, 0, this.canvas.width, this.canvas.height
+      );
+    } else {
+      this.ctx.drawImage(
+        sheet,
+        fInfo.x, fInfo.y, fInfo.w, fInfo.h,
+        0, 0, this.canvas.width, this.canvas.height
+      );
+    }
   }
 
   public pause(): void {
