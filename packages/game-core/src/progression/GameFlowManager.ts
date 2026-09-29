@@ -3,11 +3,13 @@ import { GameSession } from '../session/GameSession';
 import { DEFAULT_DAYS } from '../data/DefaultData';
 import { SaveSystem } from './SaveSystem';
 import { TutorialDirector, DragTutorialCue } from './TutorialDirector';
+import { DishPuzzleTutorialDirector, DishPieceDragTutorialCue } from './DishPuzzleTutorialDirector';
 
 export interface GameFlowEvents {
   onPhaseChanged?: (phase: GamePhase, prevPhase: GamePhase) => void;
   onSessionStarted?: (session: GameSession) => void;
   onTutorialCue?: (cue: DragTutorialCue | null) => void;
+  onDishTutorialCue?: (cue: DishPieceDragTutorialCue | null) => void;
   onDayCompleted?: (record: DayCompletionRecord) => void;
   onDayFailed?: (reason: string) => void;
   onResolvingRequested?: (suggestedDurationMs: number) => void;
@@ -122,9 +124,16 @@ export class GameFlowManager {
     if (this._phase === 'DAY_INTRO') {
       this.transitionTo('PLAYING');
       if (this._session) {
-        const cue = TutorialDirector.getFirstDragCue(this._session, this._campaignState);
-        if (cue) {
-          this._events.onTutorialCue?.(cue);
+        if (this._session.gameplayMode === 'DISH_PUZZLE') {
+          const dishCue = DishPuzzleTutorialDirector.getDay1FirstDragCue(this._session, this._campaignState);
+          if (dishCue) {
+            this._events.onDishTutorialCue?.(dishCue);
+          }
+        } else {
+          const cue = TutorialDirector.getFirstDragCue(this._session, this._campaignState);
+          if (cue) {
+            this._events.onTutorialCue?.(cue);
+          }
         }
       }
     }
@@ -165,8 +174,10 @@ export class GameFlowManager {
       return { success: false, reason: 'NO_SESSION' };
     }
 
+    DishPuzzleTutorialDirector.dismissDay1FirstDragCue();
     TutorialDirector.dismissFirstDragCue();
     this._events.onTutorialCue?.(null);
+    this._events.onDishTutorialCue?.(null);
 
     return this._session.moveDishGroup(groupId, targetCol, targetRow, referencePieceId);
   }

@@ -179,6 +179,21 @@ export class DishPuzzleManager {
   }
 
   /**
+   * Resets and clears all board pieces, groups, instances, and grid cells.
+   */
+  clearBoard(): void {
+    this._pieces.clear();
+    this._groups.clear();
+    this._instances.clear();
+    this._scheduler.cleanupInstances([]);
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.columns; c++) {
+        this._gridCells[r][c] = null;
+      }
+    }
+  }
+
+  /**
    * Generic procedural initialization for DishPuzzle sessions based on DishPuzzleDayConfig.
    * Creates active dish instances, seeds initial piece groups, respects reserved regions,
    * and guarantees at least one solvable matching path.
@@ -189,15 +204,7 @@ export class DishPuzzleManager {
       return;
     }
 
-    this._pieces.clear();
-    this._groups.clear();
-    this._instances.clear();
-    this._scheduler.cleanupInstances([]);
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.columns; c++) {
-        this._gridCells[r][c] = null;
-      }
-    }
+    this.clearBoard();
 
     const rng = new SeededRandom(`${seed}_init_session`);
     const activeDishes = config.activeDishIds && config.activeDishIds.length > 0 ? config.activeDishIds : ['dish_salad', 'dish_breakfast', 'dish_ramen'];
@@ -274,15 +281,7 @@ export class DishPuzzleManager {
    * DOES NOT collapse to the bottom via premature global gravity.
    */
   initDay1Layout(): void {
-    this._pieces.clear();
-    this._groups.clear();
-    this._instances.clear();
-    this._scheduler.cleanupInstances([]);
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.columns; c++) {
-        this._gridCells[r][c] = null;
-      }
-    }
+    this.clearBoard();
 
     // Create 3 active dish instances
     const breakfast = this.createDishInstance('dish_breakfast');

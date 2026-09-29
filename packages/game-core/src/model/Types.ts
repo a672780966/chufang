@@ -232,6 +232,7 @@ export interface DayConfig {
   nextOrderPreviewDay?: number;
   useDay1GoldSample?: boolean;
   completionRefillCount?: number;
+  initialLayoutPreset?: string;
 }
 
 export type GameplayMode = 'DISH_PUZZLE' | 'LEGACY_INGREDIENT';
@@ -260,6 +261,7 @@ export interface DishPuzzleDayConfig {
   nextOrderPreviewDay?: number;
   useDay1GoldSample?: boolean;
   completionRefillCount?: number;
+  initialLayoutPreset?: string;
 }
 
 export type NextOrderPreviewMode = 'NONE' | 'DISH_ONLY' | 'FULL_RECIPE';

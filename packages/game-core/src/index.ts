@@ -23,4 +23,7 @@ export * from './puzzle/DishPuzzleManager';
 export * from './puzzle/DishPieceSupplyScheduler';
 export * from './data/DishCatalog';
 export * from './data/ProvisionalDishConfig';
+export * from './data/DishCampaignConfig';
+export * from './puzzle/InitialLayoutPreset';
+export * from './progression/DishPuzzleTutorialDirector';
 export * from './detector/DishPuzzleDeadlockDetector';

@@ -23,6 +23,8 @@ import { SeededRandom } from '../random/SeededRandom';
 import { DEFAULT_INGREDIENTS, DEFAULT_RECIPES } from '../data/DefaultData';
 import { DishPuzzleManager } from '../puzzle/DishPuzzleManager';
 import { getProvisionalDishConfig } from '../data/ProvisionalDishConfig';
+import { getDishCampaignDayConfig } from '../data/DishCampaignConfig';
+import { InitialLayoutPresets, InitialLayoutPresetType } from '../puzzle/InitialLayoutPreset';
 
 function inferGameplayMode(dayConfig: DayConfig, explicitMode?: GameplayMode): GameplayMode {
   if (explicitMode) return explicitMode;
@@ -101,9 +103,9 @@ export class GameSession {
 
     // P0-1: Single Source of Truth for DishPuzzle Runtime Config
     let effectiveDayConfig: DayConfig = dayConfig;
-    let provisionalDishConfig: ReturnType<typeof getProvisionalDishConfig> | undefined;
+    let provisionalDishConfig: ReturnType<typeof getDishCampaignDayConfig> | undefined;
     if (this.gameplayMode === 'DISH_PUZZLE') {
-      provisionalDishConfig = getProvisionalDishConfig(dayConfig.dayNumber);
+      provisionalDishConfig = getDishCampaignDayConfig(dayConfig.dayNumber);
       const isCustomDishConfig = Array.isArray((dayConfig as any).activeDishIds) || !!(dayConfig as any).orderWeights;
       effectiveDayConfig = {
         ...dayConfig,
@@ -123,7 +125,8 @@ export class GameSession {
         dangerThreshold: (dayConfig as any).dangerThreshold ?? provisionalDishConfig.dangerThreshold,
         nextOrderPreviewDay: (dayConfig as any).nextOrderPreviewDay ?? provisionalDishConfig.nextOrderPreviewDay,
         useDay1GoldSample: (dayConfig as any).useDay1GoldSample ?? provisionalDishConfig.useDay1GoldSample,
-        completionRefillCount: (dayConfig as any).completionRefillCount ?? provisionalDishConfig.completionRefillCount
+        completionRefillCount: (dayConfig as any).completionRefillCount ?? provisionalDishConfig.completionRefillCount,
+        initialLayoutPreset: (dayConfig as any).initialLayoutPreset ?? provisionalDishConfig.initialLayoutPreset
       };
     }
     this.dayConfig = effectiveDayConfig;
@@ -183,11 +186,9 @@ export class GameSession {
 
     // Initialize DishPuzzle layout using the exact same effectiveDayConfig
     if (this.gameplayMode === 'DISH_PUZZLE') {
-      if (effectiveDayConfig.dayNumber === 1 && effectiveDayConfig.useDay1GoldSample) {
-        this.dishPuzzleManager.initDay1Layout();
-      } else {
-        this.dishPuzzleManager.initializeDishPuzzleSession(effectiveDayConfig as any, daySeed);
-      }
+      const preset: InitialLayoutPresetType = (effectiveDayConfig as any).initialLayoutPreset ??
+        ((effectiveDayConfig.dayNumber === 1 && effectiveDayConfig.useDay1GoldSample) ? 'DAY1_GUIDED' : 'DEFAULT_PROCEDURAL');
+      InitialLayoutPresets.apply(this.dishPuzzleManager, preset, daySeed);
     } else if (this.dayConfig.dayNumber === 1) {
       this.dishPuzzleManager.initDay1Layout();
     }
