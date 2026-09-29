@@ -413,14 +413,14 @@ class WebGameApp {
       }
     }
 
-    // C. Next Order Preview (Stage 2 Gated: Day 1 hidden)
+    // C. Next Order Preview (Gated by Day 7 per Baseline Section 27 and Cocos Parity)
     const nextHint = document.getElementById('next-order-hint');
     const nextLabel = document.getElementById('next-order-label');
     const preview = session.orderSystem.getNextOrderPreview();
-    const isDay1 = session.dayConfig.dayNumber === 1;
+    const isGated = session.dayConfig.dayNumber < 7;
 
     if (nextHint && nextLabel) {
-      if (isDay1 || preview.mode === 'NONE' || !preview.dishName) {
+      if (isGated || preview.mode === 'NONE' || !preview.dishName) {
         nextHint.style.display = 'none';
       } else {
         nextHint.style.display = 'inline-flex';
