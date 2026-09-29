@@ -800,8 +800,8 @@ class WebGameApp {
       setTimeout(() => { priceTag.style.transform = 'scale(1) rotate(-2deg)'; }, 180);
     }
 
-    // 5. Clear completed group from board (triggers DISH_SERVED -> order fulfillment)
-    this.flow.executeAuthoritativeDishResolution(groupId);
+    // 5. Visual arrival complete: notify GameFlow to finish resolving
+    this.flow.finishResolving();
 
     // 6. Flying revenue particle
     const manifest = GOLD_SAMPLE_DISH_MANIFEST[dishId];

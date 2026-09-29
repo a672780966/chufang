@@ -224,12 +224,16 @@ describe('DishPuzzle Domain Model & Adjacency Engine', () => {
     const gMerged3 = manager.getGroupByPieceId(p00.pieceInstanceId)!;
     assert.strictEqual(gMerged3.pieceIds.length, 8, 'Merged group should have 8 pieces');
 
-    // Move 4: Drag piece (2,2) from (6,0) to (2,2) -> FINAL SNAP -> DISH_COMPLETED!
+    // Move 4: Drag piece (2,2) from (6,0) to (2,2) -> FINAL SNAP -> DISH_COMPLETED & Synchronous Clear!
     let dishCompletedEmitted = false;
+    let dishClearedEmitted = false;
     let completedDishPayload: any = null;
     manager.events.on('DISH_COMPLETED', (payload: any) => {
       dishCompletedEmitted = true;
       completedDishPayload = payload;
+    });
+    manager.events.on('DISH_CLEARED', () => {
+      dishClearedEmitted = true;
     });
 
     const p22 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 2)!;
@@ -241,13 +245,7 @@ describe('DishPuzzle Domain Model & Adjacency Engine', () => {
     assert.ok(dishCompletedEmitted, 'DISH_COMPLETED event must be emitted');
     assert.strictEqual(completedDishPayload.dishId, 'dish_salad');
     assert.strictEqual(completedDishPayload.pieces.length, 9);
-
-    // Now clear the completed dish and verify rigid gravity + deterministic refill
-    let dishClearedEmitted = false;
-    manager.events.on('DISH_CLEARED', () => { dishClearedEmitted = true; });
-
-    manager.clearCompletedGroup(p00.groupId);
-    assert.ok(dishClearedEmitted, 'DISH_CLEARED event must be emitted');
+    assert.ok(dishClearedEmitted, 'DISH_CLEARED event must be emitted synchronously on completion');
 
     // Salad pieces should be completely cleared
     const remainingSalad = manager.getAllPieces().filter(p => p.dishId === 'dish_salad');
@@ -356,8 +354,7 @@ describe('DishPuzzle Domain Model & Adjacency Engine', () => {
       const res4 = manager.tryMoveGroup(g22.groupId, 2, 2, p22.pieceInstanceId);
       assert.ok(res4.completedDish, 'Move 4 should complete the dish');
 
-      // Clear completed group -> triggers DISH_SERVED -> fulfills order & spawns next if needed
-      manager.clearCompletedGroup(p00.groupId);
+      // Move 4 completes the dish, which Core synchronously clears and serves
       return salad;
     };
 
@@ -420,8 +417,6 @@ describe('DishPuzzle Domain Model & Adjacency Engine', () => {
       const p22 = saladPieces.find(p => p.dishCol === 2 && p.dishRow === 2)!;
       const g22 = manager.getGroupByPieceId(p22.pieceInstanceId)!;
       manager.tryMoveGroup(g22.groupId, 2, 2, p22.pieceInstanceId);
-
-      manager.clearCompletedGroup(p00.groupId);
     };
 
     // Solve 3 consecutive salad orders to exceed goal (210 >= 200)

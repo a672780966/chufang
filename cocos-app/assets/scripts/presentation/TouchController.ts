@@ -148,7 +148,7 @@ export class TouchController extends Component {
     if (this._draggingDishGroup && this._draggingDishPiece && this._dishMemberNodes.length > 0 && this.boardView && this.gameManager) {
       const grabItem = this._dishMemberNodes.find(item => item.piece.pieceInstanceId === this._draggingDishPiece!.pieceInstanceId) || this._dishMemberNodes[0];
       const targetCoord = this.boardView.localPosToGrid(grabItem.node.position);
-      const res = this.gameManager.session.dishPuzzleManager.tryMoveGroup(
+      const res = this.gameManager.flow.moveDishGroup(
         this._draggingDishGroup.groupId,
         targetCoord.col,
         targetCoord.row,

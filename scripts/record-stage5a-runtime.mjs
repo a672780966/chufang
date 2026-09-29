@@ -345,31 +345,40 @@ async function main() {
 
     await new Promise(r => setTimeout(r, 500));
 
-    // Block top spawn and saturate board to trigger deadlock
+    // Real board construction: Saturate board completely with 1-piece groups of alternating dishes
+    // Top spawn zone blocked, 0 empty cells, 0 legal moves, 0 completions -> triggers true deadlock via Gameplay API / Detector!
     await callCDP('Runtime.evaluate', {
       expression: `
         (function() {
           const app = window.__app;
           const session = app.flow.session;
           const mgr = app.dishPuzzleManager;
-          const dInst = mgr.createDishInstance('dish_ramen');
-          for (let c = 0; c < 8; c++) {
-            if (!mgr.getPieceAt(c, 11)) {
-              mgr.createPiece(dInst.instanceId, 'dish_ramen', 0, 0, { col: c, row: 11 });
+
+          // Clear previous pieces to set up deadlocked state cleanly
+          for (const p of mgr.getAllPieces()) {
+            mgr._gridCells[p.boardCoord.row][p.boardCoord.col] = null;
+          }
+          mgr._pieces.clear();
+          mgr._groups.clear();
+
+          const dishes = ['dish_salad', 'dish_breakfast', 'dish_ramen'];
+          const instances = dishes.map(d => mgr.createDishInstance(d));
+          let idx = 0;
+
+          for (let r = 0; r < 12; r++) {
+            for (let c = 0; c < 8; c++) {
+              if (!mgr.isCellReserved(c, r)) {
+                const inst = instances[idx % instances.length];
+                idx++;
+                const p = mgr.createPiece(inst.instanceId, inst.dishId, 0, 0, { col: c, row: r });
+                mgr.createGroup([p]);
+              }
             }
           }
-          // Force board deadlocked event
-          session.events.emit('DISH_BOARD_DEADLOCKED', {
-            reason: 'TOP_SPAWN_BLOCKED_NO_LEGAL_MOVES',
-            occupancyRatio: 0.95,
-            legalMovesCount: 0
-          });
-          session.events.emit('DAY_FAILED', {
-            dayNumber: 1,
-            currentRevenue: session.revenue,
-            businessGoal: session.dayConfig.businessGoal,
-            reason: 'BOARD_BLOCKED'
-          });
+
+          // Trigger authoritative gameplay API / Detector: Core detects deadlock on its own!
+          session.checkBoardDangerAndDeadlock();
+          app.updateHUD();
         })()
       `
     });

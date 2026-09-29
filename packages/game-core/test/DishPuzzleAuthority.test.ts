@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   GameFlowManager,
   GameSession,
+  DishPuzzleManager,
   DEFAULT_DAYS
 } from '../src/index';
 
@@ -42,33 +43,72 @@ describe('Stage 5A Test Suite 1: DishPuzzle Core Authority', () => {
     assert.strictEqual(session.stats.groupsMoved, 1);
   });
 
-  it('should prevent presentation layer from blocking core resolution via authoritative fallback timer', async () => {
-    const flow = new GameFlowManager();
-    const session = flow.startDay(1, 'fallback_timer_seed');
+  it('should synchronously commit dish resolution in core upon completion and lock input without wall-clock timer', () => {
+    let resolvingDuration: number | null = null;
+    const flow = new GameFlowManager({
+      onResolvingRequested: (durationMs) => {
+        resolvingDuration = durationMs;
+      }
+    });
+    const session = flow.startDay(1, 'sync_auth_seed');
     flow.beginPlaying();
 
     const manager = session.dishPuzzleManager;
-    // Complete a 9-piece dish by creating all pieces in a group
+    // Complete a 9-piece dish by snapping pieces together
     const saladInst = manager.createDishInstance('dish_salad');
-    const pieces = [];
+    // Group 1: 8 pieces
+    const pieces1 = [];
     for (let r = 0; r < 3; r++) {
       for (let c = 0; c < 3; c++) {
-        // Place in cols 0..2, rows 6..8
-        pieces.push(manager.createPiece(saladInst.instanceId, 'dish_salad', c, r, { col: c, row: r + 6 }));
+        if (c === 2 && r === 2) continue; // leave (2,2) empty
+        pieces1.push(manager.createPiece(saladInst.instanceId, 'dish_salad', c, r, { col: c, row: r + 6 }));
       }
     }
-    const group = manager.createGroup(pieces);
+    const group1 = manager.createGroup(pieces1);
 
-    let resolvingRequested = false;
-    flow['handleDishCompletedResolving']({ groupId: group.groupId });
-    assert.strictEqual(flow.phase, 'RESOLVING', 'Must transition to RESOLVING');
+    // Group 2: remaining 1 piece at (3, 8)
+    const p9 = manager.createPiece(saladInst.instanceId, 'dish_salad', 2, 2, { col: 3, row: 8 });
+    const group2 = manager.createGroup([p9]);
 
-    // Presentation layer fails to call finishResolving()
-    // Authoritative fallback timer should fire and resolve the completed dish
-    await new Promise(resolve => setTimeout(resolve, 850));
+    // Move group 2 to (2, 8) to snap and complete 9 pieces!
+    const moveRes = flow.moveDishGroup(group2.groupId, 2, 8, p9.pieceInstanceId);
+    assert.strictEqual(moveRes.success, true);
+    assert.strictEqual(moveRes.merged, true);
+    assert.ok(moveRes.completedDish, 'Move must complete the dish');
 
-    assert.ok(flow.phase === 'PLAYING' || flow.phase === 'DAY_CLEAR', 'Must transition out of RESOLVING authoritatively');
-    assert.strictEqual(manager.getGroup(group.groupId), undefined, 'Completed group must be authoritatively cleared');
+    // Verify Core synchronously and immediately cleared the completed dish from the board!
+    assert.strictEqual(manager.getGroup(group1.groupId), undefined, 'Completed group must be cleared immediately from board');
+    assert.strictEqual(manager.getGroup(group2.groupId), undefined, 'Merged group must be cleared immediately from board');
+    assert.strictEqual(manager.getPiece(p9.pieceInstanceId), undefined, 'Pieces of completed dish must be removed');
+
+    // Revenue and dishes served are immediately recorded by Core
+    assert.ok(session.revenue > 0, 'Revenue must be updated synchronously');
+    assert.strictEqual(session.stats.dishesCompleted, 1);
+    assert.strictEqual(session.stats.dishesServed, 1);
+
+    // Presentation input is locked in RESOLVING phase
+    assert.strictEqual(flow.phase, 'RESOLVING', 'Flow must be in RESOLVING phase');
+    assert.strictEqual(flow.isInputLocked, true, 'Input must be locked during RESOLVING');
+    assert.strictEqual(resolvingDuration, 650, 'Must request 650ms resolving animation window');
+
+    // Presentation notifies flow when animation finishes
+    flow.finishResolving();
+    assert.strictEqual(flow.phase, 'PLAYING', 'Flow must return to PLAYING after finishResolving');
+    assert.strictEqual(flow.isInputLocked, false, 'Input must be unlocked');
+  });
+
+  it('should fail-fast and throw Error on unknown dishId in DishPuzzleManager or OrderBag', () => {
+    const manager = new DishPuzzleManager(8, 12);
+    assert.throws(
+      () => manager.createDishInstance('dish_burger'),
+      /not found in GOLD_SAMPLE_DISH_MANIFEST/,
+      'Must throw Error for non-existent dish_burger'
+    );
+    assert.throws(
+      () => manager.createPiece('inst_1', 'dish_burger', 0, 0, { col: 0, row: 0 }),
+      /invalid dishId/,
+      'Must throw Error for invalid piece dishId'
+    );
   });
 
   it('should ensure Core authoritatively controls state transitions without relying on UI callbacks', () => {

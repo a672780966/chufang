@@ -481,12 +481,7 @@ export class BoardView extends Component {
       }
     }
 
-    // After 550ms celebration: invoke clearCompletedGroup on DishPuzzleManager
-    this.scheduleOnce(() => {
-      if (this._session && this._session.dishPuzzleManager) {
-        this._session.dishPuzzleManager.clearCompletedGroup(payload.groupId);
-      }
-    }, 0.55);
+    // Presentation only plays the celebration tween; Core authoritatively clears the dish.
   }
 
   onDishCleared(payload: CoreEventMap['DISH_CLEARED']) {

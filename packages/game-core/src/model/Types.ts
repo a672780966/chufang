@@ -218,6 +218,18 @@ export interface DayConfig {
   pressureProfile?: PressureProfile;
   directorProfile?: FlowDirectorProfile;
   gameplayMode?: GameplayMode;
+  orderWeights?: Record<string, number>;
+  activeDishIds?: string[];
+  initialPieceCount?: number;
+  comfortablePieceCount?: number;
+  maxPieceCount?: number;
+  supplyPerAction?: number;
+  currentOrderWeight?: number;
+  nearCompleteWeight?: number;
+  starvationWeight?: number;
+  dangerThreshold?: number;
+  nextOrderPreviewDay?: number;
+  useDay1GoldSample?: boolean;
 }
 
 export type GameplayMode = 'DISH_PUZZLE' | 'LEGACY_INGREDIENT';

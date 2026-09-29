@@ -78,8 +78,12 @@ export class OrderBag {
       for (const [dishId, weight] of Object.entries(this._dayConfig.orderWeights)) {
         if (weight <= 0) continue;
         const dishDef = this._dishCatalog[dishId];
-        // Strictly forbid dishes that do not exist in the authoritative catalog!
-        if (!dishDef) continue;
+        // Strictly forbid dishes that do not exist in the authoritative catalog: Fail-fast!
+        if (!dishDef) {
+          throw new Error(
+            `[OrderBag] Unknown dishId "${dishId}" in orderWeights. Authoritative catalog contains: ${Object.keys(this._dishCatalog).join(', ')}`
+          );
+        }
         for (let i = 0; i < weight; i++) {
           pool.push(this.createDishOrderInstance(dishDef));
         }
@@ -95,14 +99,11 @@ export class OrderBag {
       }
     }
 
-    // Safeguard fallback: if pool is empty, populate from authoritative catalog
+    // Fail-fast: If pool is empty, throw Error rather than silently falling back
     if (pool.length === 0) {
-      const defaultDish = this._dishCatalog['dish_salad'] || Object.values(this._dishCatalog)[0];
-      if (defaultDish) {
-        for (let i = 0; i < 5; i++) {
-          pool.push(this.createDishOrderInstance(defaultDish));
-        }
-      }
+      throw new Error(
+        `[OrderBag] Cannot refill OrderBag: order pool is empty for Day ${(this._dayConfig as any).dayNumber}.`
+      );
     }
 
     // Constrained shuffle: avoid same dish appearing consecutively

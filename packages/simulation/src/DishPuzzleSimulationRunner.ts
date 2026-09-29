@@ -42,6 +42,8 @@ export interface CandidateMove {
   score: number;
 }
 
+export type SimulationOutcome = 'CLEARED' | 'DEADLOCKED' | 'LIVE_PROGRESS_AT_CUTOFF' | 'STALLED_NO_PROGRESS';
+
 export interface SeedSimulationRun {
   seed: string;
   policy: BotPolicyType;
@@ -49,7 +51,7 @@ export interface SeedSimulationRun {
   steps: number;
   cleared: boolean;
   deadlocked: boolean;
-  outcome: 'CLEARED' | 'DEADLOCKED' | 'MAX_STEPS';
+  outcome: SimulationOutcome;
   revenue: number;
   businessGoal: number;
   groupsMoved: number;
@@ -62,6 +64,17 @@ export interface SeedSimulationRun {
   reservedViolations: number;
 }
 
+export interface PolicyMetrics {
+  count: number;
+  clearedCount: number;
+  deadlockedCount: number;
+  liveProgressCount: number;
+  stalledCount: number;
+  clearRate: number;
+  avgSteps: number;
+  avgRevenue: number;
+}
+
 export interface SimulationSummary {
   timestamp: string;
   totalSeeds: number;
@@ -71,33 +84,9 @@ export interface SimulationSummary {
   unclassifiedRuns: number;
   determinismPassed: boolean;
   policyBreakdown: {
-    random_legal: {
-      count: number;
-      clearedCount: number;
-      deadlockedCount: number;
-      maxStepsCount: number;
-      clearRate: number;
-      avgSteps: number;
-      avgRevenue: number;
-    };
-    order_focus: {
-      count: number;
-      clearedCount: number;
-      deadlockedCount: number;
-      maxStepsCount: number;
-      clearRate: number;
-      avgSteps: number;
-      avgRevenue: number;
-    };
-    multi_dish_planner: {
-      count: number;
-      clearedCount: number;
-      deadlockedCount: number;
-      maxStepsCount: number;
-      clearRate: number;
-      avgSteps: number;
-      avgRevenue: number;
-    };
+    random_legal: PolicyMetrics;
+    order_focus: PolicyMetrics;
+    multi_dish_planner: PolicyMetrics;
   };
   sampleRuns: SeedSimulationRun[];
 }
@@ -248,6 +237,83 @@ export class DishPuzzleSimulationRunner {
   /**
    * Executes a single simulation run for a given seed and bot policy.
    */
+  /**
+   * Comprehensive Multi-Dish Planner heuristic evaluation.
+   * Evaluates:
+   *   1. High-value merge and complete (especially 9-piece dish formation)
+   *   2. Prepared Buffer capacity and parallel multi-dish preparation
+   *   3. Companion piece clustering (minimizing Manhattan distance to same-instance pieces)
+   *   4. Anti-oscillation taboo memory (prevents repetitive 2-cycle ping-pong)
+   *   5. Spatial relief and gravity consolidation
+   */
+  static scorePlannerCandidate(
+    c: CandidateMove,
+    session: GameSession,
+    manager: DishPuzzleManager,
+    recentPosSet: Set<string>
+  ): number {
+    const group = manager.getGroup(c.groupId);
+    if (!group) return -9999;
+    const curDish = session.orderSystem.currentOrder?.dishId;
+    const isCur = curDish ? group.dishId === curDish : false;
+    const bufAvail = session.orderSystem.preparedDishBuffer.length < session.orderSystem.maxPreparedBuffer;
+
+    // Anti-oscillation penalty: if this group moved to this target cell recently
+    const posKey = `${c.groupId}_${c.targetCol}_${c.targetRow}`;
+    if (recentPosSet.has(posKey)) {
+      return -2000;
+    }
+
+    let s = 0;
+    if (c.enablesMerge) {
+      const sz = group.pieceIds.length;
+      if (sz >= 4) {
+        s += isCur ? 3000 + sz * 100 : (bufAvail ? 2000 + sz * 80 : 800 + sz * 40);
+      } else {
+        s += isCur ? 1000 + sz * 50 : (bufAvail ? 600 + sz * 30 : 300 + sz * 20);
+      }
+    }
+
+    // Companion piece attraction (minimize distance to same-instance pieces)
+    const companions = manager.getAllPieces().filter(
+      p => p.dishPuzzleInstanceId === group.dishPuzzleInstanceId && !group.pieceIds.includes(p.pieceInstanceId)
+    );
+    if (companions.length > 0) {
+      const gpList = group.pieceIds.map(id => manager.getPiece(id)).filter(Boolean) as DishPuzzlePiece[];
+      let curDist = 999;
+      for (const gp of gpList) {
+        for (const cp of companions) {
+          const d = Math.abs(gp.boardCoord.col - cp.boardCoord.col) + Math.abs(gp.boardCoord.row - cp.boardCoord.row);
+          if (d < curDist) curDist = d;
+        }
+      }
+      let simDist = 999;
+      for (const gp of gpList) {
+        const sc = gp.boardCoord.col + c.deltaCol;
+        const sr = gp.boardCoord.row + c.deltaRow;
+        for (const cp of companions) {
+          const d = Math.abs(sc - cp.boardCoord.col) + Math.abs(sr - cp.boardCoord.row);
+          if (d < simDist) simDist = d;
+        }
+      }
+      if (simDist < curDist) {
+        const b = (curDist - simDist) * 120;
+        s += isCur ? b * 1.5 : (bufAvail ? b * 1.2 : b);
+      } else if (simDist > curDist) {
+        s -= 80;
+      }
+    }
+
+    if (isCur) s += 80;
+    // Downward gravity consolidation
+    if (c.deltaRow < 0) s += 20;
+
+    return s;
+  }
+
+  /**
+   * Executes a single simulation run for a given seed and bot policy.
+   */
   static runSingleSeed(seed: string, policy: BotPolicyType, dayNumber: number = 1): SeedSimulationRun {
     const dayConfig = DEFAULT_DAYS[dayNumber - 1] || DEFAULT_DAYS[0];
     const session = new GameSession(dayConfig, seed, undefined, undefined, 'DISH_PUZZLE');
@@ -256,6 +322,11 @@ export class DishPuzzleSimulationRunner {
     let steps = 0;
     let orphanViolations = 0;
     let reservedViolations = 0;
+
+    const recentHistory: string[] = [];
+    const recentPosSet = new Set<string>();
+    const recentMerges: boolean[] = [];
+    const recentDishes: boolean[] = [];
 
     const assertIntegrity = () => {
       const pieces = session.dishPuzzleManager.getAllPieces();
@@ -317,11 +388,22 @@ export class DishPuzzleSimulationRunner {
           }
         }
       } else if (policy === 'multi_dish_planner') {
-        // Score-based selection
+        // Multi-dish planner heuristic evaluation
+        for (const c of candidates) {
+          c.score = this.scorePlannerCandidate(c, session, session.dishPuzzleManager, recentPosSet);
+        }
         candidates.sort((a, b) => b.score - a.score);
         const topScore = candidates[0].score;
-        const topTiers = candidates.filter(c => c.score === topScore);
-        chosenMove = topTiers[rng.nextInt(0, topTiers.length - 1)];
+        const topTiers = candidates.filter(c => c.score >= topScore - 10 && c.score > -1000);
+        chosenMove = topTiers.length > 0 ? topTiers[rng.nextInt(0, topTiers.length - 1)] : candidates[0];
+
+        const posKey = `${chosenMove.groupId}_${chosenMove.targetCol}_${chosenMove.targetRow}`;
+        recentHistory.push(posKey);
+        recentPosSet.add(posKey);
+        if (recentHistory.length > 8) {
+          const oldest = recentHistory.shift()!;
+          recentPosSet.delete(oldest);
+        }
       }
 
       if (!chosenMove) break;
@@ -333,9 +415,11 @@ export class DishPuzzleSimulationRunner {
         chosenMove.refPieceId
       );
 
-      if (moveRes.success && moveRes.completedDish) {
-        // Core authoritative resolution immediately upon completion
-        session.resolveCompletedDish(chosenMove.groupId);
+      recentMerges.push(Boolean(moveRes.merged));
+      recentDishes.push(Boolean(moveRes.completedDish));
+      if (recentMerges.length > 30) {
+        recentMerges.shift();
+        recentDishes.shift();
       }
 
       assertIntegrity();
@@ -343,11 +427,26 @@ export class DishPuzzleSimulationRunner {
 
     const cleared = session.orderSystem.isGoalReached;
     const deadlocked = session.isGameOver && !cleared;
-    const outcome: 'CLEARED' | 'DEADLOCKED' | 'MAX_STEPS' = cleared
-      ? 'CLEARED'
-      : deadlocked
-      ? 'DEADLOCKED'
-      : 'MAX_STEPS';
+    let outcome: SimulationOutcome;
+
+    if (cleared) {
+      outcome = 'CLEARED';
+    } else if (deadlocked) {
+      outcome = 'DEADLOCKED';
+    } else {
+      // 500 steps reached: check progress
+      const hadRecentMerges = recentMerges.some(Boolean);
+      const hadRecentDishes = recentDishes.some(Boolean);
+      const remainingCandidates = this.findCandidateMoves(session);
+      const hasReachableMerge = remainingCandidates.some(c => c.enablesMerge);
+      const hasSupplyContinuation = session.dishPuzzleManager.getAvailableSpawnCells().length > 0;
+
+      if ((hadRecentMerges || hadRecentDishes || hasReachableMerge) && hasSupplyContinuation) {
+        outcome = 'LIVE_PROGRESS_AT_CUTOFF';
+      } else {
+        outcome = 'STALLED_NO_PROGRESS';
+      }
+    }
 
     return {
       seed,
@@ -432,7 +531,8 @@ export class DishPuzzleSimulationRunner {
       const pRuns = runs.filter(r => r.policy === pol);
       const cleared = pRuns.filter(r => r.cleared);
       const deadlocked = pRuns.filter(r => r.deadlocked);
-      const maxSteps = pRuns.filter(r => r.outcome === 'MAX_STEPS');
+      const liveProgress = pRuns.filter(r => r.outcome === 'LIVE_PROGRESS_AT_CUTOFF');
+      const stalled = pRuns.filter(r => r.outcome === 'STALLED_NO_PROGRESS');
 
       const avgSteps = Math.round(pRuns.reduce((sum, r) => sum + r.steps, 0) / pRuns.length);
       const avgRevenue = Math.round(pRuns.reduce((sum, r) => sum + r.revenue, 0) / pRuns.length);
@@ -447,7 +547,8 @@ export class DishPuzzleSimulationRunner {
         count: pRuns.length,
         clearedCount: cleared.length,
         deadlockedCount: deadlocked.length,
-        maxStepsCount: maxSteps.length,
+        liveProgressCount: liveProgress.length,
+        stalledCount: stalled.length,
         clearRate: Number((cleared.length / pRuns.length).toFixed(4)),
         avgSteps,
         avgRevenue

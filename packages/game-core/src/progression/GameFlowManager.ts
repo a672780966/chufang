@@ -19,7 +19,6 @@ export class GameFlowManager {
   private _session: GameSession | null = null;
   private _selectedDay: number = 1;
   private _events: GameFlowEvents = {};
-  private _resolvingTimeout: any = null;
   private _resolvingGroupId: string | null = null;
 
   constructor(events: GameFlowEvents = {}) {
@@ -57,10 +56,6 @@ export class GameFlowManager {
    * Enters Main Menu.
    */
   enterMainMenu(): void {
-    if (this._resolvingTimeout) {
-      clearTimeout(this._resolvingTimeout);
-      this._resolvingTimeout = null;
-    }
     this._resolvingGroupId = null;
     this._session = null;
     this._campaignState = SaveSystem.loadCampaignState();
@@ -76,10 +71,6 @@ export class GameFlowManager {
       throw new Error(`Invalid dayNumber: ${dayNumber}. Must be between 1 and 12.`);
     }
 
-    if (this._resolvingTimeout) {
-      clearTimeout(this._resolvingTimeout);
-      this._resolvingTimeout = null;
-    }
     this._resolvingGroupId = null;
 
     this._selectedDay = dayNumber;
@@ -190,7 +181,7 @@ export class GameFlowManager {
   }
 
   /**
-   * Handles DishPuzzle dish completion event with authoritative fallback timer.
+   * Handles DishPuzzle dish completion event: locks input in RESOLVING phase during visual presentation.
    */
   private handleDishCompletedResolving(payload: any): void {
     if (this._phase === 'DAY_CLEAR' || this._phase === 'DAY_FAILED') return;
@@ -198,25 +189,12 @@ export class GameFlowManager {
     this._resolvingGroupId = payload?.groupId || null;
     const duration = 650;
     this._events.onResolvingRequested?.(duration);
-
-    if (this._resolvingTimeout) {
-      clearTimeout(this._resolvingTimeout);
-    }
-    // Authoritative fallback: Presentation layer gets 650ms + 150ms buffer.
-    // If presentation is headless or fails to call finishResolving(), Core clears authoritatively!
-    this._resolvingTimeout = setTimeout(() => {
-      this.executeAuthoritativeDishResolution(payload?.groupId);
-    }, duration + 150);
   }
 
   /**
    * Executes authoritative resolution of a completed dish.
    */
   executeAuthoritativeDishResolution(groupId?: string): void {
-    if (this._resolvingTimeout) {
-      clearTimeout(this._resolvingTimeout);
-      this._resolvingTimeout = null;
-    }
     const targetGroupId = groupId || this._resolvingGroupId;
     if (targetGroupId && this._session && this._session.dishPuzzleManager.getGroup(targetGroupId)) {
       this._session.resolveCompletedDish(targetGroupId);
@@ -229,10 +207,6 @@ export class GameFlowManager {
    * Called by presentation layer after visual resolution animations finish.
    */
   finishResolving(): void {
-    if (this._resolvingTimeout) {
-      clearTimeout(this._resolvingTimeout);
-      this._resolvingTimeout = null;
-    }
     this._resolvingGroupId = null;
     if (this._phase === 'RESOLVING') {
       if (this._session && this._session.revenue >= this._session.dayConfig.businessGoal) {

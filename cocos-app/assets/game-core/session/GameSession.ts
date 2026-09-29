@@ -26,8 +26,7 @@ import { getProvisionalDishConfig } from '../data/ProvisionalDishConfig';
 function inferGameplayMode(dayConfig: DayConfig, explicitMode?: GameplayMode): GameplayMode {
   if (explicitMode) return explicitMode;
   if (dayConfig.gameplayMode) return dayConfig.gameplayMode;
-  if ('activeDishIds' in dayConfig) return 'DISH_PUZZLE';
-  if (dayConfig.targetIngredientCount !== undefined && dayConfig.targetIngredientCount > 0) {
+  if (dayConfig.targetIngredientCount !== undefined && dayConfig.targetIngredientCount > 0 && !('activeDishIds' in dayConfig)) {
     return 'LEGACY_INGREDIENT';
   }
   return 'DISH_PUZZLE';
@@ -93,18 +92,41 @@ export class GameSession {
     customRecipes?: Record<string, RecipeDefinition>,
     gameplayMode?: GameplayMode
   ) {
-    this.dayConfig = dayConfig;
     this.daySeed = daySeed;
     this.gameplayMode = inferGameplayMode(dayConfig, gameplayMode);
     this._rng = new SeededRandom(`${daySeed}_session`);
     this._ingredients = customIngredients || DEFAULT_INGREDIENTS;
     this._recipes = customRecipes || DEFAULT_RECIPES;
 
-    this.grid = new BoardGrid(dayConfig.boardProfile);
-    this.flowDirector = new FlowDirector(dayConfig, this._ingredients, this._recipes, daySeed);
+    // P0-1: Single Source of Truth for DishPuzzle Runtime Config
+    let effectiveDayConfig: DayConfig = dayConfig;
+    let provisionalDishConfig: ReturnType<typeof getProvisionalDishConfig> | undefined;
+    if (this.gameplayMode === 'DISH_PUZZLE') {
+      provisionalDishConfig = getProvisionalDishConfig(dayConfig.dayNumber);
+      effectiveDayConfig = {
+        ...dayConfig,
+        businessGoal: provisionalDishConfig.businessGoal,
+        orderWeights: provisionalDishConfig.orderWeights,
+        activeDishIds: provisionalDishConfig.activeDishIds,
+        initialPieceCount: provisionalDishConfig.initialPieceCount,
+        comfortablePieceCount: provisionalDishConfig.comfortablePieceCount,
+        maxPieceCount: provisionalDishConfig.maxPieceCount,
+        supplyPerAction: provisionalDishConfig.supplyPerAction,
+        currentOrderWeight: provisionalDishConfig.currentOrderWeight,
+        nearCompleteWeight: provisionalDishConfig.nearCompleteWeight,
+        starvationWeight: provisionalDishConfig.starvationWeight,
+        dangerThreshold: provisionalDishConfig.dangerThreshold,
+        nextOrderPreviewDay: provisionalDishConfig.nextOrderPreviewDay,
+        useDay1GoldSample: provisionalDishConfig.useDay1GoldSample
+      };
+    }
+    this.dayConfig = effectiveDayConfig;
+
+    this.grid = new BoardGrid(this.dayConfig.boardProfile);
+    this.flowDirector = new FlowDirector(this.dayConfig, this._ingredients, this._recipes, daySeed);
 
     this.orderSystem = new OrderSystem(
-      dayConfig,
+      this.dayConfig,
       this._recipes,
       daySeed,
       this.inventory,
@@ -116,6 +138,8 @@ export class GameSession {
 
     // Connect Dish serving (triggered when completed group clears) directly with OrderSystem
     this.events.on('DISH_SERVED', ({ dishId }) => {
+      this._stats.dishesServed++;
+      this._stats.completionReflows++;
       this.orderSystem.handleCompletedDish(dishId);
       if (!this.orderSystem.isGoalReached && this.orderSystem.currentOrder) {
         const neededDishId = this.orderSystem.currentOrder.dishId || (this.orderSystem.currentOrder.recipeId.startsWith('dish_') ? this.orderSystem.currentOrder.recipeId : `dish_${this.orderSystem.currentOrder.recipeId}`);
@@ -143,12 +167,15 @@ export class GameSession {
       });
     });
 
-    // Initialize DishPuzzle layout
-    if (dayConfig.dayNumber === 1) {
+    // Initialize DishPuzzle layout using the exact same provisionalDishConfig
+    if (this.gameplayMode === 'DISH_PUZZLE' && provisionalDishConfig) {
+      if (provisionalDishConfig.dayNumber === 1 && provisionalDishConfig.useDay1GoldSample) {
+        this.dishPuzzleManager.initDay1Layout();
+      } else {
+        this.dishPuzzleManager.initializeDishPuzzleSession(provisionalDishConfig, daySeed);
+      }
+    } else if (this.dayConfig.dayNumber === 1) {
       this.dishPuzzleManager.initDay1Layout();
-    } else {
-      const provisional = getProvisionalDishConfig(dayConfig.dayNumber);
-      this.dishPuzzleManager.initializeDishPuzzleSession(provisional, daySeed);
     }
 
     if (this.gameplayMode === 'LEGACY_INGREDIENT') {
@@ -522,7 +549,8 @@ export class GameSession {
     }
     const occRatio = this.dishPuzzleManager.getOccupancyRatio();
     const maxStack = this.dishPuzzleManager.getMaxStackHeight();
-    return occRatio >= 0.65 || maxStack >= (this.grid.rows - 3);
+    const threshold = this.dayConfig.dangerThreshold ?? 0.65;
+    return occRatio >= threshold || maxStack >= (this.grid.rows - 3);
   }
 
   /**
@@ -561,7 +589,7 @@ export class GameSession {
     }
 
     const deadlockResult = this._deadlockDetector.checkDeadlock(this.dishPuzzleManager);
-    if (deadlockResult.isDeadlocked) {
+    if (deadlockResult.isDeadlocked && !this._isGameOver) {
       this._isGameOver = true;
       this.events.emit('DISH_BOARD_DEADLOCKED', {
         reason: deadlockResult.reason || 'NO_LEGAL_TRANSITIONS',

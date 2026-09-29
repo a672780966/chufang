@@ -71,6 +71,14 @@ export class DishPuzzleManager {
     return Array.from(this._groups.values());
   }
 
+  getAllInstances(): DishPuzzleInstance[] {
+    return Array.from(this._instances.values());
+  }
+
+  getActiveDishInstances(): DishPuzzleInstance[] {
+    return Array.from(this._instances.values()).filter(i => !i.isCompleted);
+  }
+
   getPieceAt(col: number, row: number): DishPuzzlePiece | undefined {
     if (col < 0 || col >= this.columns || row < 0 || row >= this.rows) return undefined;
     const id = this._gridCells[row][col];
@@ -336,11 +344,16 @@ export class DishPuzzleManager {
 
   createDishInstance(dishId: string): DishPuzzleInstance {
     const manifest = GOLD_SAMPLE_DISH_MANIFEST[dishId];
+    if (!manifest) {
+      throw new Error(
+        `[DishPuzzleManager] Invalid dishId "${dishId}": not found in GOLD_SAMPLE_DISH_MANIFEST. Valid dishes: ${Object.keys(GOLD_SAMPLE_DISH_MANIFEST).join(', ')}`
+      );
+    }
     const instanceId = `inst_${dishId}_${this._instanceCounter++}`;
     const instance: DishPuzzleInstance = {
       instanceId,
       dishId,
-      name: manifest?.name || dishId,
+      name: manifest.name,
       totalPieces: 9,
       isCompleted: false,
       spawnedSlots: new Set<string>()
@@ -356,6 +369,9 @@ export class DishPuzzleManager {
     dishRow: number,
     boardCoord: GridCoord
   ): DishPuzzlePiece {
+    if (!GOLD_SAMPLE_DISH_MANIFEST[dishId]) {
+      throw new Error(`[DishPuzzleManager] Cannot create piece with invalid dishId "${dishId}".`);
+    }
     const pieceInstanceId = `p_${dishId}_${dishCol}_${dishRow}_${this._pieceCounter++}`;
     const slotId = `slot_${dishCol}_${dishRow}`;
     const edges = generateDishSlotEdges(dishCol, dishRow, 3, 3);
@@ -527,12 +543,23 @@ export class DishPuzzleManager {
       const instance = this._instances.get(currentGroup.dishPuzzleInstanceId);
       if (instance && !instance.isCompleted) {
         instance.isCompleted = true;
+        // Snapshot member pieces BEFORE clearing
+        const piecesSnapshot = currentGroup.pieceIds
+          .map(id => this._pieces.get(id))
+          .filter((p): p is DishPuzzlePiece => Boolean(p))
+          .map(p => ({ ...p, boardCoord: { ...p.boardCoord } }));
+
+        const completedGroupId = currentGroup.groupId;
         this.events.emit('DISH_COMPLETED', {
           dishId: instance.dishId,
           dishPuzzleInstanceId: instance.instanceId,
-          groupId: currentGroup.groupId,
-          pieces: currentGroup.pieceIds.map(id => this._pieces.get(id)!)
+          groupId: completedGroupId,
+          pieces: piecesSnapshot
         });
+
+        // Core IMMEDIATELY commits: Complete / Clear / Reflow / Serve
+        this.clearCompletedGroup(completedGroupId);
+
         return { merged: totalMerged, completedDish: instance };
       }
     }
