@@ -13,6 +13,7 @@ import {
   DishPuzzlePiece,
   PieceGroup,
   DishPuzzleInstance,
+  DISH_MANIFEST,
   GOLD_SAMPLE_DISH_MANIFEST,
   DragTutorialCue
 } from '../../game-core/src/index.js';
@@ -376,7 +377,7 @@ class WebGameApp {
     // B. Hanging Thermal Receipt - True Master Dish Art Order from OrderSystem
     const currentOrder = session.orderSystem.currentOrder;
     const curDishId = currentOrder?.dishId || (currentOrder?.recipeId.startsWith('dish_') ? currentOrder.recipeId : `dish_${currentOrder?.recipeId}`) || 'dish_salad';
-    const manifest = GOLD_SAMPLE_DISH_MANIFEST[curDishId];
+    const manifest = DISH_MANIFEST[curDishId];
     const orderIdNum = document.getElementById('order-id-num');
     const orderIdDish = document.getElementById('order-id-dish');
     const orderRevenue = document.getElementById('order-revenue');
@@ -419,7 +420,7 @@ class WebGameApp {
       } else {
         nextHint.style.display = 'inline-flex';
         const nextDishId = preview.dishId || 'dish_salad';
-        const nextManifest = GOLD_SAMPLE_DISH_MANIFEST[nextDishId];
+        const nextManifest = DISH_MANIFEST[nextDishId];
         nextLabel.textContent = `下道料理: ${nextManifest?.name || preview.dishName}`;
       }
     }
@@ -430,7 +431,7 @@ class WebGameApp {
     const buffer = session.orderSystem.preparedDishBuffer;
     if (slot0) {
       if (buffer[0]) {
-        const dManifest = GOLD_SAMPLE_DISH_MANIFEST[buffer[0]];
+        const dManifest = DISH_MANIFEST[buffer[0]];
         slot0.textContent = dManifest?.name || buffer[0];
         slot0.className = 'tray-dish-slot occupied';
       } else {
@@ -440,7 +441,7 @@ class WebGameApp {
     }
     if (slot1) {
       if (buffer[1]) {
-        const dManifest = GOLD_SAMPLE_DISH_MANIFEST[buffer[1]];
+        const dManifest = DISH_MANIFEST[buffer[1]];
         slot1.textContent = dManifest?.name || buffer[1];
         slot1.className = 'tray-dish-slot occupied';
       } else {
@@ -804,7 +805,7 @@ class WebGameApp {
     this.flow.finishResolving();
 
     // 6. Flying revenue particle
-    const manifest = GOLD_SAMPLE_DISH_MANIFEST[dishId];
+    const manifest = DISH_MANIFEST[dishId];
     const revenueAmount = manifest?.orderRevenue || 70;
     this.triggerRevenueFlyer(`+¥${revenueAmount}`);
 
@@ -1036,7 +1037,7 @@ class WebGameApp {
           const tTitle = (elapsed - 320) / 260;
           const titleAlpha = Math.sin(tTitle * Math.PI);
           const titleY = minY - 14 + GameFeelProfile.finalCeremony.titleLiftPx * tTitle;
-          const manifest = GOLD_SAMPLE_DISH_MANIFEST[anim.dishId];
+          const manifest = DISH_MANIFEST[anim.dishId];
           const dishTitleText = `${manifest?.name || '料理'} 完成！`;
 
           this.ctx.save();

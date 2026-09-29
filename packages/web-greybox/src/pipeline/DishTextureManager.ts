@@ -10,17 +10,25 @@ export class DishTextureManager {
   private static _dishMasterCache = new Map<string, HTMLImageElement>();
   private static _initialized = false;
 
-  // Master Dish Art mapping for Gold Sample dishes
+  // Master Dish Art mapping for all 8 dishes
   static readonly DISH_MASTERS: Record<string, string> = {
     dish_breakfast: '/assets/dishes/dish_breakfast_master.jpg',
     dish_salad: '/assets/dishes/dish_salad_master.jpg',
     dish_ramen: '/assets/dishes/dish_ramen_master.jpg',
+    dish_curry_rice: '/assets/dishes/dish_curry_rice_master.jpg',
+    dish_tomato_pasta: '/assets/dishes/dish_tomato_pasta_master.jpg',
+    dish_avocado_chicken_bowl: '/assets/dishes/dish_avocado_chicken_bowl_master.jpg',
+    dish_shrimp_fried_rice: '/assets/dishes/dish_shrimp_fried_rice_master.jpg',
+    dish_grilled_steak: '/assets/dishes/dish_grilled_steak_master.jpg',
     // Recipe aliases for order system
     breakfast: '/assets/dishes/dish_breakfast_master.jpg',
     salad: '/assets/dishes/dish_salad_master.jpg',
     ramen: '/assets/dishes/dish_ramen_master.jpg',
-    sandwich: '/assets/dishes/dish_breakfast_master.jpg',
-    beef_noodle: '/assets/dishes/dish_ramen_master.jpg'
+    curry_rice: '/assets/dishes/dish_curry_rice_master.jpg',
+    tomato_pasta: '/assets/dishes/dish_tomato_pasta_master.jpg',
+    avocado_chicken_bowl: '/assets/dishes/dish_avocado_chicken_bowl_master.jpg',
+    shrimp_fried_rice: '/assets/dishes/dish_shrimp_fried_rice_master.jpg',
+    grilled_steak: '/assets/dishes/dish_grilled_steak_master.jpg'
   };
 
   /**
@@ -47,8 +55,17 @@ export class DishTextureManager {
       }
     }
 
-    // Preload All 27 Cut Pieces for the 3 Gold Sample dishes
-    const dishes = ['dish_breakfast', 'dish_salad', 'dish_ramen'];
+    // Preload All 72 Cut Pieces for the 8 dishes
+    const dishes = [
+      'dish_breakfast',
+      'dish_salad',
+      'dish_ramen',
+      'dish_curry_rice',
+      'dish_tomato_pasta',
+      'dish_avocado_chicken_bowl',
+      'dish_shrimp_fried_rice',
+      'dish_grilled_steak'
+    ];
     for (const dishId of dishes) {
       for (let c = 0; c < 3; c++) {
         for (let r = 0; r < 3; r++) {

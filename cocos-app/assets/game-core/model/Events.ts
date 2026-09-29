@@ -32,7 +32,10 @@ export type CoreEventType =
   | 'DISH_SERVED'
   | 'DISH_BOARD_DANGER'
   | 'DISH_BOARD_DANGER_CLEARED'
-  | 'DISH_BOARD_DEADLOCKED';
+  | 'DISH_BOARD_DEADLOCKED'
+  | 'PREPARED_DISH_STORED'
+  | 'PREPARED_DISH_SERVED'
+  | 'PRODUCTION_CASCADE_TRIGGERED';
 
 export interface CoreEventMap {
   TARGET_SPAWNED: { target: IngredientTarget; fromAnchor: GridCoord; toAnchor: GridCoord };
@@ -167,6 +170,9 @@ export interface CoreEventMap {
     occupancyRatio?: number;
     legalMovesCount?: number;
   };
+  PREPARED_DISH_STORED: { dishId: string; bufferSlot: number };
+  PREPARED_DISH_SERVED: { dishId: string; orderId?: string };
+  PRODUCTION_CASCADE_TRIGGERED: { dishId: string; cascadeCount: number };
 }
 
 export type EventListener<K extends CoreEventType> = (payload: CoreEventMap[K]) => void;

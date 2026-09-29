@@ -15,7 +15,7 @@ import {
   arePiecesGeometricallyAligned,
   generateDishSlotEdges
 } from './DishPuzzleModel.js';
-import { GOLD_SAMPLE_DISH_MANIFEST } from '../data/DishManifest.js';
+import { DISH_MANIFEST, GOLD_SAMPLE_DISH_MANIFEST } from '../data/DishManifest.js';
 import { DishPieceSupplyScheduler } from './DishPieceSupplyScheduler.js';
 import { SeededRandom } from '../random/SeededRandom.js';
 
@@ -361,10 +361,10 @@ export class DishPuzzleManager {
   }
 
   createDishInstance(dishId: string): DishPuzzleInstance {
-    const manifest = GOLD_SAMPLE_DISH_MANIFEST[dishId];
+    const manifest = DISH_MANIFEST[dishId];
     if (!manifest) {
       throw new Error(
-        `[DishPuzzleManager] Invalid dishId "${dishId}": not found in GOLD_SAMPLE_DISH_MANIFEST. Valid dishes: ${Object.keys(GOLD_SAMPLE_DISH_MANIFEST).join(', ')}`
+        `[DishPuzzleManager] Invalid dishId "${dishId}": not found in GOLD_SAMPLE_DISH_MANIFEST. Valid dishes: ${Object.keys(DISH_MANIFEST).join(', ')}`
       );
     }
     const instanceId = `inst_${dishId}_${this._instanceCounter++}`;
@@ -387,7 +387,7 @@ export class DishPuzzleManager {
     dishRow: number,
     boardCoord: GridCoord
   ): DishPuzzlePiece {
-    if (!GOLD_SAMPLE_DISH_MANIFEST[dishId]) {
+    if (!DISH_MANIFEST[dishId]) {
       throw new Error(`[DishPuzzleManager] Cannot create piece with invalid dishId "${dishId}".`);
     }
     const pieceInstanceId = `p_${dishId}_${dishCol}_${dishRow}_${this._pieceCounter++}`;

@@ -25,15 +25,49 @@ const DISHES = [
   },
   {
     id: 'dish_ramen',
-    name: '暖汤拉面',
+    name: '豚骨拉面',
     masterFile: 'packages/web-greybox/public/assets/dishes/dish_ramen_master.jpg',
+    cols: 3,
+    rows: 3
+  },
+  {
+    id: 'dish_curry_rice',
+    name: '金黄咖喱饭',
+    masterFile: 'packages/web-greybox/public/assets/dishes/dish_curry_rice_master.jpg',
+    cols: 3,
+    rows: 3
+  },
+  {
+    id: 'dish_tomato_pasta',
+    name: '番茄肉酱意面',
+    masterFile: 'packages/web-greybox/public/assets/dishes/dish_tomato_pasta_master.jpg',
+    cols: 3,
+    rows: 3
+  },
+  {
+    id: 'dish_avocado_chicken_bowl',
+    name: '牛油果鸡肉碗',
+    masterFile: 'packages/web-greybox/public/assets/dishes/dish_avocado_chicken_bowl_master.jpg',
+    cols: 3,
+    rows: 3
+  },
+  {
+    id: 'dish_shrimp_fried_rice',
+    name: '鲜虾蛋炒饭',
+    masterFile: 'packages/web-greybox/public/assets/dishes/dish_shrimp_fried_rice_master.jpg',
+    cols: 3,
+    rows: 3
+  },
+  {
+    id: 'dish_grilled_steak',
+    name: '炭烤牛排拼盘',
+    masterFile: 'packages/web-greybox/public/assets/dishes/dish_grilled_steak_master.jpg',
     cols: 3,
     rows: 3
   }
 ];
 
-import ts from 'typescript';
-const compiler = ts.default || ts;
+import esbuild from 'esbuild';
 
 // Read PuzzleGeometry logic to embed into browser runner
 const puzzleGeometryPath = path.join(rootDir, 'packages/game-core/src/pipeline/PuzzleGeometry.ts');
@@ -41,14 +75,12 @@ const puzzleGeometryCode = fs.readFileSync(puzzleGeometryPath, 'utf-8');
 
 // Build HTML runner page that runs inside Chrome with native Canvas 2D
 function buildHtmlPage() {
-  const transpileResult = compiler.transpileModule(puzzleGeometryCode, {
-    compilerOptions: { target: 7 } // ES2020
+  const transpileResult = esbuild.transformSync(puzzleGeometryCode, {
+    loader: 'ts',
+    format: 'iife',
+    globalName: 'PuzzleGeometryModule'
   });
-  const jsGeometry = transpileResult.outputText
-    .replace(/import .*/g, '')
-    .replace(/Object\.defineProperty\(exports, "__esModule", \{ value: true \}\);/g, '')
-    .replace(/exports\.\w+ = void 0;/g, '')
-    .replace(/exports\./g, '');
+  const jsGeometry = transpileResult.code + '\nconst PuzzleGeometry = PuzzleGeometryModule.PuzzleGeometry;';
 
   return `<!DOCTYPE html>
 <html>

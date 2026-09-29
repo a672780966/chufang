@@ -1,0 +1,560 @@
+{
+  "stage": "Stage 5B Round 2A",
+  "timestamp": "2026-09-29T17:21:18.297Z",
+  "totalDishes": 8,
+  "totalPieces": 72,
+  "dishes": {
+    "dish_breakfast": {
+      "dishId": "dish_breakfast",
+      "name": "春日早餐盘",
+      "category": "Breakfast",
+      "visualDifficulty": "MEDIUM",
+      "masterAsset": "/assets/dishes/dish_breakfast_master.jpg",
+      "masterBytes": 895383,
+      "approvedHash": "80342B5EC130F05C45929D356B5BA149BB959A5AA7BC15675F8B6320B7B1AABE",
+      "atlasPng": "/assets/dishes/atlas_dish_breakfast.png",
+      "atlasBytes": 2435327,
+      "atlasJson": "/assets/dishes/atlas_dish_breakfast.json",
+      "pieceCount": 9,
+      "pieces": [
+        {
+          "slotId": "slot_0_0",
+          "file": "piece_dish_breakfast_slot_0_0.png",
+          "bytes": 233078,
+          "sha256": "C1C66EB31A8215FB..."
+        },
+        {
+          "slotId": "slot_1_0",
+          "file": "piece_dish_breakfast_slot_1_0.png",
+          "bytes": 316195,
+          "sha256": "D3C74379F1690FC1..."
+        },
+        {
+          "slotId": "slot_2_0",
+          "file": "piece_dish_breakfast_slot_2_0.png",
+          "bytes": 242550,
+          "sha256": "2FAD4DB97536C7C7..."
+        },
+        {
+          "slotId": "slot_0_1",
+          "file": "piece_dish_breakfast_slot_0_1.png",
+          "bytes": 292180,
+          "sha256": "42AA0E251C7464C7..."
+        },
+        {
+          "slotId": "slot_1_1",
+          "file": "piece_dish_breakfast_slot_1_1.png",
+          "bytes": 267987,
+          "sha256": "5EF7E58422EB9A41..."
+        },
+        {
+          "slotId": "slot_2_1",
+          "file": "piece_dish_breakfast_slot_2_1.png",
+          "bytes": 306827,
+          "sha256": "54FD81F5330439E3..."
+        },
+        {
+          "slotId": "slot_0_2",
+          "file": "piece_dish_breakfast_slot_0_2.png",
+          "bytes": 239170,
+          "sha256": "BFEDD02028B709BE..."
+        },
+        {
+          "slotId": "slot_1_2",
+          "file": "piece_dish_breakfast_slot_1_2.png",
+          "bytes": 269953,
+          "sha256": "140AF2121678B469..."
+        },
+        {
+          "slotId": "slot_2_2",
+          "file": "piece_dish_breakfast_slot_2_2.png",
+          "bytes": 275137,
+          "sha256": "082124A0292E1450..."
+        }
+      ]
+    },
+    "dish_salad": {
+      "dishId": "dish_salad",
+      "name": "田园沙拉",
+      "category": "Salad",
+      "visualDifficulty": "MEDIUM",
+      "masterAsset": "/assets/dishes/dish_salad_master.jpg",
+      "masterBytes": 990308,
+      "approvedHash": "464DBA9C95C00C3B8D8A4D0CCEAFB7B625130FA4F2A426F535D4A37B846DC142",
+      "atlasPng": "/assets/dishes/atlas_dish_salad.png",
+      "atlasBytes": 2558383,
+      "atlasJson": "/assets/dishes/atlas_dish_salad.json",
+      "pieceCount": 9,
+      "pieces": [
+        {
+          "slotId": "slot_0_0",
+          "file": "piece_dish_salad_slot_0_0.png",
+          "bytes": 242468,
+          "sha256": "93282E482D267A32..."
+        },
+        {
+          "slotId": "slot_1_0",
+          "file": "piece_dish_salad_slot_1_0.png",
+          "bytes": 353975,
+          "sha256": "DD0566CB351E2501..."
+        },
+        {
+          "slotId": "slot_2_0",
+          "file": "piece_dish_salad_slot_2_0.png",
+          "bytes": 248845,
+          "sha256": "54512073A6A658FD..."
+        },
+        {
+          "slotId": "slot_0_1",
+          "file": "piece_dish_salad_slot_0_1.png",
+          "bytes": 312637,
+          "sha256": "80762E22294C4578..."
+        },
+        {
+          "slotId": "slot_1_1",
+          "file": "piece_dish_salad_slot_1_1.png",
+          "bytes": 290201,
+          "sha256": "4E9E16E289B47739..."
+        },
+        {
+          "slotId": "slot_2_1",
+          "file": "piece_dish_salad_slot_2_1.png",
+          "bytes": 320318,
+          "sha256": "F0D16DFB569D3745..."
+        },
+        {
+          "slotId": "slot_0_2",
+          "file": "piece_dish_salad_slot_0_2.png",
+          "bytes": 246170,
+          "sha256": "43EBF9E88BC1DC6E..."
+        },
+        {
+          "slotId": "slot_1_2",
+          "file": "piece_dish_salad_slot_1_2.png",
+          "bytes": 291855,
+          "sha256": "2FA87960D8091E7D..."
+        },
+        {
+          "slotId": "slot_2_2",
+          "file": "piece_dish_salad_slot_2_2.png",
+          "bytes": 260458,
+          "sha256": "74CA621042A79DF3..."
+        }
+      ]
+    },
+    "dish_ramen": {
+      "dishId": "dish_ramen",
+      "name": "豚骨拉面",
+      "category": "Ramen",
+      "visualDifficulty": "EASY",
+      "masterAsset": "/assets/dishes/dish_ramen_master.jpg",
+      "masterBytes": 973017,
+      "approvedHash": "7FCE8C677B21909679A62456057E5304C38999A3FC04217F8544AD66853C9D18",
+      "atlasPng": "/assets/dishes/atlas_dish_ramen.png",
+      "atlasBytes": 2577774,
+      "atlasJson": "/assets/dishes/atlas_dish_ramen.json",
+      "pieceCount": 9,
+      "pieces": [
+        {
+          "slotId": "slot_0_0",
+          "file": "piece_dish_ramen_slot_0_0.png",
+          "bytes": 262822,
+          "sha256": "8E6E8F9309569A23..."
+        },
+        {
+          "slotId": "slot_1_0",
+          "file": "piece_dish_ramen_slot_1_0.png",
+          "bytes": 353713,
+          "sha256": "95D51B4DC9EC2EC2..."
+        },
+        {
+          "slotId": "slot_2_0",
+          "file": "piece_dish_ramen_slot_2_0.png",
+          "bytes": 266345,
+          "sha256": "2A10D21075C11ECA..."
+        },
+        {
+          "slotId": "slot_0_1",
+          "file": "piece_dish_ramen_slot_0_1.png",
+          "bytes": 311883,
+          "sha256": "2C0FF23F66E514FF..."
+        },
+        {
+          "slotId": "slot_1_1",
+          "file": "piece_dish_ramen_slot_1_1.png",
+          "bytes": 289036,
+          "sha256": "03E05BF88F6FC21E..."
+        },
+        {
+          "slotId": "slot_2_1",
+          "file": "piece_dish_ramen_slot_2_1.png",
+          "bytes": 314387,
+          "sha256": "7B27374D8F136AF6..."
+        },
+        {
+          "slotId": "slot_0_2",
+          "file": "piece_dish_ramen_slot_0_2.png",
+          "bytes": 260411,
+          "sha256": "5F7CD0634E9228B8..."
+        },
+        {
+          "slotId": "slot_1_2",
+          "file": "piece_dish_ramen_slot_1_2.png",
+          "bytes": 268546,
+          "sha256": "99718D91837AFCA7..."
+        },
+        {
+          "slotId": "slot_2_2",
+          "file": "piece_dish_ramen_slot_2_2.png",
+          "bytes": 260282,
+          "sha256": "D7E1A3C4A6588D47..."
+        }
+      ]
+    },
+    "dish_curry_rice": {
+      "dishId": "dish_curry_rice",
+      "name": "金黄咖喱饭",
+      "category": "Curry",
+      "visualDifficulty": "MEDIUM",
+      "masterAsset": "/assets/dishes/dish_curry_rice_master.jpg",
+      "masterBytes": 936752,
+      "approvedHash": "4F0A8858993F145671F5D1FA1D9C446C8CB9CB0C4182675540B19CD13F073AC5",
+      "atlasPng": "/assets/dishes/atlas_dish_curry_rice.png",
+      "atlasBytes": 2512879,
+      "atlasJson": "/assets/dishes/atlas_dish_curry_rice.json",
+      "pieceCount": 9,
+      "pieces": [
+        {
+          "slotId": "slot_0_0",
+          "file": "piece_dish_curry_rice_slot_0_0.png",
+          "bytes": 257477,
+          "sha256": "5C6D1A9E997BACD4..."
+        },
+        {
+          "slotId": "slot_1_0",
+          "file": "piece_dish_curry_rice_slot_1_0.png",
+          "bytes": 335468,
+          "sha256": "5979E6D3D2CD9224..."
+        },
+        {
+          "slotId": "slot_2_0",
+          "file": "piece_dish_curry_rice_slot_2_0.png",
+          "bytes": 253416,
+          "sha256": "16E440D85C66B3BB..."
+        },
+        {
+          "slotId": "slot_0_1",
+          "file": "piece_dish_curry_rice_slot_0_1.png",
+          "bytes": 292696,
+          "sha256": "11A9FC95E37DFAA0..."
+        },
+        {
+          "slotId": "slot_1_1",
+          "file": "piece_dish_curry_rice_slot_1_1.png",
+          "bytes": 289433,
+          "sha256": "E51239766E150A3D..."
+        },
+        {
+          "slotId": "slot_2_1",
+          "file": "piece_dish_curry_rice_slot_2_1.png",
+          "bytes": 306361,
+          "sha256": "CE0EE26CD3A9C109..."
+        },
+        {
+          "slotId": "slot_0_2",
+          "file": "piece_dish_curry_rice_slot_0_2.png",
+          "bytes": 258366,
+          "sha256": "497F9B04E9E86B72..."
+        },
+        {
+          "slotId": "slot_1_2",
+          "file": "piece_dish_curry_rice_slot_1_2.png",
+          "bytes": 263807,
+          "sha256": "EE8B3741298BF981..."
+        },
+        {
+          "slotId": "slot_2_2",
+          "file": "piece_dish_curry_rice_slot_2_2.png",
+          "bytes": 270206,
+          "sha256": "87056E4A983D6131..."
+        }
+      ]
+    },
+    "dish_tomato_pasta": {
+      "dishId": "dish_tomato_pasta",
+      "name": "番茄肉酱意面",
+      "category": "Pasta",
+      "visualDifficulty": "EASY",
+      "masterAsset": "/assets/dishes/dish_tomato_pasta_master.jpg",
+      "masterBytes": 970652,
+      "approvedHash": "2BFB574724716E4BA625B73D3E780D8D905FFEE4DB1511B29679E13DC0F7679F",
+      "atlasPng": "/assets/dishes/atlas_dish_tomato_pasta.png",
+      "atlasBytes": 2587690,
+      "atlasJson": "/assets/dishes/atlas_dish_tomato_pasta.json",
+      "pieceCount": 9,
+      "pieces": [
+        {
+          "slotId": "slot_0_0",
+          "file": "piece_dish_tomato_pasta_slot_0_0.png",
+          "bytes": 251867,
+          "sha256": "F53F00727AA052F2..."
+        },
+        {
+          "slotId": "slot_1_0",
+          "file": "piece_dish_tomato_pasta_slot_1_0.png",
+          "bytes": 336570,
+          "sha256": "B02D5DFDBCFA5426..."
+        },
+        {
+          "slotId": "slot_2_0",
+          "file": "piece_dish_tomato_pasta_slot_2_0.png",
+          "bytes": 244901,
+          "sha256": "F9CFE9E5FA1907FA..."
+        },
+        {
+          "slotId": "slot_0_1",
+          "file": "piece_dish_tomato_pasta_slot_0_1.png",
+          "bytes": 296135,
+          "sha256": "A115966DAC56EEE1..."
+        },
+        {
+          "slotId": "slot_1_1",
+          "file": "piece_dish_tomato_pasta_slot_1_1.png",
+          "bytes": 316110,
+          "sha256": "89B3ECFB87D0E53A..."
+        },
+        {
+          "slotId": "slot_2_1",
+          "file": "piece_dish_tomato_pasta_slot_2_1.png",
+          "bytes": 291584,
+          "sha256": "B2CCAC24870FB6FE..."
+        },
+        {
+          "slotId": "slot_0_2",
+          "file": "piece_dish_tomato_pasta_slot_0_2.png",
+          "bytes": 286586,
+          "sha256": "182BC1ED87789740..."
+        },
+        {
+          "slotId": "slot_1_2",
+          "file": "piece_dish_tomato_pasta_slot_1_2.png",
+          "bytes": 291179,
+          "sha256": "9821B6F30986B8F5..."
+        },
+        {
+          "slotId": "slot_2_2",
+          "file": "piece_dish_tomato_pasta_slot_2_2.png",
+          "bytes": 270416,
+          "sha256": "6128A44EFACFFF04..."
+        }
+      ]
+    },
+    "dish_avocado_chicken_bowl": {
+      "dishId": "dish_avocado_chicken_bowl",
+      "name": "牛油果鸡肉碗",
+      "category": "Healthy",
+      "visualDifficulty": "HARD",
+      "masterAsset": "/assets/dishes/dish_avocado_chicken_bowl_master.jpg",
+      "masterBytes": 1130954,
+      "approvedHash": "84505167BBD5B71548C6E84A38424DAB9E587617E3A4F8D0B51253FE6E0652F3",
+      "atlasPng": "/assets/dishes/atlas_dish_avocado_chicken_bowl.png",
+      "atlasBytes": 2807832,
+      "atlasJson": "/assets/dishes/atlas_dish_avocado_chicken_bowl.json",
+      "pieceCount": 9,
+      "pieces": [
+        {
+          "slotId": "slot_0_0",
+          "file": "piece_dish_avocado_chicken_bowl_slot_0_0.png",
+          "bytes": 278781,
+          "sha256": "F9D5538A1498EB5C..."
+        },
+        {
+          "slotId": "slot_1_0",
+          "file": "piece_dish_avocado_chicken_bowl_slot_1_0.png",
+          "bytes": 369877,
+          "sha256": "148CC4C9F5ECF99E..."
+        },
+        {
+          "slotId": "slot_2_0",
+          "file": "piece_dish_avocado_chicken_bowl_slot_2_0.png",
+          "bytes": 266490,
+          "sha256": "453F010B5AD46EDB..."
+        },
+        {
+          "slotId": "slot_0_1",
+          "file": "piece_dish_avocado_chicken_bowl_slot_0_1.png",
+          "bytes": 325651,
+          "sha256": "F92FFC3417AE3AE4..."
+        },
+        {
+          "slotId": "slot_1_1",
+          "file": "piece_dish_avocado_chicken_bowl_slot_1_1.png",
+          "bytes": 308018,
+          "sha256": "44A38074770A80B6..."
+        },
+        {
+          "slotId": "slot_2_1",
+          "file": "piece_dish_avocado_chicken_bowl_slot_2_1.png",
+          "bytes": 336491,
+          "sha256": "EAE4EA716702375D..."
+        },
+        {
+          "slotId": "slot_0_2",
+          "file": "piece_dish_avocado_chicken_bowl_slot_0_2.png",
+          "bytes": 282383,
+          "sha256": "596EED3E3F27E93F..."
+        },
+        {
+          "slotId": "slot_1_2",
+          "file": "piece_dish_avocado_chicken_bowl_slot_1_2.png",
+          "bytes": 331467,
+          "sha256": "FDC4F8B2917C0FAF..."
+        },
+        {
+          "slotId": "slot_2_2",
+          "file": "piece_dish_avocado_chicken_bowl_slot_2_2.png",
+          "bytes": 315176,
+          "sha256": "3A3AE8E54FFE8C78..."
+        }
+      ]
+    },
+    "dish_shrimp_fried_rice": {
+      "dishId": "dish_shrimp_fried_rice",
+      "name": "鲜虾蛋炒饭",
+      "category": "Rice",
+      "visualDifficulty": "HARD",
+      "masterAsset": "/assets/dishes/dish_shrimp_fried_rice_master.jpg",
+      "masterBytes": 1159653,
+      "approvedHash": "E3CA60877A28C145B7DEAA7B4A8B9792100139E41352404B96EE88C6F45D5933",
+      "atlasPng": "/assets/dishes/atlas_dish_shrimp_fried_rice.png",
+      "atlasBytes": 2814622,
+      "atlasJson": "/assets/dishes/atlas_dish_shrimp_fried_rice.json",
+      "pieceCount": 9,
+      "pieces": [
+        {
+          "slotId": "slot_0_0",
+          "file": "piece_dish_shrimp_fried_rice_slot_0_0.png",
+          "bytes": 283099,
+          "sha256": "49205625E4D4A232..."
+        },
+        {
+          "slotId": "slot_1_0",
+          "file": "piece_dish_shrimp_fried_rice_slot_1_0.png",
+          "bytes": 379796,
+          "sha256": "F3FF63F37A035D4A..."
+        },
+        {
+          "slotId": "slot_2_0",
+          "file": "piece_dish_shrimp_fried_rice_slot_2_0.png",
+          "bytes": 269087,
+          "sha256": "97D0B9402F2CBF8C..."
+        },
+        {
+          "slotId": "slot_0_1",
+          "file": "piece_dish_shrimp_fried_rice_slot_0_1.png",
+          "bytes": 338134,
+          "sha256": "83447137CC2FEF88..."
+        },
+        {
+          "slotId": "slot_1_1",
+          "file": "piece_dish_shrimp_fried_rice_slot_1_1.png",
+          "bytes": 300310,
+          "sha256": "78C3BE8087234639..."
+        },
+        {
+          "slotId": "slot_2_1",
+          "file": "piece_dish_shrimp_fried_rice_slot_2_1.png",
+          "bytes": 335352,
+          "sha256": "989EC597D70ECC7C..."
+        },
+        {
+          "slotId": "slot_0_2",
+          "file": "piece_dish_shrimp_fried_rice_slot_0_2.png",
+          "bytes": 294118,
+          "sha256": "54BDC6B3A81CEEE7..."
+        },
+        {
+          "slotId": "slot_1_2",
+          "file": "piece_dish_shrimp_fried_rice_slot_1_2.png",
+          "bytes": 329311,
+          "sha256": "C00DF640EA6A31EF..."
+        },
+        {
+          "slotId": "slot_2_2",
+          "file": "piece_dish_shrimp_fried_rice_slot_2_2.png",
+          "bytes": 299213,
+          "sha256": "5716D4DE5B7DFBCC..."
+        }
+      ]
+    },
+    "dish_grilled_steak": {
+      "dishId": "dish_grilled_steak",
+      "name": "炭烤牛排拼盘",
+      "category": "Steak",
+      "visualDifficulty": "MEDIUM",
+      "masterAsset": "/assets/dishes/dish_grilled_steak_master.jpg",
+      "masterBytes": 1102075,
+      "approvedHash": "680D0BA523796492117344A0EB6A3A8FD1640045F009379CF0D80B66327D51B0",
+      "atlasPng": "/assets/dishes/atlas_dish_grilled_steak.png",
+      "atlasBytes": 2748716,
+      "atlasJson": "/assets/dishes/atlas_dish_grilled_steak.json",
+      "pieceCount": 9,
+      "pieces": [
+        {
+          "slotId": "slot_0_0",
+          "file": "piece_dish_grilled_steak_slot_0_0.png",
+          "bytes": 267797,
+          "sha256": "5BB73B1CB53AA88E..."
+        },
+        {
+          "slotId": "slot_1_0",
+          "file": "piece_dish_grilled_steak_slot_1_0.png",
+          "bytes": 351707,
+          "sha256": "EB3B75A021906CBF..."
+        },
+        {
+          "slotId": "slot_2_0",
+          "file": "piece_dish_grilled_steak_slot_2_0.png",
+          "bytes": 264238,
+          "sha256": "4ABD306F3B8C4362..."
+        },
+        {
+          "slotId": "slot_0_1",
+          "file": "piece_dish_grilled_steak_slot_0_1.png",
+          "bytes": 324950,
+          "sha256": "8DE62B93D4042B23..."
+        },
+        {
+          "slotId": "slot_1_1",
+          "file": "piece_dish_grilled_steak_slot_1_1.png",
+          "bytes": 301648,
+          "sha256": "94FF5638C1DB3663..."
+        },
+        {
+          "slotId": "slot_2_1",
+          "file": "piece_dish_grilled_steak_slot_2_1.png",
+          "bytes": 331058,
+          "sha256": "91678738D9536DE2..."
+        },
+        {
+          "slotId": "slot_0_2",
+          "file": "piece_dish_grilled_steak_slot_0_2.png",
+          "bytes": 297013,
+          "sha256": "6A6B30EBAABF27DB..."
+        },
+        {
+          "slotId": "slot_1_2",
+          "file": "piece_dish_grilled_steak_slot_1_2.png",
+          "bytes": 332138,
+          "sha256": "D46BB9F66ABDB2C2..."
+        },
+        {
+          "slotId": "slot_2_2",
+          "file": "piece_dish_grilled_steak_slot_2_2.png",
+          "bytes": 289880,
+          "sha256": "70DB1D449327D6D9..."
+        }
+      ]
+    }
+  }
+}
