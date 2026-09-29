@@ -15,6 +15,7 @@ export class OrderSystem {
   private _cascadeChain: number = 0;
   private _ordersFulfilledCount: number = 0;
   private _preparedDishBuffer: string[] = [];
+  private _dayConfig: DayConfig | DishPuzzleDayConfig;
   readonly maxPreparedBuffer: number = 2;
 
   constructor(
@@ -26,6 +27,7 @@ export class OrderSystem {
     previewMode: NextOrderPreviewMode = 'DISH_ONLY',
     dishCatalog?: Record<string, DishOrderDefinition>
   ) {
+    this._dayConfig = dayConfig;
     this._orderBag = new OrderBag(dayConfig, recipes, daySeed, dishCatalog);
     this._inventory = inventory || new PrepInventory();
     this._events = events || new EventEmitter();
@@ -60,7 +62,15 @@ export class OrderSystem {
   }
 
   getNextOrderPreview(): NextOrderPreview {
+    const unlockDay = (this._dayConfig as any).nextOrderPreviewDay;
+    if (unlockDay !== undefined && (this._dayConfig as any).dayNumber < unlockDay) {
+      return { mode: 'NONE' };
+    }
     return this._orderBag.getNextOrderPreview(this._previewMode);
+  }
+
+  getOrderBagStateSnapshot() {
+    return this._orderBag.getStateSnapshot();
   }
 
   /**
@@ -92,6 +102,9 @@ export class OrderSystem {
    */
   syncInventoryWithCurrentOrder(): boolean {
     if (!this._currentOrder || this._currentOrder.isFulfilled) return false;
+    if (this._currentOrder.kind === 'DISH' || this._currentOrder.items.length === 0) {
+      return false;
+    }
 
     let changed = false;
     for (const item of this._currentOrder.items) {
@@ -124,6 +137,9 @@ export class OrderSystem {
 
   private checkCurrentOrderFulfillment(): boolean {
     if (!this._currentOrder || this._currentOrder.isFulfilled) return false;
+    if (this._currentOrder.kind === 'DISH' || this._currentOrder.items.length === 0) {
+      return false;
+    }
 
     const allSatisfied = this._currentOrder.items.every(
       item => item.reserved >= item.needed

@@ -43,7 +43,8 @@ export class OrderBag {
       emoji: dish.emoji || '🍽️',
       baseRevenue: dish.baseRevenue,
       items: [],
-      isFulfilled: false
+      isFulfilled: false,
+      kind: 'DISH'
     };
   }
 
@@ -64,7 +65,8 @@ export class OrderBag {
       emoji: recipe.emoji,
       baseRevenue: recipe.baseRevenue,
       items,
-      isFulfilled: false
+      isFulfilled: false,
+      kind: 'RECIPE'
     };
   }
 
@@ -172,5 +174,23 @@ export class OrderBag {
 
   getCurrentOrderIndex(): number {
     return this._currentIndex;
+  }
+
+  getStateSnapshot(): {
+    currentIndex: number;
+    bagCycleIndex: number;
+    orderSequence: { orderId: string; dishId?: string; recipeId: string }[];
+    rngState: number;
+  } {
+    return {
+      currentIndex: this._currentIndex,
+      bagCycleIndex: this._bagCycleIndex,
+      orderSequence: this._orderSequence.map(o => ({
+        orderId: o.orderId,
+        dishId: o.dishId,
+        recipeId: o.recipeId
+      })),
+      rngState: this._rng.getState()
+    };
   }
 }

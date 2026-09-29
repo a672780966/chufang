@@ -124,6 +124,7 @@ export interface Order {
   baseRevenue: number;
   items: OrderItemProgress[];
   isFulfilled: boolean;
+  kind?: 'RECIPE' | 'DISH';
 }
 
 export interface PressureProfile {
@@ -230,9 +231,13 @@ export interface DayConfig {
   dangerThreshold?: number;
   nextOrderPreviewDay?: number;
   useDay1GoldSample?: boolean;
+  completionRefillCount?: number;
 }
 
 export type GameplayMode = 'DISH_PUZZLE' | 'LEGACY_INGREDIENT';
+
+export const DEFAULT_COMPLETION_REFILL_PIECES = 2;
+export const DEFAULT_BASE_NON_ORDER_WEIGHT = 40;
 
 /**
  * DishPuzzleDayConfig
@@ -254,6 +259,7 @@ export interface DishPuzzleDayConfig {
   dangerThreshold: number; // Occupancy ratio threshold (e.g. 0.65)
   nextOrderPreviewDay?: number;
   useDay1GoldSample?: boolean;
+  completionRefillCount?: number;
 }
 
 export type NextOrderPreviewMode = 'NONE' | 'DISH_ONLY' | 'FULL_RECIPE';

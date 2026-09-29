@@ -470,31 +470,30 @@ export class BoardView extends Component {
   }
 
   onDishCompleted(payload: CoreEventMap['DISH_COMPLETED']) {
-    // 550ms completion celebration matching Web presentation
+    // Stage 5A Revision 2: Create visual Completion Ghost nodes from snapshot.
+    // The celebration tween plays for 600ms without being interrupted by Core's synchronous clear.
     for (const p of payload.pieces) {
-      const node = this.piecesContainer?.getChildByName(`DishPiece_${p.pieceInstanceId}`);
-      if (node) {
-        tween(node)
-          .to(0.22, { scale: new Vec3(1.12, 1.12, 1) }, { easing: 'sineOut' })
-          .to(0.22, { scale: new Vec3(1.0, 1.0, 1) }, { easing: 'sineIn' })
+      const liveNode = this.piecesContainer?.getChildByName(`DishPiece_${p.pieceInstanceId}`);
+      if (liveNode) {
+        liveNode.name = `DishPiece_Ghost_${p.pieceInstanceId}`;
+        tween(liveNode)
+          .to(0.24, { scale: new Vec3(1.14, 1.14, 1) }, { easing: 'sineOut' })
+          .by(0.16, { position: new Vec3(0, 15, 0) }, { easing: 'quadOut' })
+          .to(0.20, { scale: new Vec3(0, 0, 1) }, { easing: 'sineIn' })
+          .call(() => liveNode.destroy())
           .start();
       }
     }
-
-    // Presentation only plays the celebration tween; Core authoritatively clears the dish.
   }
 
   onDishCleared(payload: CoreEventMap['DISH_CLEARED']) {
-    // 1. Remove nodes of the cleared dish pieces
+    // 1. Remove nodes of the cleared dish pieces (ignoring ghost nodes which manage their own lifecycle)
     if (this.piecesContainer) {
       for (const child of [...this.piecesContainer.children]) {
-        if (child.name.startsWith('DishPiece_')) {
+        if (child.name.startsWith('DishPiece_') && !child.name.startsWith('DishPiece_Ghost_')) {
           const pId = child.name.replace('DishPiece_', '');
           if (!this._session?.dishPuzzleManager?.getPiece(pId)) {
-            tween(child)
-              .to(0.12, { scale: new Vec3(0, 0, 1) })
-              .call(() => child.destroy())
-              .start();
+            child.destroy();
           }
         }
       }

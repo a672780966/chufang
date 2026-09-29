@@ -407,14 +407,14 @@ class WebGameApp {
       }
     }
 
-    // C. Next Order Preview (Gated by Day 7 per Baseline Section 27 and Cocos Parity)
+    // C. Next Order Preview (Gated by Core session.isNextOrderPreviewUnlocked)
     const nextHint = document.getElementById('next-order-hint');
     const nextLabel = document.getElementById('next-order-label');
-    const preview = session.orderSystem.getNextOrderPreview();
-    const isGated = session.dayConfig.dayNumber < 7;
+    const preview = session.nextOrderPreview;
+    const isGated = !session.isNextOrderPreviewUnlocked || preview.mode === 'NONE';
 
     if (nextHint && nextLabel) {
-      if (isGated || preview.mode === 'NONE' || !preview.dishName) {
+      if (isGated || !preview.dishName) {
         nextHint.style.display = 'none';
       } else {
         nextHint.style.display = 'inline-flex';

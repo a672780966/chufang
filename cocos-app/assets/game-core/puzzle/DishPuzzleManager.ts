@@ -40,13 +40,34 @@ export class DishPuzzleManager {
   private _pieceCounter: number = 1;
   private _groupCounter: number = 1;
   private _scheduler = new DishPieceSupplyScheduler();
+  private _runtimeConfig?: DishPuzzleDayConfig;
 
-  constructor(columns: number = 8, rows: number = 12, events?: EventEmitter) {
+  constructor(columns: number = 8, rows: number = 12, events?: EventEmitter, config?: DishPuzzleDayConfig) {
     this.columns = columns;
     this.rows = rows;
     this.events = events || new EventEmitter();
 
     this._gridCells = Array.from({ length: rows }, () => Array(columns).fill(null));
+    if (config) {
+      this.configureRuntime(config);
+    }
+  }
+
+  configureRuntime(config: DishPuzzleDayConfig): void {
+    this._runtimeConfig = config;
+    this._scheduler.configureWeights({
+      currentOrderWeight: config.currentOrderWeight,
+      nearCompleteWeight: config.nearCompleteWeight,
+      starvationWeight: config.starvationWeight
+    });
+  }
+
+  getRuntimeConfig(): DishPuzzleDayConfig | undefined {
+    return this._runtimeConfig;
+  }
+
+  getSchedulerStateSnapshot(): { starvationCounters: Record<string, number> } {
+    return this._scheduler.getStateSnapshot();
   }
 
   getPiece(pieceId: string): DishPuzzlePiece | undefined {
@@ -321,15 +342,11 @@ export class DishPuzzleManager {
    * Ensures the board always maintains 3 active unfinished DishPuzzleInstances.
    * On Day 1: maintains 'dish_salad', 'dish_breakfast', 'dish_ramen'.
    */
-  maintainActiveDishPool(targetDishes: string[] = ['dish_salad', 'dish_breakfast', 'dish_ramen']): DishPuzzleInstance[] {
-    // Only maintain multi-dish pool if this manager is running a multi-dish session
-    if (this._instances.size < 2) {
-      return Array.from(this._instances.values()).filter(i => !i.isCompleted);
-    }
-
+  maintainActiveDishPool(targetDishes?: string[]): DishPuzzleInstance[] {
+    const dishes = targetDishes ?? this._runtimeConfig?.activeDishIds ?? ['dish_salad', 'dish_breakfast', 'dish_ramen'];
     const activeInstances: DishPuzzleInstance[] = [];
 
-    for (const dishId of targetDishes) {
+    for (const dishId of dishes) {
       let inst = Array.from(this._instances.values()).find(
         i => i.dishId === dishId && !i.isCompleted
       );
@@ -420,6 +437,31 @@ export class DishPuzzleManager {
 
     this._groups.set(groupId, group);
     return group;
+  }
+
+  removePiece(pieceInstanceId: string): boolean {
+    const piece = this._pieces.get(pieceInstanceId);
+    if (!piece) return false;
+    if (
+      piece.boardCoord.row >= 0 && piece.boardCoord.row < this.rows &&
+      piece.boardCoord.col >= 0 && piece.boardCoord.col < this.columns &&
+      this._gridCells[piece.boardCoord.row][piece.boardCoord.col] === pieceInstanceId
+    ) {
+      this._gridCells[piece.boardCoord.row][piece.boardCoord.col] = null;
+    }
+    const group = this._groups.get(piece.groupId);
+    if (group) {
+      group.pieceIds = group.pieceIds.filter(id => id !== pieceInstanceId);
+      if (group.pieceIds.length === 0) {
+        this._groups.delete(group.groupId);
+      }
+    }
+    this._pieces.delete(pieceInstanceId);
+    const inst = this._instances.get(piece.dishPuzzleInstanceId);
+    if (inst) {
+      inst.spawnedSlots.delete(`${piece.dishCol}_${piece.dishRow}`);
+    }
+    return true;
   }
 
   /**
@@ -682,9 +724,6 @@ export class DishPuzzleManager {
     );
     if (!existing) {
       existing = this.createDishInstance(dishId);
-    }
-    if (dishId === 'dish_salad' && existing.spawnedSlots.size === 0) {
-      this.spawnDay1SaladLayout(existing);
     }
     this.maintainActiveDishPool();
     return existing;

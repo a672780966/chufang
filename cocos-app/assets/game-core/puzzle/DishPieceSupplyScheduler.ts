@@ -1,7 +1,35 @@
 import { DishPuzzleInstance } from './DishPuzzleModel.js';
+import { DEFAULT_BASE_NON_ORDER_WEIGHT } from '../model/Types.js';
+
+export interface DishPieceSupplySchedulerWeights {
+  currentOrderWeight?: number;
+  nearCompleteWeight?: number;
+  starvationWeight?: number;
+  baseNonOrderWeight?: number;
+}
 
 export class DishPieceSupplyScheduler {
   private _starvationCounters = new Map<string, number>();
+  private _currentOrderWeight: number = 100;
+  private _nearCompleteWeight: number = 25;
+  private _starvationWeight: number = 20;
+  private _baseNonOrderWeight: number = DEFAULT_BASE_NON_ORDER_WEIGHT;
+
+  configureWeights(weights?: DishPieceSupplySchedulerWeights): void {
+    if (!weights) return;
+    if (weights.currentOrderWeight !== undefined) this._currentOrderWeight = weights.currentOrderWeight;
+    if (weights.nearCompleteWeight !== undefined) this._nearCompleteWeight = weights.nearCompleteWeight;
+    if (weights.starvationWeight !== undefined) this._starvationWeight = weights.starvationWeight;
+    if (weights.baseNonOrderWeight !== undefined) this._baseNonOrderWeight = weights.baseNonOrderWeight;
+  }
+
+  getStateSnapshot(): { starvationCounters: Record<string, number> } {
+    const counters: Record<string, number> = {};
+    for (const [id, count] of this._starvationCounters.entries()) {
+      counters[id] = count;
+    }
+    return { starvationCounters: counters };
+  }
 
   getStarvationCounter(instanceId: string): number {
     return this._starvationCounters.get(instanceId) || 0;
@@ -32,10 +60,10 @@ export class DishPieceSupplyScheduler {
   /**
    * Computes priority weight for an active instance.
    * Day 1 Base Weights:
-   * - Current Order Dish: 100 (high)
-   * - Other Active Dish: 40 (medium)
-   * - Near-complete Dish (>= 6 pieces spawned): +25
-   * - Starved Dish: +20 * starvationCycles. Escalates aggressively if starvation >= 3.
+   * - Current Order Dish: currentOrderWeight (default 100)
+   * - Other Active Dish: baseNonOrderWeight (default 40)
+   * - Near-complete Dish (>= 6 pieces spawned): +nearCompleteWeight (default 25)
+   * - Starved Dish: +starvationWeight * starvationCycles. Escalates aggressively if starvation >= 3.
    */
   calculateInstanceWeight(
     instance: DishPuzzleInstance,
@@ -45,17 +73,17 @@ export class DishPieceSupplyScheduler {
       ? instance.dishId === currentOrderDishId
       : false;
 
-    let weight = isCurrentOrder ? 100 : 40;
+    let weight = isCurrentOrder ? this._currentOrderWeight : this._baseNonOrderWeight;
 
     // Near-complete bonus: 6, 7, or 8 pieces spawned
     if (instance.spawnedSlots.size >= 6) {
-      weight += 25;
+      weight += this._nearCompleteWeight;
     }
 
     // Starvation protection
     const starvation = this.getStarvationCounter(instance.instanceId);
     if (starvation > 0) {
-      weight += starvation * 20;
+      weight += starvation * this._starvationWeight;
       if (starvation >= 3) {
         weight += (starvation - 2) * 50; // Escalating surge guarantees supply
       }

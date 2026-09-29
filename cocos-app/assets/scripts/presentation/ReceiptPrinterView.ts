@@ -209,15 +209,13 @@ export class ReceiptPrinterView extends Component {
     }
 
     if (this.nextOrderLabel) {
-      if (this._session.dayConfig.dayNumber >= 7) {
-        const preview = this._session.orderSystem.getNextOrderPreview();
-        if (preview && preview.dishName) {
-          this.nextOrderLabel.string = `下一单预告: ${preview.dishName}`;
-        } else {
-          this.nextOrderLabel.string = '营业目标达成在即！';
-        }
+      const preview = this._session.nextOrderPreview;
+      if (preview && preview.mode !== 'NONE' && preview.dishName) {
+        this.nextOrderLabel.string = `下一单预告: ${preview.dishName}`;
+      } else if (preview && preview.mode !== 'NONE') {
+        this.nextOrderLabel.string = '营业目标达成在即！';
       } else {
-        this.nextOrderLabel.string = '下一单预告: 🔒 第 7 天解锁';
+        this.nextOrderLabel.string = '下一单预告: 🔒 尚未解锁';
       }
     }
   }

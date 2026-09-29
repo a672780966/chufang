@@ -325,10 +325,14 @@ describe('DishPuzzle Domain Model & Adjacency Engine', () => {
 
     const solveActiveSalad = () => {
       const manager = session.dishPuzzleManager;
-      const salad = Array.from(manager.getAllPieces())
-        .map(p => manager['_instances'].get(p.dishPuzzleInstanceId)!)
-        .find(inst => inst && inst.dishId === 'dish_salad' && !inst.isCompleted)!;
+      const salad = manager.getActiveDishInstances().find(inst => inst.dishId === 'dish_salad');
       assert.ok(salad, 'Active salad instance must exist');
+      if (salad.spawnedSlots.size < 9) {
+        for (const p of manager.getAllPieces().filter(p => p.dishPuzzleInstanceId === salad.instanceId)) {
+          manager.removePiece(p.pieceInstanceId);
+        }
+        manager.spawnDay1SaladLayout(salad);
+      }
 
       const saladPieces = manager.getAllPieces().filter(p => p.dishPuzzleInstanceId === salad.instanceId);
       const p00 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 0)!;
@@ -395,9 +399,14 @@ describe('DishPuzzle Domain Model & Adjacency Engine', () => {
 
     const solveActiveSalad = () => {
       const manager = session.dishPuzzleManager;
-      const salad = Array.from(manager.getAllPieces())
-        .map(p => manager['_instances'].get(p.dishPuzzleInstanceId)!)
-        .find(inst => inst && inst.dishId === 'dish_salad' && !inst.isCompleted)!;
+      const salad = manager.getActiveDishInstances().find(inst => inst.dishId === 'dish_salad');
+      assert.ok(salad, 'Active salad instance must exist');
+      if (salad.spawnedSlots.size < 9) {
+        for (const p of manager.getAllPieces().filter(p => p.dishPuzzleInstanceId === salad.instanceId)) {
+          manager.removePiece(p.pieceInstanceId);
+        }
+        manager.spawnDay1SaladLayout(salad);
+      }
 
       const saladPieces = manager.getAllPieces().filter(p => p.dishPuzzleInstanceId === salad.instanceId);
       const p00 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 0)!;

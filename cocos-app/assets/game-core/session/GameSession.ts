@@ -8,7 +8,8 @@ import {
   NextOrderPreview,
   GridCoord,
   DEFAULT_PRESSURE_PROFILE,
-  GameplayMode
+  GameplayMode,
+  DEFAULT_COMPLETION_REFILL_PIECES
 } from '../model/Types';
 import { EventEmitter, CoreEventMap } from '../model/Events';
 import { BoardGrid } from '../board/BoardGrid';
@@ -103,21 +104,26 @@ export class GameSession {
     let provisionalDishConfig: ReturnType<typeof getProvisionalDishConfig> | undefined;
     if (this.gameplayMode === 'DISH_PUZZLE') {
       provisionalDishConfig = getProvisionalDishConfig(dayConfig.dayNumber);
+      const isCustomDishConfig = Array.isArray((dayConfig as any).activeDishIds) || !!(dayConfig as any).orderWeights;
       effectiveDayConfig = {
         ...dayConfig,
-        businessGoal: provisionalDishConfig.businessGoal,
-        orderWeights: provisionalDishConfig.orderWeights,
-        activeDishIds: provisionalDishConfig.activeDishIds,
-        initialPieceCount: provisionalDishConfig.initialPieceCount,
-        comfortablePieceCount: provisionalDishConfig.comfortablePieceCount,
-        maxPieceCount: provisionalDishConfig.maxPieceCount,
-        supplyPerAction: provisionalDishConfig.supplyPerAction,
-        currentOrderWeight: provisionalDishConfig.currentOrderWeight,
-        nearCompleteWeight: provisionalDishConfig.nearCompleteWeight,
-        starvationWeight: provisionalDishConfig.starvationWeight,
-        dangerThreshold: provisionalDishConfig.dangerThreshold,
-        nextOrderPreviewDay: provisionalDishConfig.nextOrderPreviewDay,
-        useDay1GoldSample: provisionalDishConfig.useDay1GoldSample
+        ...provisionalDishConfig,
+        businessGoal: isCustomDishConfig && (dayConfig as any).businessGoal !== undefined
+          ? (dayConfig as any).businessGoal
+          : provisionalDishConfig.businessGoal,
+        orderWeights: (dayConfig as any).orderWeights ?? provisionalDishConfig.orderWeights,
+        activeDishIds: (dayConfig as any).activeDishIds ?? provisionalDishConfig.activeDishIds,
+        initialPieceCount: (dayConfig as any).initialPieceCount ?? provisionalDishConfig.initialPieceCount,
+        comfortablePieceCount: (dayConfig as any).comfortablePieceCount ?? provisionalDishConfig.comfortablePieceCount,
+        maxPieceCount: (dayConfig as any).maxPieceCount ?? provisionalDishConfig.maxPieceCount,
+        supplyPerAction: (dayConfig as any).supplyPerAction ?? provisionalDishConfig.supplyPerAction,
+        currentOrderWeight: (dayConfig as any).currentOrderWeight ?? provisionalDishConfig.currentOrderWeight,
+        nearCompleteWeight: (dayConfig as any).nearCompleteWeight ?? provisionalDishConfig.nearCompleteWeight,
+        starvationWeight: (dayConfig as any).starvationWeight ?? provisionalDishConfig.starvationWeight,
+        dangerThreshold: (dayConfig as any).dangerThreshold ?? provisionalDishConfig.dangerThreshold,
+        nextOrderPreviewDay: (dayConfig as any).nextOrderPreviewDay ?? provisionalDishConfig.nextOrderPreviewDay,
+        useDay1GoldSample: (dayConfig as any).useDay1GoldSample ?? provisionalDishConfig.useDay1GoldSample,
+        completionRefillCount: (dayConfig as any).completionRefillCount ?? provisionalDishConfig.completionRefillCount
       };
     }
     this.dayConfig = effectiveDayConfig;
@@ -134,7 +140,12 @@ export class GameSession {
       'DISH_ONLY'
     );
 
-    this.dishPuzzleManager = new DishPuzzleManager(this.grid.columns, this.grid.rows, this.events);
+    this.dishPuzzleManager = new DishPuzzleManager(
+      this.grid.columns,
+      this.grid.rows,
+      this.events,
+      effectiveDayConfig as any
+    );
 
     // Connect Dish serving (triggered when completed group clears) directly with OrderSystem
     this.events.on('DISH_SERVED', ({ dishId }) => {
@@ -145,15 +156,18 @@ export class GameSession {
         const neededDishId = this.orderSystem.currentOrder.dishId || (this.orderSystem.currentOrder.recipeId.startsWith('dish_') ? this.orderSystem.currentOrder.recipeId : `dish_${this.orderSystem.currentOrder.recipeId}`);
         this.dishPuzzleManager.ensureActiveDishInstance(neededDishId);
         this.dishPuzzleManager.maintainActiveDishPool();
-        this.dishPuzzleManager.schedulePieceAcrossActiveDishes(2, neededDishId);
+        const refillCount = this.dayConfig.completionRefillCount ?? DEFAULT_COMPLETION_REFILL_PIECES;
+        this.dishPuzzleManager.schedulePieceAcrossActiveDishes(refillCount, neededDishId);
       }
     });
 
     // When pieces merge, supply pieces across active dishes if space is available
     this.events.on('PIECE_GROUP_MERGED', () => {
-      if (!this._isGameOver && this.dishPuzzleManager.getAllPieces().length < 24) {
+      const maxPieces = this.dayConfig.maxPieceCount ?? 24;
+      if (!this._isGameOver && this.dishPuzzleManager.getAllPieces().length < maxPieces) {
         const curDish = this.orderSystem.currentOrder?.dishId;
-        this.dishPuzzleManager.schedulePieceAcrossActiveDishes(1, curDish);
+        const count = this.dayConfig.supplyPerAction ?? 1;
+        this.dishPuzzleManager.schedulePieceAcrossActiveDishes(count, curDish);
       }
     });
 
@@ -167,12 +181,12 @@ export class GameSession {
       });
     });
 
-    // Initialize DishPuzzle layout using the exact same provisionalDishConfig
-    if (this.gameplayMode === 'DISH_PUZZLE' && provisionalDishConfig) {
-      if (provisionalDishConfig.dayNumber === 1 && provisionalDishConfig.useDay1GoldSample) {
+    // Initialize DishPuzzle layout using the exact same effectiveDayConfig
+    if (this.gameplayMode === 'DISH_PUZZLE') {
+      if (effectiveDayConfig.dayNumber === 1 && effectiveDayConfig.useDay1GoldSample) {
         this.dishPuzzleManager.initDay1Layout();
       } else {
-        this.dishPuzzleManager.initializeDishPuzzleSession(provisionalDishConfig, daySeed);
+        this.dishPuzzleManager.initializeDishPuzzleSession(effectiveDayConfig as any, daySeed);
       }
     } else if (this.dayConfig.dayNumber === 1) {
       this.dishPuzzleManager.initDay1Layout();
@@ -207,8 +221,21 @@ export class GameSession {
     return this._recipes;
   }
 
+  get isNextOrderPreviewUnlocked(): boolean {
+    const unlockDay = this.dayConfig.nextOrderPreviewDay;
+    if (unlockDay === undefined) return true;
+    return this.dayConfig.dayNumber >= unlockDay;
+  }
+
   get nextOrderPreview(): NextOrderPreview {
+    if (!this.isNextOrderPreviewUnlocked) {
+      return { mode: 'NONE' };
+    }
     return this.orderSystem.getNextOrderPreview();
+  }
+
+  getNextOrderPreview(): NextOrderPreview {
+    return this.nextOrderPreview;
   }
 
   /**
@@ -425,9 +452,11 @@ export class GameSession {
 
   private handleActionSupply(): void {
     if (this._isGameOver) return;
-    if (this.dishPuzzleManager.getAllPieces().length < 24) {
+    const maxPieces = this.dayConfig.maxPieceCount ?? 24;
+    if (this.dishPuzzleManager.getAllPieces().length < maxPieces) {
       const curDish = this.orderSystem.currentOrder?.dishId;
-      this.dishPuzzleManager.schedulePieceAcrossActiveDishes(1, curDish);
+      const count = this.dayConfig.supplyPerAction ?? 1;
+      this.dishPuzzleManager.schedulePieceAcrossActiveDishes(count, curDish);
     }
   }
 
@@ -758,8 +787,47 @@ export class GameSession {
       loosePieces: this.grid.getAllLoosePieces(),
       inventory: this.inventory.getAllAvailable(),
       currentOrder: this.orderSystem.currentOrder,
-      nextOrderPreview: this.orderSystem.getNextOrderPreview(),
+      nextOrderPreview: this.nextOrderPreview,
       stats: this.stats
+    };
+  }
+
+  getFullStateSnapshot() {
+    return {
+      dayNumber: this.dayConfig.dayNumber,
+      businessGoal: this.orderSystem.businessGoal,
+      currentRevenue: this.orderSystem.totalRevenue,
+      isGoalReached: this.orderSystem.isGoalReached,
+      isGameOver: this._isGameOver,
+      isDeadlocked: this._isGameOver && !this.orderSystem.isGoalReached,
+      preparedDishBuffer: [...this.orderSystem.preparedDishBuffer],
+      currentOrder: this.orderSystem.currentOrder ? {
+        orderId: this.orderSystem.currentOrder.orderId,
+        dishId: this.orderSystem.currentOrder.dishId,
+        isFulfilled: this.orderSystem.currentOrder.isFulfilled
+      } : null,
+      nextOrderPreview: this.nextOrderPreview,
+      pieces: this.dishPuzzleManager.getAllPieces().map(p => ({
+        id: p.pieceInstanceId,
+        dishId: p.dishId,
+        dishCol: p.dishCol,
+        dishRow: p.dishRow,
+        boardCoord: { ...p.boardCoord }
+      })).sort((a, b) => a.id.localeCompare(b.id)),
+      groups: this.dishPuzzleManager.getAllGroups().map(g => ({
+        groupId: g.groupId,
+        pieceIds: [...g.pieceIds].sort()
+      })).sort((a, b) => a.groupId.localeCompare(b.groupId)),
+      activeDishInstances: this.dishPuzzleManager.getActiveDishInstances().map(i => ({
+        instanceId: i.instanceId,
+        dishId: i.dishId,
+        isCompleted: i.isCompleted,
+        spawnedCount: i.spawnedSlots.size
+      })).sort((a, b) => a.instanceId.localeCompare(b.instanceId)),
+      schedulerState: this.dishPuzzleManager.getSchedulerStateSnapshot(),
+      orderBagState: this.orderSystem.getOrderBagStateSnapshot(),
+      stats: this.stats,
+      sessionRngState: this._rng.getState()
     };
   }
 }

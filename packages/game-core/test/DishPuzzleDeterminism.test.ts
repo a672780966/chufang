@@ -68,6 +68,8 @@ export function computeSessionStateHash(session: GameSession, phase: string = 'P
     currentOrder,
     nextOrder,
     preparedBuffer: [...session.orderSystem.preparedDishBuffer],
+    schedulerState: session.dishPuzzleManager.getSchedulerStateSnapshot(),
+    orderBagState: session.orderSystem.getOrderBagStateSnapshot(),
     revenue: session.revenue,
     stats: session.stats,
     rngState: (session as any)._rng?.getState?.() || '',

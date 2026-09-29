@@ -357,6 +357,13 @@ describe('Cocos Presentation Playable Chain: Drag -> Place -> Complete -> Refill
     // Helper: simulate touch drag moves solving the active salad instance
     const solveSaladViaTouchMoves = () => {
       const mgr = session.dishPuzzleManager;
+      const salad = mgr.getActiveDishInstances().find(inst => inst.dishId === 'dish_salad');
+      if (salad && salad.spawnedSlots.size < 9) {
+        for (const p of mgr.getAllPieces().filter(p => p.dishPuzzleInstanceId === salad.instanceId)) {
+          mgr.removePiece(p.pieceInstanceId);
+        }
+        mgr.spawnDay1SaladLayout(salad);
+      }
       const saladPieces = mgr.getAllPieces().filter(p => p.dishId === 'dish_salad');
       const p00 = saladPieces.find(p => p.dishCol === 0 && p.dishRow === 0)!;
 
