@@ -101,7 +101,7 @@ describe('Stage 5A Test Suite 1: DishPuzzle Core Authority', () => {
     const manager = new DishPuzzleManager(8, 12);
     assert.throws(
       () => manager.createDishInstance('dish_burger'),
-      /not found in GOLD_SAMPLE_DISH_MANIFEST/,
+      /not found in DISH_MANIFEST/,
       'Must throw Error for non-existent dish_burger'
     );
     assert.throws(

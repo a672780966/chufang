@@ -272,7 +272,9 @@ export class OrderSystem {
   handleCompletedDish(dishId: string): { served: boolean; buffered: boolean; order?: Order } {
     if (!this._currentOrder) {
       if (this._preparedDishBuffer.length < this.maxPreparedBuffer) {
+        const slot = this._preparedDishBuffer.length;
         this._preparedDishBuffer.push(dishId);
+        this._events.emit('PREPARED_DISH_STORED', { dishId, bufferSlot: slot });
         return { served: false, buffered: true };
       }
       return { served: false, buffered: false };
@@ -337,6 +339,7 @@ export class OrderSystem {
         const bufIdx = this._preparedDishBuffer.findIndex(d => this.matchesDish(this._currentOrder!.dishId || this._currentOrder!.recipeId, d));
         if (bufIdx !== -1) {
           const bufferedDish = this._preparedDishBuffer.splice(bufIdx, 1)[0];
+          this._events.emit('PREPARED_DISH_SERVED', { dishId: bufferedDish, orderId: this._currentOrder?.orderId });
           this.handleCompletedDish(bufferedDish);
         } else {
           this._cascadeChain = 0;
@@ -349,7 +352,9 @@ export class OrderSystem {
     } else {
       // Dish does not match current order: enter PreparedDishBuffer
       if (this._preparedDishBuffer.length < this.maxPreparedBuffer) {
+        const slot = this._preparedDishBuffer.length;
         this._preparedDishBuffer.push(dishId);
+        this._events.emit('PREPARED_DISH_STORED', { dishId, bufferSlot: slot });
         return { served: false, buffered: true };
       }
       return { served: false, buffered: false };

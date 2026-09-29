@@ -1,0 +1,170 @@
+{
+  "10": {
+    "num": "10",
+    "dishId": "dish_grilled_steak",
+    "dishName": "炭烤牛排拼盘",
+    "slotId": "slot_1_0",
+    "slotType": "Edge (1,0)"
+  },
+  "11": {
+    "num": "11",
+    "dishId": "dish_avocado_chicken_bowl",
+    "dishName": "牛油果鸡肉碗",
+    "slotId": "slot_0_0",
+    "slotType": "Corner (0,0)"
+  },
+  "12": {
+    "num": "12",
+    "dishId": "dish_grilled_steak",
+    "dishName": "炭烤牛排拼盘",
+    "slotId": "slot_1_1",
+    "slotType": "Center (1,1)"
+  },
+  "13": {
+    "num": "13",
+    "dishId": "dish_breakfast",
+    "dishName": "春日早餐盘",
+    "slotId": "slot_1_1",
+    "slotType": "Center (1,1)"
+  },
+  "14": {
+    "num": "14",
+    "dishId": "dish_salad",
+    "dishName": "田园沙拉",
+    "slotId": "slot_1_0",
+    "slotType": "Edge (1,0)"
+  },
+  "15": {
+    "num": "15",
+    "dishId": "dish_breakfast",
+    "dishName": "春日早餐盘",
+    "slotId": "slot_0_0",
+    "slotType": "Corner (0,0)"
+  },
+  "16": {
+    "num": "16",
+    "dishId": "dish_avocado_chicken_bowl",
+    "dishName": "牛油果鸡肉碗",
+    "slotId": "slot_1_0",
+    "slotType": "Edge (1,0)"
+  },
+  "17": {
+    "num": "17",
+    "dishId": "dish_salad",
+    "dishName": "田园沙拉",
+    "slotId": "slot_0_0",
+    "slotType": "Corner (0,0)"
+  },
+  "18": {
+    "num": "18",
+    "dishId": "dish_grilled_steak",
+    "dishName": "炭烤牛排拼盘",
+    "slotId": "slot_0_0",
+    "slotType": "Corner (0,0)"
+  },
+  "19": {
+    "num": "19",
+    "dishId": "dish_shrimp_fried_rice",
+    "dishName": "鲜虾蛋炒饭",
+    "slotId": "slot_1_0",
+    "slotType": "Edge (1,0)"
+  },
+  "20": {
+    "num": "20",
+    "dishId": "dish_curry_rice",
+    "dishName": "金黄咖喱饭",
+    "slotId": "slot_0_0",
+    "slotType": "Corner (0,0)"
+  },
+  "21": {
+    "num": "21",
+    "dishId": "dish_shrimp_fried_rice",
+    "dishName": "鲜虾蛋炒饭",
+    "slotId": "slot_1_1",
+    "slotType": "Center (1,1)"
+  },
+  "22": {
+    "num": "22",
+    "dishId": "dish_curry_rice",
+    "dishName": "金黄咖喱饭",
+    "slotId": "slot_1_0",
+    "slotType": "Edge (1,0)"
+  },
+  "23": {
+    "num": "23",
+    "dishId": "dish_ramen",
+    "dishName": "豚骨拉面",
+    "slotId": "slot_1_0",
+    "slotType": "Edge (1,0)"
+  },
+  "24": {
+    "num": "24",
+    "dishId": "dish_curry_rice",
+    "dishName": "金黄咖喱饭",
+    "slotId": "slot_1_1",
+    "slotType": "Center (1,1)"
+  },
+  "01": {
+    "num": "01",
+    "dishId": "dish_shrimp_fried_rice",
+    "dishName": "鲜虾蛋炒饭",
+    "slotId": "slot_0_0",
+    "slotType": "Corner (0,0)"
+  },
+  "02": {
+    "num": "02",
+    "dishId": "dish_ramen",
+    "dishName": "豚骨拉面",
+    "slotId": "slot_0_0",
+    "slotType": "Corner (0,0)"
+  },
+  "03": {
+    "num": "03",
+    "dishId": "dish_salad",
+    "dishName": "田园沙拉",
+    "slotId": "slot_1_1",
+    "slotType": "Center (1,1)"
+  },
+  "04": {
+    "num": "04",
+    "dishId": "dish_breakfast",
+    "dishName": "春日早餐盘",
+    "slotId": "slot_1_0",
+    "slotType": "Edge (1,0)"
+  },
+  "05": {
+    "num": "05",
+    "dishId": "dish_tomato_pasta",
+    "dishName": "番茄肉酱意面",
+    "slotId": "slot_1_1",
+    "slotType": "Center (1,1)"
+  },
+  "06": {
+    "num": "06",
+    "dishId": "dish_ramen",
+    "dishName": "豚骨拉面",
+    "slotId": "slot_1_1",
+    "slotType": "Center (1,1)"
+  },
+  "07": {
+    "num": "07",
+    "dishId": "dish_tomato_pasta",
+    "dishName": "番茄肉酱意面",
+    "slotId": "slot_0_0",
+    "slotType": "Corner (0,0)"
+  },
+  "08": {
+    "num": "08",
+    "dishId": "dish_avocado_chicken_bowl",
+    "dishName": "牛油果鸡肉碗",
+    "slotId": "slot_1_1",
+    "slotType": "Center (1,1)"
+  },
+  "09": {
+    "num": "09",
+    "dishId": "dish_tomato_pasta",
+    "dishName": "番茄肉酱意面",
+    "slotId": "slot_1_0",
+    "slotType": "Edge (1,0)"
+  }
+}

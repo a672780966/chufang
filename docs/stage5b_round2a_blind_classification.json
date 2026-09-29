@@ -1,0 +1,657 @@
+{
+  "testSuite": "Stage 5B Round 2A Blind Classification Evaluation",
+  "evaluatedPieces": 24,
+  "testersCount": 3,
+  "totalObservations": 72,
+  "overallAccuracy": 87.5,
+  "observations": [
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "10",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_grilled_steak",
+      "selectedDishId": "dish_grilled_steak",
+      "correct": true,
+      "decisionTimeMs": 1421
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "11",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_avocado_chicken_bowl",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": true,
+      "decisionTimeMs": 1521
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "12",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_grilled_steak",
+      "selectedDishId": "dish_grilled_steak",
+      "correct": true,
+      "decisionTimeMs": 1698
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "13",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_breakfast",
+      "selectedDishId": "dish_breakfast",
+      "correct": true,
+      "decisionTimeMs": 1972
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "14",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_salad",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": false,
+      "decisionTimeMs": 2215
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "15",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_breakfast",
+      "selectedDishId": "dish_breakfast",
+      "correct": true,
+      "decisionTimeMs": 2061
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "16",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_avocado_chicken_bowl",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": true,
+      "decisionTimeMs": 2686
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "17",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_salad",
+      "selectedDishId": "dish_salad",
+      "correct": true,
+      "decisionTimeMs": 1650
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "18",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_grilled_steak",
+      "selectedDishId": "dish_grilled_steak",
+      "correct": true,
+      "decisionTimeMs": 2409
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "19",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_shrimp_fried_rice",
+      "selectedDishId": "dish_shrimp_fried_rice",
+      "correct": true,
+      "decisionTimeMs": 2496
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "20",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_curry_rice",
+      "selectedDishId": "dish_curry_rice",
+      "correct": true,
+      "decisionTimeMs": 2758
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "21",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_shrimp_fried_rice",
+      "selectedDishId": "dish_shrimp_fried_rice",
+      "correct": true,
+      "decisionTimeMs": 1676
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "22",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_curry_rice",
+      "selectedDishId": "dish_curry_rice",
+      "correct": true,
+      "decisionTimeMs": 1936
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "23",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_ramen",
+      "selectedDishId": "dish_ramen",
+      "correct": true,
+      "decisionTimeMs": 2075
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "24",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_curry_rice",
+      "selectedDishId": "dish_curry_rice",
+      "correct": true,
+      "decisionTimeMs": 1995
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "01",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_shrimp_fried_rice",
+      "selectedDishId": "dish_curry_rice",
+      "correct": false,
+      "decisionTimeMs": 2338
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "02",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_ramen",
+      "selectedDishId": "dish_tomato_pasta",
+      "correct": false,
+      "decisionTimeMs": 2532
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "03",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_salad",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": false,
+      "decisionTimeMs": 3099
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "04",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_breakfast",
+      "selectedDishId": "dish_breakfast",
+      "correct": true,
+      "decisionTimeMs": 1837
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "05",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_tomato_pasta",
+      "selectedDishId": "dish_tomato_pasta",
+      "correct": true,
+      "decisionTimeMs": 2263
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "06",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_ramen",
+      "selectedDishId": "dish_ramen",
+      "correct": true,
+      "decisionTimeMs": 1522
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "07",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_tomato_pasta",
+      "selectedDishId": "dish_tomato_pasta",
+      "correct": true,
+      "decisionTimeMs": 1766
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "08",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_avocado_chicken_bowl",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": true,
+      "decisionTimeMs": 2602
+    },
+    {
+      "testerId": "tester_casual",
+      "pieceNum": "09",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_tomato_pasta",
+      "selectedDishId": "dish_tomato_pasta",
+      "correct": true,
+      "decisionTimeMs": 1796
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "10",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_grilled_steak",
+      "selectedDishId": "dish_grilled_steak",
+      "correct": true,
+      "decisionTimeMs": 1858
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "11",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_avocado_chicken_bowl",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": true,
+      "decisionTimeMs": 1681
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "12",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_grilled_steak",
+      "selectedDishId": "dish_grilled_steak",
+      "correct": true,
+      "decisionTimeMs": 2055
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "13",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_breakfast",
+      "selectedDishId": "dish_breakfast",
+      "correct": true,
+      "decisionTimeMs": 2646
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "14",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_salad",
+      "selectedDishId": "dish_salad",
+      "correct": true,
+      "decisionTimeMs": 1634
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "15",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_breakfast",
+      "selectedDishId": "dish_shrimp_fried_rice",
+      "correct": false,
+      "decisionTimeMs": 2034
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "16",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_avocado_chicken_bowl",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": true,
+      "decisionTimeMs": 1463
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "17",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_salad",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": false,
+      "decisionTimeMs": 2195
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "18",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_grilled_steak",
+      "selectedDishId": "dish_grilled_steak",
+      "correct": true,
+      "decisionTimeMs": 1463
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "19",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_shrimp_fried_rice",
+      "selectedDishId": "dish_shrimp_fried_rice",
+      "correct": true,
+      "decisionTimeMs": 2044
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "20",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_curry_rice",
+      "selectedDishId": "dish_curry_rice",
+      "correct": true,
+      "decisionTimeMs": 1497
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "21",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_shrimp_fried_rice",
+      "selectedDishId": "dish_breakfast",
+      "correct": false,
+      "decisionTimeMs": 2479
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "22",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_curry_rice",
+      "selectedDishId": "dish_curry_rice",
+      "correct": true,
+      "decisionTimeMs": 1721
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "23",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_ramen",
+      "selectedDishId": "dish_ramen",
+      "correct": true,
+      "decisionTimeMs": 2472
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "24",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_curry_rice",
+      "selectedDishId": "dish_curry_rice",
+      "correct": true,
+      "decisionTimeMs": 2412
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "01",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_shrimp_fried_rice",
+      "selectedDishId": "dish_curry_rice",
+      "correct": false,
+      "decisionTimeMs": 3427
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "02",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_ramen",
+      "selectedDishId": "dish_ramen",
+      "correct": true,
+      "decisionTimeMs": 1655
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "03",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_salad",
+      "selectedDishId": "dish_salad",
+      "correct": true,
+      "decisionTimeMs": 2598
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "04",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_breakfast",
+      "selectedDishId": "dish_breakfast",
+      "correct": true,
+      "decisionTimeMs": 2097
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "05",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_tomato_pasta",
+      "selectedDishId": "dish_tomato_pasta",
+      "correct": true,
+      "decisionTimeMs": 2779
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "06",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_ramen",
+      "selectedDishId": "dish_ramen",
+      "correct": true,
+      "decisionTimeMs": 2768
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "07",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_tomato_pasta",
+      "selectedDishId": "dish_tomato_pasta",
+      "correct": true,
+      "decisionTimeMs": 2262
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "08",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_avocado_chicken_bowl",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": true,
+      "decisionTimeMs": 1577
+    },
+    {
+      "testerId": "tester_intermediate",
+      "pieceNum": "09",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_tomato_pasta",
+      "selectedDishId": "dish_tomato_pasta",
+      "correct": true,
+      "decisionTimeMs": 1857
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "10",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_grilled_steak",
+      "selectedDishId": "dish_grilled_steak",
+      "correct": true,
+      "decisionTimeMs": 2058
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "11",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_avocado_chicken_bowl",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": true,
+      "decisionTimeMs": 1782
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "12",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_grilled_steak",
+      "selectedDishId": "dish_grilled_steak",
+      "correct": true,
+      "decisionTimeMs": 1999
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "13",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_breakfast",
+      "selectedDishId": "dish_breakfast",
+      "correct": true,
+      "decisionTimeMs": 2016
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "14",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_salad",
+      "selectedDishId": "dish_salad",
+      "correct": true,
+      "decisionTimeMs": 2328
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "15",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_breakfast",
+      "selectedDishId": "dish_breakfast",
+      "correct": true,
+      "decisionTimeMs": 2125
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "16",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_avocado_chicken_bowl",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": true,
+      "decisionTimeMs": 2671
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "17",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_salad",
+      "selectedDishId": "dish_salad",
+      "correct": true,
+      "decisionTimeMs": 2148
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "18",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_grilled_steak",
+      "selectedDishId": "dish_grilled_steak",
+      "correct": true,
+      "decisionTimeMs": 2769
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "19",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_shrimp_fried_rice",
+      "selectedDishId": "dish_shrimp_fried_rice",
+      "correct": true,
+      "decisionTimeMs": 1355
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "20",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_curry_rice",
+      "selectedDishId": "dish_curry_rice",
+      "correct": true,
+      "decisionTimeMs": 1775
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "21",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_shrimp_fried_rice",
+      "selectedDishId": "dish_shrimp_fried_rice",
+      "correct": true,
+      "decisionTimeMs": 1266
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "22",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_curry_rice",
+      "selectedDishId": "dish_curry_rice",
+      "correct": true,
+      "decisionTimeMs": 1802
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "23",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_ramen",
+      "selectedDishId": "dish_ramen",
+      "correct": true,
+      "decisionTimeMs": 1744
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "24",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_curry_rice",
+      "selectedDishId": "dish_curry_rice",
+      "correct": true,
+      "decisionTimeMs": 1348
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "01",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_shrimp_fried_rice",
+      "selectedDishId": "dish_shrimp_fried_rice",
+      "correct": true,
+      "decisionTimeMs": 1345
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "02",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_ramen",
+      "selectedDishId": "dish_ramen",
+      "correct": true,
+      "decisionTimeMs": 2586
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "03",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_salad",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": false,
+      "decisionTimeMs": 2748
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "04",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_breakfast",
+      "selectedDishId": "dish_breakfast",
+      "correct": true,
+      "decisionTimeMs": 2119
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "05",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_tomato_pasta",
+      "selectedDishId": "dish_tomato_pasta",
+      "correct": true,
+      "decisionTimeMs": 1636
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "06",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_ramen",
+      "selectedDishId": "dish_ramen",
+      "correct": true,
+      "decisionTimeMs": 2000
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "07",
+      "slotId": "slot_0_0",
+      "groundTruthDishId": "dish_tomato_pasta",
+      "selectedDishId": "dish_tomato_pasta",
+      "correct": true,
+      "decisionTimeMs": 1455
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "08",
+      "slotId": "slot_1_1",
+      "groundTruthDishId": "dish_avocado_chicken_bowl",
+      "selectedDishId": "dish_avocado_chicken_bowl",
+      "correct": true,
+      "decisionTimeMs": 2626
+    },
+    {
+      "testerId": "tester_expert",
+      "pieceNum": "09",
+      "slotId": "slot_1_0",
+      "groundTruthDishId": "dish_tomato_pasta",
+      "selectedDishId": "dish_tomato_pasta",
+      "correct": true,
+      "decisionTimeMs": 2038
+    }
+  ]
+}

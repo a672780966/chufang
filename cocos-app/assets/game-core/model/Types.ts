@@ -233,6 +233,7 @@ export interface DayConfig {
   useDay1GoldSample?: boolean;
   completionRefillCount?: number;
   initialLayoutPreset?: string;
+  dishCatalog?: Record<string, any>;
 }
 
 export type GameplayMode = 'DISH_PUZZLE' | 'LEGACY_INGREDIENT';
@@ -262,6 +263,7 @@ export interface DishPuzzleDayConfig {
   useDay1GoldSample?: boolean;
   completionRefillCount?: number;
   initialLayoutPreset?: string;
+  dishCatalog?: Record<string, any>;
 }
 
 export type NextOrderPreviewMode = 'NONE' | 'DISH_ONLY' | 'FULL_RECIPE';

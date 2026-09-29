@@ -364,7 +364,7 @@ export class DishPuzzleManager {
     const manifest = DISH_MANIFEST[dishId];
     if (!manifest) {
       throw new Error(
-        `[DishPuzzleManager] Invalid dishId "${dishId}": not found in GOLD_SAMPLE_DISH_MANIFEST. Valid dishes: ${Object.keys(DISH_MANIFEST).join(', ')}`
+        `[DishPuzzleManager] Invalid dishId "${dishId}": not found in DISH_MANIFEST. Valid dishes: ${Object.keys(DISH_MANIFEST).join(', ')}`
       );
     }
     const instanceId = `inst_${dishId}_${this._instanceCounter++}`;

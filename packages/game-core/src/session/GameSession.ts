@@ -9,7 +9,8 @@ import {
   GridCoord,
   DEFAULT_PRESSURE_PROFILE,
   GameplayMode,
-  DEFAULT_COMPLETION_REFILL_PIECES
+  DEFAULT_COMPLETION_REFILL_PIECES,
+  DishPuzzleDayConfig
 } from '../model/Types';
 import { EventEmitter, CoreEventMap } from '../model/Events';
 import { BoardGrid } from '../board/BoardGrid';
@@ -25,8 +26,9 @@ import { DishPuzzleManager } from '../puzzle/DishPuzzleManager';
 import { getProvisionalDishConfig } from '../data/ProvisionalDishConfig';
 import { getDishCampaignDayConfig } from '../data/DishCampaignConfig';
 import { InitialLayoutPresets, InitialLayoutPresetType } from '../puzzle/InitialLayoutPreset';
+import { DISH_CATALOG } from '../data/DishCatalog';
 
-function inferGameplayMode(dayConfig: DayConfig, explicitMode?: GameplayMode): GameplayMode {
+function inferGameplayMode(dayConfig: any, explicitMode?: GameplayMode): GameplayMode {
   if (explicitMode) return explicitMode;
   if (dayConfig.gameplayMode) return dayConfig.gameplayMode;
   if (dayConfig.targetIngredientCount !== undefined && dayConfig.targetIngredientCount > 0 && !('activeDishIds' in dayConfig)) {
@@ -89,7 +91,7 @@ export class GameSession {
   };
 
   constructor(
-    dayConfig: DayConfig,
+    dayConfig: DayConfig | DishPuzzleDayConfig,
     daySeed: string | number = 12345,
     customIngredients?: Record<string, IngredientDefinition>,
     customRecipes?: Record<string, RecipeDefinition>,
@@ -102,7 +104,7 @@ export class GameSession {
     this._recipes = customRecipes || DEFAULT_RECIPES;
 
     // P0-1: Single Source of Truth for DishPuzzle Runtime Config
-    let effectiveDayConfig: DayConfig = dayConfig;
+    let effectiveDayConfig: any = dayConfig;
     let provisionalDishConfig: ReturnType<typeof getDishCampaignDayConfig> | undefined;
     if (this.gameplayMode === 'DISH_PUZZLE') {
       provisionalDishConfig = getDishCampaignDayConfig(dayConfig.dayNumber);
@@ -129,7 +131,7 @@ export class GameSession {
         initialLayoutPreset: (dayConfig as any).initialLayoutPreset ?? provisionalDishConfig.initialLayoutPreset
       };
     }
-    this.dayConfig = effectiveDayConfig;
+    this.dayConfig = effectiveDayConfig as DayConfig;
 
     this.grid = new BoardGrid(this.dayConfig.boardProfile);
     this.flowDirector = new FlowDirector(this.dayConfig, this._ingredients, this._recipes, daySeed);
@@ -140,7 +142,8 @@ export class GameSession {
       daySeed,
       this.inventory,
       this.events,
-      'DISH_ONLY'
+      'DISH_ONLY',
+      (this.dayConfig as any).dishCatalog || DISH_CATALOG
     );
 
     this.dishPuzzleManager = new DishPuzzleManager(

@@ -8,7 +8,7 @@ import {
   NextOrderPreview
 } from '../model/Types';
 import { SeededRandom } from '../random/SeededRandom';
-import { GOLD_SAMPLE_DISH_CATALOG, DishOrderDefinition } from '../data/DishCatalog';
+import { DISH_CATALOG, DishOrderDefinition } from '../data/DishCatalog';
 
 export class OrderBag {
   private _rng: SeededRandom;
@@ -28,7 +28,11 @@ export class OrderBag {
   ) {
     this._dayConfig = dayConfig;
     this._recipes = recipes;
-    this._dishCatalog = dishCatalog || GOLD_SAMPLE_DISH_CATALOG;
+    this._dishCatalog =
+      dishCatalog ||
+      ('dishCatalog' in dayConfig && dayConfig.dishCatalog
+        ? (dayConfig.dishCatalog as Record<string, DishOrderDefinition>)
+        : DISH_CATALOG);
     this._rng = new SeededRandom(`${daySeed}_orders`);
     this.refillBag();
   }

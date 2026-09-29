@@ -77,13 +77,13 @@ describe('EightDishRuntime - Multi-Dish Runtime Authority & Assembly', () => {
       weights[id] = 1.0;
     }
 
-    const config: DishPuzzleDayConfig = {
+    const config = {
       dayNumber: 8,
       businessGoal: 1000,
       activeDishIds: ALL_8_DISH_IDS,
       orderWeights: weights,
       dishCatalog: DISH_CATALOG
-    };
+    } as unknown as DishPuzzleDayConfig;
 
     const bag = new OrderBag(config, undefined, 'seed_8_dishes', DISH_CATALOG);
     const generatedDishes = new Set<string>();
