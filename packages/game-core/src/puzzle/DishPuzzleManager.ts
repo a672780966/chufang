@@ -5,7 +5,7 @@
  *   Piece -> Piece -> Group -> Dish -> Clear
  */
 
-import { GridCoord } from '../model/Types.js';
+import { GridCoord, DishPuzzleDayConfig } from '../model/Types.js';
 import { EventEmitter } from '../model/Events.js';
 import {
   DishPuzzlePiece,
@@ -17,6 +17,7 @@ import {
 } from './DishPuzzleModel.js';
 import { GOLD_SAMPLE_DISH_MANIFEST } from '../data/DishManifest.js';
 import { DishPieceSupplyScheduler } from './DishPieceSupplyScheduler.js';
+import { SeededRandom } from '../random/SeededRandom.js';
 
 export interface MoveGroupResult {
   success: boolean;
@@ -82,6 +83,157 @@ export class DishPuzzleManager {
    */
   isCellReserved(col: number, row: number): boolean {
     return col >= this.columns - 3 && row < 3;
+  }
+
+  /**
+   * Returns total count of playable cells on the board (excluding the 3x3 reserved Cat region).
+   * For standard 8x12 board with 3x3 reserved region: 96 - 9 = 87 cells.
+   */
+  getPlayableCellCount(): number {
+    let count = 0;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.columns; c++) {
+        if (!this.isCellReserved(c, r)) count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Returns count of currently occupied playable cells.
+   */
+  getOccupiedPlayableCellCount(): number {
+    let count = 0;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.columns; c++) {
+        if (!this.isCellReserved(c, r) && this._gridCells[r][c] !== null) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Returns current occupancy ratio of playable cells (0.0 to 1.0).
+   */
+  getOccupancyRatio(): number {
+    const total = this.getPlayableCellCount();
+    return total > 0 ? this.getOccupiedPlayableCellCount() / total : 0;
+  }
+
+  /**
+   * Returns maximum stack height (1-based row index) among all pieces on board.
+   */
+  getMaxStackHeight(): number {
+    let maxHeight = 0;
+    for (const piece of this._pieces.values()) {
+      if (piece.boardCoord.row + 1 > maxHeight) {
+        maxHeight = piece.boardCoord.row + 1;
+      }
+    }
+    return maxHeight;
+  }
+
+  /**
+   * Returns available cells in the top row (row = rows - 1) capable of receiving new spawned pieces.
+   */
+  getAvailableSpawnCells(): GridCoord[] {
+    const topRow = this.rows - 1;
+    const available: GridCoord[] = [];
+    for (let c = 0; c < this.columns; c++) {
+      if (!this.isCellReserved(c, topRow) && this._gridCells[topRow][c] === null) {
+        available.push({ col: c, row: topRow });
+      }
+    }
+    return available;
+  }
+
+  /**
+   * Generic procedural initialization for DishPuzzle sessions based on DishPuzzleDayConfig.
+   * Creates active dish instances, seeds initial piece groups, respects reserved regions,
+   * and guarantees at least one solvable matching path.
+   */
+  initializeDishPuzzleSession(config: DishPuzzleDayConfig, seed: string | number): void {
+    if (config.useDay1GoldSample && config.dayNumber === 1) {
+      this.initDay1Layout();
+      return;
+    }
+
+    this._pieces.clear();
+    this._groups.clear();
+    this._instances.clear();
+    this._scheduler.cleanupInstances([]);
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.columns; c++) {
+        this._gridCells[r][c] = null;
+      }
+    }
+
+    const rng = new SeededRandom(`${seed}_init_session`);
+    const activeDishes = config.activeDishIds && config.activeDishIds.length > 0 ? config.activeDishIds : ['dish_salad', 'dish_breakfast', 'dish_ramen'];
+    const instances: DishPuzzleInstance[] = [];
+    for (const dishId of activeDishes) {
+      instances.push(this.createDishInstance(dishId));
+    }
+
+    // 1. Primary order dish (first dish): create a 2x2 base group (slots 0,0 1,0 0,1 1,1) at board (0..1, 0..1)
+    const primary = instances[0];
+    const p_0_0 = this.createPiece(primary.instanceId, primary.dishId, 0, 0, { col: 0, row: 0 });
+    const p_1_0 = this.createPiece(primary.instanceId, primary.dishId, 1, 0, { col: 1, row: 0 });
+    const p_0_1 = this.createPiece(primary.instanceId, primary.dishId, 0, 1, { col: 0, row: 1 });
+    const p_1_1 = this.createPiece(primary.instanceId, primary.dishId, 1, 1, { col: 1, row: 1 });
+    this.createGroup([p_0_0, p_1_0, p_0_1, p_1_1]);
+
+    // 2. Complementary matching piece group for primary dish at col 4 (rows 2, 3)
+    const p_2_0 = this.createPiece(primary.instanceId, primary.dishId, 2, 0, { col: 4, row: 2 });
+    const p_2_1 = this.createPiece(primary.instanceId, primary.dishId, 2, 1, { col: 4, row: 3 });
+    this.createGroup([p_2_0, p_2_1]);
+
+    // 3. Scatter pieces for secondary and tertiary dishes across cols 3..7 (strictly above row 2 in cols 5..7)
+    let spawnedCount = 6;
+    const targetCount = Math.max(9, Math.min(config.initialPieceCount || 15, 20));
+
+    // Remaining slots to spawn across instances
+    const candidateSlots = [
+      { col: 0, row: 2 },
+      { col: 1, row: 2 },
+      { col: 2, row: 2 }
+    ];
+
+    // Add remaining pieces for primary dish
+    for (const s of candidateSlots) {
+      if (spawnedCount >= targetCount) break;
+      this.localSettlePiece(primary, s.col, s.row);
+      spawnedCount++;
+    }
+
+    // Add partial pieces for other active dishes
+    let instIdx = 1;
+    while (spawnedCount < targetCount && instIdx < instances.length) {
+      const inst = instances[instIdx];
+      const colSlot = rng.nextInt(0, 1);
+      const rowSlot = rng.nextInt(0, 1);
+      const piece1 = this.localSettlePiece(inst, colSlot, rowSlot);
+      if (piece1) spawnedCount++;
+      if (spawnedCount < targetCount) {
+        const piece2 = this.localSettlePiece(inst, colSlot + 1, rowSlot);
+        if (piece2) {
+          spawnedCount++;
+          if (piece1 && arePiecesDishAdjacent(piece1, piece2) && arePiecesGeometricallyAligned(piece1, piece2)) {
+            const g1 = this.getGroupByPieceId(piece1.pieceInstanceId);
+            const g2 = this.getGroupByPieceId(piece2.pieceInstanceId);
+            if (g1 && g2 && g1.groupId !== g2.groupId) {
+              this.mergeTwoGroups(g1, g2);
+            }
+          }
+        }
+      }
+      instIdx++;
+    }
+
+    // Maintain pool
+    this.maintainActiveDishPool();
   }
 
   /**

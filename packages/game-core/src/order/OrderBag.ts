@@ -1,29 +1,53 @@
-import { DayConfig, RecipeDefinition, Order, OrderItemProgress, NextOrderPreviewMode, NextOrderPreview } from '../model/Types';
+import {
+  DayConfig,
+  DishPuzzleDayConfig,
+  RecipeDefinition,
+  Order,
+  OrderItemProgress,
+  NextOrderPreviewMode,
+  NextOrderPreview
+} from '../model/Types';
 import { SeededRandom } from '../random/SeededRandom';
-import { PrepInventory } from '../inventory/PrepInventory';
-import { EventEmitter } from '../model/Events';
+import { GOLD_SAMPLE_DISH_CATALOG, DishOrderDefinition } from '../data/DishCatalog';
 
 export class OrderBag {
   private _rng: SeededRandom;
-  private _recipes: Record<string, RecipeDefinition>;
-  private _dayConfig: DayConfig;
+  private _recipes?: Record<string, RecipeDefinition>;
+  private _dishCatalog: Record<string, DishOrderDefinition>;
+  private _dayConfig: DayConfig | DishPuzzleDayConfig;
   private _bagCycleIndex: number = 0;
   private _orderSequence: Order[] = [];
   private _currentIndex: number = 0;
   private _orderCounter: number = 1001;
 
   constructor(
-    dayConfig: DayConfig,
-    recipes: Record<string, RecipeDefinition>,
-    daySeed: string | number
+    dayConfig: DayConfig | DishPuzzleDayConfig,
+    recipes?: Record<string, RecipeDefinition>,
+    daySeed: string | number = 12345,
+    dishCatalog?: Record<string, DishOrderDefinition>
   ) {
     this._dayConfig = dayConfig;
     this._recipes = recipes;
+    this._dishCatalog = dishCatalog || GOLD_SAMPLE_DISH_CATALOG;
     this._rng = new SeededRandom(`${daySeed}_orders`);
     this.refillBag();
   }
 
-  private createOrderInstance(recipe: RecipeDefinition): Order {
+  private createDishOrderInstance(dish: DishOrderDefinition): Order {
+    const orderId = `#${(this._orderCounter++).toString().padStart(4, '0')}`;
+    return {
+      orderId,
+      recipeId: dish.dishId,
+      dishId: dish.dishId,
+      dishName: dish.name,
+      emoji: dish.emoji || '🍽️',
+      baseRevenue: dish.baseRevenue,
+      items: [],
+      isFulfilled: false
+    };
+  }
+
+  private createRecipeOrderInstance(recipe: RecipeDefinition): Order {
     const orderId = `#${(this._orderCounter++).toString().padStart(4, '0')}`;
     const items: OrderItemProgress[] = recipe.requirements.map(req => ({
       ingredientId: req.ingredientId,
@@ -47,27 +71,50 @@ export class OrderBag {
   private refillBag(): void {
     const cycleSeed = `${this._rng.getState()}_cycle_${this._bagCycleIndex++}`;
     const cycleRng = new SeededRandom(cycleSeed);
-
     const pool: Order[] = [];
-    for (const [recipeId, weight] of Object.entries(this._dayConfig.recipeWeights)) {
-      const recipe = this._recipes[recipeId];
-      if (!recipe) continue;
-      for (let i = 0; i < weight; i++) {
-        pool.push(this.createOrderInstance(recipe));
+
+    // 1. Check if DishPuzzleDayConfig with orderWeights is present
+    if ('orderWeights' in this._dayConfig && this._dayConfig.orderWeights) {
+      for (const [dishId, weight] of Object.entries(this._dayConfig.orderWeights)) {
+        if (weight <= 0) continue;
+        const dishDef = this._dishCatalog[dishId];
+        // Strictly forbid dishes that do not exist in the authoritative catalog!
+        if (!dishDef) continue;
+        for (let i = 0; i < weight; i++) {
+          pool.push(this.createDishOrderInstance(dishDef));
+        }
+      }
+    } else if ('recipeWeights' in this._dayConfig && this._dayConfig.recipeWeights && this._recipes) {
+      // 2. Legacy recipe mode
+      for (const [recipeId, weight] of Object.entries(this._dayConfig.recipeWeights)) {
+        const recipe = this._recipes[recipeId];
+        if (!recipe) continue;
+        for (let i = 0; i < weight; i++) {
+          pool.push(this.createRecipeOrderInstance(recipe));
+        }
       }
     }
 
-    // Constrained shuffle: avoid same recipe appearing consecutively
+    // Safeguard fallback: if pool is empty, populate from authoritative catalog
+    if (pool.length === 0) {
+      const defaultDish = this._dishCatalog['dish_salad'] || Object.values(this._dishCatalog)[0];
+      if (defaultDish) {
+        for (let i = 0; i < 5; i++) {
+          pool.push(this.createDishOrderInstance(defaultDish));
+        }
+      }
+    }
+
+    // Constrained shuffle: avoid same dish appearing consecutively
     const shuffled: Order[] = [];
     cycleRng.shuffle(pool);
 
     while (pool.length > 0) {
       let pickedIndex = -1;
-      const lastDish = shuffled.length > 0 ? shuffled[shuffled.length - 1].recipeId : null;
+      const lastDish = shuffled.length > 0 ? shuffled[shuffled.length - 1].dishId : null;
 
-      // Find an item that does not repeat the last dish if possible
       for (let i = 0; i < pool.length; i++) {
-        if (pool[i].recipeId !== lastDish || pool.length === 1) {
+        if (pool[i].dishId !== lastDish || pool.length === 1) {
           pickedIndex = i;
           break;
         }
@@ -108,14 +155,14 @@ export class OrderBag {
     if (mode === 'DISH_ONLY') {
       return {
         mode: 'DISH_ONLY',
-        dishId: next.recipeId,
+        dishId: next.dishId,
         dishName: next.dishName,
         emoji: next.emoji
       };
     }
     return {
       mode: 'FULL_RECIPE',
-      dishId: next.recipeId,
+      dishId: next.dishId,
       dishName: next.dishName,
       emoji: next.emoji,
       requirements: next.items.map(i => ({ ingredientId: i.ingredientId, count: i.needed }))

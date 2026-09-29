@@ -1,7 +1,8 @@
-import { Order, DayConfig, RecipeDefinition, NextOrderPreviewMode, NextOrderPreview } from '../model/Types';
+import { Order, DayConfig, DishPuzzleDayConfig, RecipeDefinition, NextOrderPreviewMode, NextOrderPreview } from '../model/Types';
 import { EventEmitter } from '../model/Events';
 import { PrepInventory } from '../inventory/PrepInventory';
 import { OrderBag } from './OrderBag';
+import { DishOrderDefinition } from '../data/DishCatalog';
 
 export class OrderSystem {
   private _orderBag: OrderBag;
@@ -17,16 +18,17 @@ export class OrderSystem {
   readonly maxPreparedBuffer: number = 2;
 
   constructor(
-    dayConfig: DayConfig,
-    recipes: Record<string, RecipeDefinition>,
-    daySeed: string | number,
-    inventory: PrepInventory,
-    events: EventEmitter,
-    previewMode: NextOrderPreviewMode = 'DISH_ONLY'
+    dayConfig: DayConfig | DishPuzzleDayConfig,
+    recipes?: Record<string, RecipeDefinition>,
+    daySeed: string | number = 12345,
+    inventory?: PrepInventory,
+    events?: EventEmitter,
+    previewMode: NextOrderPreviewMode = 'DISH_ONLY',
+    dishCatalog?: Record<string, DishOrderDefinition>
   ) {
-    this._orderBag = new OrderBag(dayConfig, recipes, daySeed);
-    this._inventory = inventory;
-    this._events = events;
+    this._orderBag = new OrderBag(dayConfig, recipes, daySeed, dishCatalog);
+    this._inventory = inventory || new PrepInventory();
+    this._events = events || new EventEmitter();
     this._businessGoal = dayConfig.businessGoal;
     this._previewMode = previewMode;
 
@@ -261,7 +263,7 @@ export class OrderSystem {
     }
 
     // Check if matching current order
-    if (this.matchesDish(this._currentOrder.recipeId, dishId)) {
+    if (this.matchesDish(this._currentOrder.dishId || this._currentOrder.recipeId, dishId)) {
       const order = this._currentOrder;
       order.isFulfilled = true;
 
@@ -316,7 +318,7 @@ export class OrderSystem {
         });
 
         // Check if next order can immediately be fulfilled from PreparedDishBuffer!
-        const bufIdx = this._preparedDishBuffer.findIndex(d => this.matchesDish(this._currentOrder!.recipeId, d));
+        const bufIdx = this._preparedDishBuffer.findIndex(d => this.matchesDish(this._currentOrder!.dishId || this._currentOrder!.recipeId, d));
         if (bufIdx !== -1) {
           const bufferedDish = this._preparedDishBuffer.splice(bufIdx, 1)[0];
           this.handleCompletedDish(bufferedDish);

@@ -21,3 +21,6 @@ export * from './data/DishManifest';
 export * from './puzzle/DishPuzzleModel';
 export * from './puzzle/DishPuzzleManager';
 export * from './puzzle/DishPieceSupplyScheduler';
+export * from './data/DishCatalog';
+export * from './data/ProvisionalDishConfig';
+export * from './detector/DishPuzzleDeadlockDetector';

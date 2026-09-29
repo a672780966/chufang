@@ -1,4 +1,4 @@
-import { GamePhase, CampaignState, DayConfig, DayCompletionRecord } from '../model/Types';
+import { GamePhase, CampaignState, DayConfig, DayCompletionRecord, GameplayMode } from '../model/Types';
 import { GameSession } from '../session/GameSession';
 import { DEFAULT_DAYS } from '../data/DefaultData';
 import { SaveSystem } from './SaveSystem';
@@ -19,6 +19,8 @@ export class GameFlowManager {
   private _session: GameSession | null = null;
   private _selectedDay: number = 1;
   private _events: GameFlowEvents = {};
+  private _resolvingTimeout: any = null;
+  private _resolvingGroupId: string | null = null;
 
   constructor(events: GameFlowEvents = {}) {
     this._events = events;
@@ -55,6 +57,11 @@ export class GameFlowManager {
    * Enters Main Menu.
    */
   enterMainMenu(): void {
+    if (this._resolvingTimeout) {
+      clearTimeout(this._resolvingTimeout);
+      this._resolvingTimeout = null;
+    }
+    this._resolvingGroupId = null;
     this._session = null;
     this._campaignState = SaveSystem.loadCampaignState();
     this.transitionTo('MAIN_MENU');
@@ -64,10 +71,16 @@ export class GameFlowManager {
    * Launches a day session. Transitions phase to DAY_INTRO.
    * Presentation layer calls beginPlaying() after intro animation finishes.
    */
-  startDay(dayNumber: number, seed?: string | number): GameSession {
+  startDay(dayNumber: number, seed?: string | number, gameplayMode: GameplayMode = 'DISH_PUZZLE'): GameSession {
     if (dayNumber < 1 || dayNumber > 12) {
       throw new Error(`Invalid dayNumber: ${dayNumber}. Must be between 1 and 12.`);
     }
+
+    if (this._resolvingTimeout) {
+      clearTimeout(this._resolvingTimeout);
+      this._resolvingTimeout = null;
+    }
+    this._resolvingGroupId = null;
 
     this._selectedDay = dayNumber;
     const dayConfig = DEFAULT_DAYS[dayNumber - 1];
@@ -76,7 +89,7 @@ export class GameFlowManager {
     }
 
     const sessionSeed = seed ?? `day_${dayNumber}_session`;
-    this._session = new GameSession(dayConfig, sessionSeed);
+    this._session = new GameSession(dayConfig, sessionSeed, undefined, undefined, gameplayMode);
 
     this.transitionTo('DAY_INTRO');
 
@@ -89,12 +102,20 @@ export class GameFlowManager {
       this.handleResolvingEvent(650);
     });
 
+    this._session.events.on('DISH_COMPLETED', (payload: any) => {
+      this.handleDishCompletedResolving(payload);
+    });
+
     this._session.events.on('BUSINESS_GOAL_REACHED', () => {
       this.handleDayWon();
     });
 
     this._session.events.on('BOARD_BLOCKED', (data: any) => {
       this.handleDayFailed(data?.reason || 'BOARD_BLOCKED');
+    });
+
+    this._session.events.on('DAY_FAILED', (data: any) => {
+      this.handleDayFailed(data?.reason || 'DAY_FAILED');
     });
 
     this._events.onSessionStarted?.(this._session);
@@ -119,7 +140,7 @@ export class GameFlowManager {
   }
 
   /**
-   * Places a piece with input-lock during resolution.
+   * Places a piece with input-lock during resolution. (Legacy mode)
    */
   placePiece(pieceInstanceId: string, targetInstanceId: string, slotId: string): { success: boolean; reason?: string } {
     if (this.isInputLocked) {
@@ -138,6 +159,28 @@ export class GameFlowManager {
   }
 
   /**
+   * Stage 5A Authoritative Player Move: Moves a DishPuzzle group and updates state.
+   */
+  moveDishGroup(
+    groupId: string,
+    targetCol: number,
+    targetRow: number,
+    referencePieceId?: string
+  ): { success: boolean; merged?: boolean; completedDish?: any; reason?: string } {
+    if (this.isInputLocked) {
+      return { success: false, reason: 'INPUT_LOCKED' };
+    }
+    if (!this._session) {
+      return { success: false, reason: 'NO_SESSION' };
+    }
+
+    TutorialDirector.dismissFirstDragCue();
+    this._events.onTutorialCue?.(null);
+
+    return this._session.moveDishGroup(groupId, targetCol, targetRow, referencePieceId);
+  }
+
+  /**
    * Puts game into temporary RESOLVING state to let presentation animations complete.
    */
   private handleResolvingEvent(suggestedDurationMs: number): void {
@@ -147,9 +190,50 @@ export class GameFlowManager {
   }
 
   /**
+   * Handles DishPuzzle dish completion event with authoritative fallback timer.
+   */
+  private handleDishCompletedResolving(payload: any): void {
+    if (this._phase === 'DAY_CLEAR' || this._phase === 'DAY_FAILED') return;
+    this.transitionTo('RESOLVING');
+    this._resolvingGroupId = payload?.groupId || null;
+    const duration = 650;
+    this._events.onResolvingRequested?.(duration);
+
+    if (this._resolvingTimeout) {
+      clearTimeout(this._resolvingTimeout);
+    }
+    // Authoritative fallback: Presentation layer gets 650ms + 150ms buffer.
+    // If presentation is headless or fails to call finishResolving(), Core clears authoritatively!
+    this._resolvingTimeout = setTimeout(() => {
+      this.executeAuthoritativeDishResolution(payload?.groupId);
+    }, duration + 150);
+  }
+
+  /**
+   * Executes authoritative resolution of a completed dish.
+   */
+  executeAuthoritativeDishResolution(groupId?: string): void {
+    if (this._resolvingTimeout) {
+      clearTimeout(this._resolvingTimeout);
+      this._resolvingTimeout = null;
+    }
+    const targetGroupId = groupId || this._resolvingGroupId;
+    if (targetGroupId && this._session && this._session.dishPuzzleManager.getGroup(targetGroupId)) {
+      this._session.resolveCompletedDish(targetGroupId);
+    }
+    this._resolvingGroupId = null;
+    this.finishResolving();
+  }
+
+  /**
    * Called by presentation layer after visual resolution animations finish.
    */
   finishResolving(): void {
+    if (this._resolvingTimeout) {
+      clearTimeout(this._resolvingTimeout);
+      this._resolvingTimeout = null;
+    }
+    this._resolvingGroupId = null;
     if (this._phase === 'RESOLVING') {
       if (this._session && this._session.revenue >= this._session.dayConfig.businessGoal) {
         this.handleDayWon();

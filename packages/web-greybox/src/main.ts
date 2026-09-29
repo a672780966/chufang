@@ -216,17 +216,6 @@ class WebGameApp {
     if (catSlot) {
       this.catActor = new CatActorPlayer(catSlot, { renderMode: 'spritesheet', cropSquare: true });
     }
-    const catMount = document.getElementById('cat-actor-mount');
-    catMount?.addEventListener('click', () => {
-      if (this.catActor && this.catActor.getState() === 'IDLE') {
-        const action = Math.random() > 0.5 ? 'COOK_CHOP' : 'COOK_STIR';
-        this.catActor.onEvent(action);
-        if (this.catReturnIdleTimer) clearTimeout(this.catReturnIdleTimer);
-        this.catReturnIdleTimer = window.setTimeout(() => {
-          this.catActor?.onEvent('ORDER_WAITING');
-        }, 1200);
-      }
-    });
   }
 
   private handleTrayServe(slotIdx: number): void {
@@ -695,7 +684,7 @@ class WebGameApp {
     const grabCenterY = this.dragPointerPos.y - group.grabOffset.y;
     const targetCoord = this.screenToGrid(grabCenterX, grabCenterY);
 
-    const moveResult = this.dishPuzzleManager.tryMoveGroup(
+    const moveResult = this.flow.moveDishGroup(
       group.groupId,
       targetCoord.col,
       targetCoord.row,
@@ -812,7 +801,7 @@ class WebGameApp {
     }
 
     // 5. Clear completed group from board (triggers DISH_SERVED -> order fulfillment)
-    this.dishPuzzleManager.clearCompletedGroup(groupId);
+    this.flow.executeAuthoritativeDishResolution(groupId);
 
     // 6. Flying revenue particle
     const manifest = GOLD_SAMPLE_DISH_MANIFEST[dishId];

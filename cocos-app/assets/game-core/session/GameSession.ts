@@ -7,7 +7,8 @@ import {
   GameStats,
   NextOrderPreview,
   GridCoord,
-  DEFAULT_PRESSURE_PROFILE
+  DEFAULT_PRESSURE_PROFILE,
+  GameplayMode
 } from '../model/Types';
 import { EventEmitter, CoreEventMap } from '../model/Events';
 import { BoardGrid } from '../board/BoardGrid';
@@ -16,9 +17,21 @@ import { PrepInventory } from '../inventory/PrepInventory';
 import { OrderSystem } from '../order/OrderSystem';
 import { FlowDirector } from '../director/FlowDirector';
 import { DeadlockDetector } from '../detector/DeadlockDetector';
+import { DishPuzzleDeadlockDetector } from '../detector/DishPuzzleDeadlockDetector';
 import { SeededRandom } from '../random/SeededRandom';
 import { DEFAULT_INGREDIENTS, DEFAULT_RECIPES } from '../data/DefaultData';
 import { DishPuzzleManager } from '../puzzle/DishPuzzleManager';
+import { getProvisionalDishConfig } from '../data/ProvisionalDishConfig';
+
+function inferGameplayMode(dayConfig: DayConfig, explicitMode?: GameplayMode): GameplayMode {
+  if (explicitMode) return explicitMode;
+  if (dayConfig.gameplayMode) return dayConfig.gameplayMode;
+  if ('activeDishIds' in dayConfig) return 'DISH_PUZZLE';
+  if (dayConfig.targetIngredientCount !== undefined && dayConfig.targetIngredientCount > 0) {
+    return 'LEGACY_INGREDIENT';
+  }
+  return 'DISH_PUZZLE';
+}
 
 export interface GameSessionState {
   dayNumber: number;
@@ -44,6 +57,7 @@ export class GameSession {
   readonly dishPuzzleManager: DishPuzzleManager;
   readonly dayConfig: DayConfig;
   readonly daySeed: string | number;
+  readonly gameplayMode: GameplayMode;
 
   private _rng: SeededRandom;
   private _ingredients: Record<string, IngredientDefinition>;
@@ -52,6 +66,8 @@ export class GameSession {
   private _targetCounter: number = 1;
   private _pieceCounter: number = 1;
   private _consecutiveNonClearPlacements: number = 0;
+  private _inDishDanger: boolean = false;
+  private _deadlockDetector: DishPuzzleDeadlockDetector = new DishPuzzleDeadlockDetector();
 
   private _stats: GameStats = {
     totalRevenue: 0,
@@ -61,17 +77,25 @@ export class GameSession {
     maxCascadeChain: 0,
     cascadeEventsCount: 0,
     totalSettlingSteps: 0,
-    deadlockChecks: 0
+    deadlockChecks: 0,
+    groupsMoved: 0,
+    piecesMerged: 0,
+    dishesCompleted: 0,
+    dishesServed: 0,
+    dangerEpisodes: 0,
+    completionReflows: 0
   };
 
   constructor(
     dayConfig: DayConfig,
     daySeed: string | number = 12345,
     customIngredients?: Record<string, IngredientDefinition>,
-    customRecipes?: Record<string, RecipeDefinition>
+    customRecipes?: Record<string, RecipeDefinition>,
+    gameplayMode?: GameplayMode
   ) {
     this.dayConfig = dayConfig;
     this.daySeed = daySeed;
+    this.gameplayMode = inferGameplayMode(dayConfig, gameplayMode);
     this._rng = new SeededRandom(`${daySeed}_session`);
     this._ingredients = customIngredients || DEFAULT_INGREDIENTS;
     this._recipes = customRecipes || DEFAULT_RECIPES;
@@ -89,9 +113,6 @@ export class GameSession {
     );
 
     this.dishPuzzleManager = new DishPuzzleManager(this.grid.columns, this.grid.rows, this.events);
-    if (dayConfig.dayNumber === 1) {
-      this.dishPuzzleManager.initDay1Layout();
-    }
 
     // Connect Dish serving (triggered when completed group clears) directly with OrderSystem
     this.events.on('DISH_SERVED', ({ dishId }) => {
@@ -122,7 +143,17 @@ export class GameSession {
       });
     });
 
-    this.initBoard();
+    // Initialize DishPuzzle layout
+    if (dayConfig.dayNumber === 1) {
+      this.dishPuzzleManager.initDay1Layout();
+    } else {
+      const provisional = getProvisionalDishConfig(dayConfig.dayNumber);
+      this.dishPuzzleManager.initializeDishPuzzleSession(provisional, daySeed);
+    }
+
+    if (this.gameplayMode === 'LEGACY_INGREDIENT') {
+      this.initBoard();
+    }
   }
 
   get stats(): GameStats {
@@ -304,6 +335,76 @@ export class GameSession {
   }
 
   /**
+   * Stage 5A Authoritative Player Action: Rigidly translates a DishPuzzle group and triggers piece supply.
+   */
+  moveDishGroup(
+    groupId: string,
+    targetCol: number,
+    targetRow: number,
+    referencePieceId?: string
+  ): { success: boolean; merged?: boolean; completedDish?: any; reason?: string } {
+    if (this._isGameOver) {
+      return { success: false, reason: 'GAME_OVER' };
+    }
+
+    const moveResult = this.dishPuzzleManager.tryMoveGroup(
+      groupId,
+      targetCol,
+      targetRow,
+      referencePieceId
+    );
+
+    if (!moveResult.success) {
+      return { success: false, reason: 'INVALID_MOVE' };
+    }
+
+    // 1 legal move = 1 action
+    this._stats.groupsMoved++;
+
+    if (moveResult.merged) {
+      this._stats.piecesMerged++;
+    }
+
+    if (moveResult.completedDish) {
+      this._stats.dishesCompleted++;
+    } else if (!moveResult.merged) {
+      // 1 legal move = 1 action cadence (if merge didn't already trigger supply)
+      this.handleActionSupply();
+    }
+
+    this.checkBoardDangerAndDeadlock();
+
+    return {
+      success: true,
+      merged: moveResult.merged,
+      completedDish: moveResult.completedDish
+    };
+  }
+
+  /**
+   * Stage 5A Authoritative Dish Resolution: Clears a completed 9-piece dish from the board,
+   * performs Completion Reflow, serves the dish, and maintains the 3-dish active pool.
+   */
+  resolveCompletedDish(groupId: string): void {
+    if (this._isGameOver) return;
+    const group = this.dishPuzzleManager.getGroup(groupId);
+    if (!group) return;
+
+    this._stats.dishesServed++;
+    this._stats.completionReflows++;
+    this.dishPuzzleManager.clearCompletedGroup(groupId);
+    this.checkBoardDangerAndDeadlock();
+  }
+
+  private handleActionSupply(): void {
+    if (this._isGameOver) return;
+    if (this.dishPuzzleManager.getAllPieces().length < 24) {
+      const curDish = this.orderSystem.currentOrder?.dishId;
+      this.dishPuzzleManager.schedulePieceAcrossActiveDishes(1, curDish);
+    }
+  }
+
+  /**
    * Player Action: Places a loose piece into an ingredient target slot.
    * Strictly enforces Target-first Instance Binding: piece must belong to targetInstanceId.
    */
@@ -414,9 +515,69 @@ export class GameSession {
    * Checks whether the board currently meets BOARD_DANGER thresholds.
    */
   isBoardInDanger(): boolean {
-    const topRowOccupancy = this.grid.getTopRowOccupancyRatio();
-    const maxStackHeight = this.grid.getMaxStackHeight();
-    return maxStackHeight >= this.grid.rows - 3 || topRowOccupancy >= 0.20;
+    if (this.gameplayMode === 'LEGACY_INGREDIENT') {
+      const topRowOccupancy = this.grid.getTopRowOccupancyRatio();
+      const maxStackHeight = this.grid.getMaxStackHeight();
+      return maxStackHeight >= this.grid.rows - 3 || topRowOccupancy >= 0.20;
+    }
+    const occRatio = this.dishPuzzleManager.getOccupancyRatio();
+    const maxStack = this.dishPuzzleManager.getMaxStackHeight();
+    return occRatio >= 0.65 || maxStack >= (this.grid.rows - 3);
+  }
+
+  /**
+   * Stage 5A Deterministic Danger and Deadlock evaluation.
+   */
+  checkBoardDangerAndDeadlock(): void {
+    if (this.gameplayMode === 'LEGACY_INGREDIENT') {
+      this.checkDeadlockAndDanger();
+      return;
+    }
+
+    this._stats.deadlockChecks++;
+    const inDanger = this.isBoardInDanger();
+    const occupancyRatio = this.dishPuzzleManager.getOccupancyRatio();
+    const maxStackHeight = this.dishPuzzleManager.getMaxStackHeight();
+
+    if (inDanger && !this._inDishDanger) {
+      this._inDishDanger = true;
+      this._stats.dangerEpisodes++;
+      this.events.emit('DISH_BOARD_DANGER', {
+        occupancyRatio,
+        maxStackHeight,
+        availableSpawnCells: this.dishPuzzleManager.getAvailableSpawnCells().length,
+        warningMessage: '厨房料理台接近饱和，请尽快拼合出餐！'
+      });
+      this.events.emit('BOARD_DANGER', {
+        topRowOccupancy: occupancyRatio,
+        warningMessage: '厨房料理台接近饱和！'
+      });
+    } else if (!inDanger && this._inDishDanger) {
+      this._inDishDanger = false;
+      this.events.emit('DISH_BOARD_DANGER_CLEARED', {
+        occupancyRatio,
+        maxStackHeight
+      });
+    }
+
+    const deadlockResult = this._deadlockDetector.checkDeadlock(this.dishPuzzleManager);
+    if (deadlockResult.isDeadlocked) {
+      this._isGameOver = true;
+      this.events.emit('DISH_BOARD_DEADLOCKED', {
+        reason: deadlockResult.reason || 'NO_LEGAL_TRANSITIONS',
+        occupancyRatio,
+        legalMovesCount: deadlockResult.legalMovesCount
+      });
+      this.events.emit('BOARD_BLOCKED', {
+        reason: deadlockResult.reason || '无可执行拼图、无待消除目标、无法生成必要碎片'
+      });
+      this.events.emit('DAY_FAILED', {
+        dayNumber: this.dayConfig.dayNumber,
+        currentRevenue: this.orderSystem.totalRevenue,
+        businessGoal: this.orderSystem.businessGoal,
+        reason: 'BOARD_BLOCKED'
+      });
+    }
   }
 
   /**

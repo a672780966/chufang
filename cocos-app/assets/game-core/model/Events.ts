@@ -29,7 +29,10 @@ export type CoreEventType =
   | 'DISH_COMPLETED'
   | 'PIECE_GROUP_MERGED'
   | 'DISH_CLEARED'
-  | 'DISH_SERVED';
+  | 'DISH_SERVED'
+  | 'DISH_BOARD_DANGER'
+  | 'DISH_BOARD_DANGER_CLEARED'
+  | 'DISH_BOARD_DEADLOCKED';
 
 export interface CoreEventMap {
   TARGET_SPAWNED: { target: IngredientTarget; fromAnchor: GridCoord; toAnchor: GridCoord };
@@ -148,6 +151,21 @@ export interface CoreEventMap {
     dishId: string;
     dishPuzzleInstanceId: string;
     groupId: string;
+  };
+  DISH_BOARD_DANGER: {
+    occupancyRatio: number;
+    maxStackHeight: number;
+    availableSpawnCells: number;
+    warningMessage: string;
+  };
+  DISH_BOARD_DANGER_CLEARED: {
+    occupancyRatio: number;
+    maxStackHeight: number;
+  };
+  DISH_BOARD_DEADLOCKED: {
+    reason: string;
+    occupancyRatio?: number;
+    legalMovesCount?: number;
   };
 }
 

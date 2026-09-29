@@ -217,6 +217,31 @@ export interface DayConfig {
   boardProfile?: BoardProfile;
   pressureProfile?: PressureProfile;
   directorProfile?: FlowDirectorProfile;
+  gameplayMode?: GameplayMode;
+}
+
+export type GameplayMode = 'DISH_PUZZLE' | 'LEGACY_INGREDIENT';
+
+/**
+ * DishPuzzleDayConfig
+ * Explicit configuration interface for DishPuzzle / Jigsaw Drop gameplay.
+ * Labeled PROVISIONAL - numbers are provisional values for Gold Sample verification.
+ */
+export interface DishPuzzleDayConfig {
+  dayNumber: number;
+  activeDishIds: string[];
+  businessGoal: number;
+  orderWeights: Record<string, number>;
+  initialPieceCount: number;
+  comfortablePieceCount: number;
+  maxPieceCount: number;
+  supplyPerAction: number;
+  currentOrderWeight: number;
+  nearCompleteWeight: number;
+  starvationWeight: number;
+  dangerThreshold: number; // Occupancy ratio threshold (e.g. 0.65)
+  nextOrderPreviewDay?: number;
+  useDay1GoldSample?: boolean;
 }
 
 export type NextOrderPreviewMode = 'NONE' | 'DISH_ONLY' | 'FULL_RECIPE';
@@ -232,12 +257,20 @@ export interface NextOrderPreview {
 export interface GameStats {
   totalRevenue: number;
   ordersCompleted: number;
-  ingredientsCompleted: number;
+  ingredientsCompleted: number; // legacy
   piecesPlaced: number;
   maxCascadeChain: number;
   cascadeEventsCount: number;
   totalSettlingSteps: number;
   deadlockChecks: number;
+
+  // Stage 5A DishPuzzle Core Authority Stats
+  groupsMoved: number;
+  piecesMerged: number;
+  dishesCompleted: number;
+  dishesServed: number;
+  dangerEpisodes: number;
+  completionReflows: number;
 }
 
 export type GamePhase =
