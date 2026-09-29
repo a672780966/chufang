@@ -221,7 +221,9 @@ export class DishPuzzleManager {
 
     // 3. Scatter pieces for secondary and tertiary dishes across cols 3..7 (strictly above row 2 in cols 5..7)
     let spawnedCount = 6;
-    const targetCount = Math.max(9, Math.min(config.initialPieceCount || 15, 20));
+    const targetCount = config.initialPieceCount !== undefined
+      ? Math.min(config.initialPieceCount, config.maxPieceCount ?? 24)
+      : 15;
 
     // Remaining slots to spawn across instances
     const candidateSlots = [
@@ -842,6 +844,9 @@ export class DishPuzzleManager {
 
     if (targetCol === -1) return null; // Board full
 
+    const maxPieces = this._runtimeConfig?.maxPieceCount ?? Infinity;
+    if (this._pieces.size >= maxPieces) return null;
+
     // Find lowest free row in targetCol (skipping reserved cells)
     let settleRow = 0;
     while (
@@ -879,10 +884,16 @@ export class DishPuzzleManager {
     currentOrderDishId?: string
   ): DishPuzzlePiece[] {
     this.maintainActiveDishPool();
+    const maxPieces = this._runtimeConfig?.maxPieceCount ?? Infinity;
+    const remaining = Math.max(0, maxPieces - this._pieces.size);
+    const actualBatch = Math.min(batchCount, remaining);
+    if (actualBatch <= 0) return [];
+
     const activeInstances = Array.from(this._instances.values()).filter(i => !i.isCompleted);
     const spawned: DishPuzzlePiece[] = [];
 
-    for (let i = 0; i < batchCount; i++) {
+    for (let i = 0; i < actualBatch; i++) {
+      if (this._pieces.size >= maxPieces) break;
       const candidate = this._scheduler.selectNextCandidate(
         activeInstances,
         (id) => this.getMissingSlots(id),

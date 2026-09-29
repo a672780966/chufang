@@ -61,64 +61,53 @@ export function diagnoseStalledRun(
   seed: string,
   policy: BotPolicyType
 ): StallDiagnosisEntry | null {
-  const dayConfig = DEFAULT_DAYS[0];
-  const session = new GameSession(dayConfig, seed, undefined, undefined, 'DISH_PUZZLE');
-  const detector = new DishPuzzleDeadlockDetector();
-
-  // Run simulation up to 500 steps
-  const simResult = DishPuzzleSimulationRunner['runSingleSeed'](seed, policy, 1);
+  // 1. Run simulation with captureTrace = true
+  const simResult = DishPuzzleSimulationRunner.runSingleSeed(seed, policy, 1, true);
   if (simResult.outcome !== 'STALLED_NO_PROGRESS') {
     return null;
   }
 
-  // Re-run session to step 500 to extract live board snapshot
-  // Use simResult data
-  const mgr = session.dishPuzzleManager;
-  // Step simulation again manually
-  const rng = session['_rng'];
-  const recentHistory: string[] = [];
-  const recentPosSet = new Set<string>();
+  // 2. Replay the exact action trace onto a fresh GameSession
+  const replayed = DishPuzzleSimulationRunner.replayActionTrace(seed, simResult.actionTrace!, 1);
+  const session = replayed.session;
 
-  for (let step = 0; step < simResult.steps; step++) {
-    const candidates = DishPuzzleSimulationRunner.findCandidateMoves(session);
-    if (candidates.length === 0) break;
-
-    let chosenMove: CandidateMove | null = null;
-    if (policy === 'random_legal') {
-      chosenMove = candidates[rng.nextInt(0, candidates.length - 1)];
-    } else if (policy === 'order_focus') {
-      const orderMerges = candidates.filter(c => c.isCurrentOrderDish && c.enablesMerge);
-      if (orderMerges.length > 0) {
-        chosenMove = orderMerges[rng.nextInt(0, orderMerges.length - 1)];
-      } else {
-        const orderMoves = candidates.filter(c => c.isCurrentOrderDish);
-        chosenMove = orderMoves.length > 0
-          ? orderMoves[rng.nextInt(0, orderMoves.length - 1)]
-          : candidates[rng.nextInt(0, candidates.length - 1)];
-      }
-    } else {
-      for (const c of candidates) {
-        c.score = DishPuzzleSimulationRunner['scorePlannerCandidate'](c, session, mgr, recentPosSet);
-      }
-      candidates.sort((a, b) => b.score - a.score);
-      const topScore = candidates[0].score;
-      const topTiers = candidates.filter(c => c.score >= topScore - 10 && c.score > -1000);
-      chosenMove = topTiers.length > 0 ? topTiers[rng.nextInt(0, topTiers.length - 1)] : candidates[0];
-
-      const posKey = `${chosenMove.groupId}_${chosenMove.targetCol}_${chosenMove.targetRow}`;
-      recentHistory.push(posKey);
-      recentPosSet.add(posKey);
-      if (recentHistory.length > 8) {
-        const oldest = recentHistory.shift()!;
-        recentPosSet.delete(oldest);
-      }
-    }
-
-    if (!chosenMove) break;
-    session.moveDishGroup(chosenMove.groupId, chosenMove.targetCol, chosenMove.targetRow, chosenMove.refPieceId);
+  // 3. STRONG INVARIANT ASSERTIONS: Replay MUST be 100% byte-for-byte identical to simulation
+  if (session.revenue !== simResult.revenue) {
+    throw new Error(
+      `[StallDiagnosis Invariant Breach] Revenue mismatch for ${seed}: sim=${simResult.revenue}, replay=${session.revenue}`
+    );
+  }
+  if (session.dayConfig.businessGoal !== simResult.businessGoal) {
+    throw new Error(
+      `[StallDiagnosis Invariant Breach] businessGoal mismatch for ${seed}: sim=${simResult.businessGoal}, replay=${session.dayConfig.businessGoal}`
+    );
+  }
+  if (replayed.finalStateHash !== simResult.finalStateHash) {
+    throw new Error(
+      `[StallDiagnosis Invariant Breach] finalStateHash mismatch for ${seed}: sim=${simResult.finalStateHash}, replay=${replayed.finalStateHash}`
+    );
+  }
+  if (replayed.finalSnapshot.pieces.length !== simResult.finalSnapshot!.pieces.length) {
+    throw new Error(
+      `[StallDiagnosis Invariant Breach] Piece count mismatch for ${seed}: sim=${simResult.finalSnapshot!.pieces.length}, replay=${replayed.finalSnapshot.pieces.length}`
+    );
+  }
+  if (replayed.finalSnapshot.groups.length !== simResult.finalSnapshot!.groups.length) {
+    throw new Error(
+      `[StallDiagnosis Invariant Breach] Group count mismatch for ${seed}: sim=${simResult.finalSnapshot!.groups.length}, replay=${replayed.finalSnapshot.groups.length}`
+    );
+  }
+  const simCurOrderId = simResult.finalSnapshot?.currentOrder?.orderId;
+  const repCurOrderId = session.orderSystem.currentOrder?.orderId;
+  if (simCurOrderId !== repCurOrderId) {
+    throw new Error(
+      `[StallDiagnosis Invariant Breach] Current order mismatch for ${seed}: sim=${simCurOrderId}, replay=${repCurOrderId}`
+    );
   }
 
-  // Snapshot at cutoff
+  // 4. Snapshot directly from the live replayed session
+  const mgr = session.dishPuzzleManager;
+  const detector = new DishPuzzleDeadlockDetector();
   const occupancyRatio = mgr.getOccupancyRatio();
   const maxStackHeight = mgr.getMaxStackHeight();
   const availableSpawnCells = mgr.getAvailableSpawnCells();
@@ -176,27 +165,46 @@ export function runFullStallDiagnosis(): StallDiagnosisReport {
   const entries: StallDiagnosisEntry[] = [];
   const targetCount = 25; // Diagnose at least 25 entries
 
-  // 1. Gather STALLED runs from random_legal
-  for (let i = 1; i <= 150 && entries.length < 10; i++) {
-    const entry = diagnoseStalledRun(`sim_random_${1000 + i}`, 'random_legal');
+  // 1. Mandatory regression check for sim_multidish_3005
+  console.log('   Checking mandatory regression target: sim_multidish_3005...');
+  const entry3005 = diagnoseStalledRun('sim_multidish_3005', 'multi_dish_planner');
+  if (entry3005) {
+    if (entry3005.revenue >= entry3005.businessGoal) {
+      throw new Error(
+        `[Regression Failure] sim_multidish_3005 replay revenue (${entry3005.revenue}) >= businessGoal (${entry3005.businessGoal})!`
+      );
+    }
+    entries.push(entry3005);
+    console.log(`   ✅ sim_multidish_3005 verified: revenue=${entry3005.revenue} < goal=${entry3005.businessGoal}`);
+  }
+
+  // 2. Gather STALLED runs from multi_dish_planner
+  for (let i = 1; i <= 350 && entries.length < 10; i++) {
+    const seed = `sim_multidish_${3000 + i}`;
+    if (seed === 'sim_multidish_3005') continue;
+    const entry = diagnoseStalledRun(seed, 'multi_dish_planner');
     if (entry) entries.push(entry);
   }
 
-  // 2. Gather STALLED runs from order_focus
-  for (let i = 1; i <= 150 && entries.length < 20; i++) {
+  // 3. Gather STALLED runs from order_focus
+  for (let i = 1; i <= 150 && entries.length < 18; i++) {
     const entry = diagnoseStalledRun(`sim_order_${2000 + i}`, 'order_focus');
     if (entry) entries.push(entry);
   }
 
-  // 3. Gather STALLED runs from multi_dish_planner
-  for (let i = 1; i <= 350 && entries.length < targetCount; i++) {
-    const entry = diagnoseStalledRun(`sim_multidish_${3000 + i}`, 'multi_dish_planner');
+  // 4. Gather STALLED runs from random_legal
+  for (let i = 1; i <= 150 && entries.length < targetCount; i++) {
+    const entry = diagnoseStalledRun(`sim_random_${1000 + i}`, 'random_legal');
     if (entry) entries.push(entry);
   }
 
   const breakdown = { A: 0, B: 0, C: 0, D: 0 };
   for (const e of entries) {
     breakdown[e.category]++;
+  }
+
+  if (breakdown.D > 0) {
+    throw new Error(`[CRITICAL] Category D (missed deadlock / true softlock) count is ${breakdown.D}! Must be 0.`);
   }
 
   const report: StallDiagnosisReport = {

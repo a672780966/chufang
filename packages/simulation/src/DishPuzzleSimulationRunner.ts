@@ -16,6 +16,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import {
   GameSession,
   DEFAULT_DAYS,
@@ -44,6 +45,17 @@ export interface CandidateMove {
 
 export type SimulationOutcome = 'CLEARED' | 'DEADLOCKED' | 'LIVE_PROGRESS_AT_CUTOFF' | 'STALLED_NO_PROGRESS';
 
+export interface RecordedAction {
+  step: number;
+  type: 'RESOLVE_DISH' | 'MOVE_GROUP';
+  groupId: string;
+  targetCol?: number;
+  targetRow?: number;
+  refPieceId?: string;
+  merged?: boolean;
+  completedDish?: boolean;
+}
+
 export interface SeedSimulationRun {
   seed: string;
   policy: BotPolicyType;
@@ -62,6 +74,9 @@ export interface SeedSimulationRun {
   completionReflows: number;
   orphanViolations: number;
   reservedViolations: number;
+  finalStateHash?: string;
+  finalSnapshot?: ReturnType<GameSession['getFullStateSnapshot']>;
+  actionTrace?: RecordedAction[];
 }
 
 export interface PolicyMetrics {
@@ -89,10 +104,113 @@ export interface SimulationSummary {
     multi_dish_planner: PolicyMetrics;
   };
   sampleRuns: SeedSimulationRun[];
+  allRuns?: SeedSimulationRun[];
 }
 
 export class DishPuzzleSimulationRunner {
   private static readonly MAX_STEPS = 500;
+
+  /**
+   * Computes a deterministic SHA-256 state hash for a GameSession.
+   */
+  static computeStateHash(session: GameSession, phase: string = 'PLAYING'): string {
+    const pieces = session.dishPuzzleManager.getAllPieces()
+      .sort((a, b) => a.pieceInstanceId.localeCompare(b.pieceInstanceId))
+      .map(p => ({
+        id: p.pieceInstanceId,
+        dishInstance: p.dishPuzzleInstanceId,
+        slot: p.slotId,
+        col: p.boardCoord.col,
+        row: p.boardCoord.row,
+        group: p.groupId
+      }));
+
+    const groups = session.dishPuzzleManager.getAllGroups()
+      .sort((a, b) => a.groupId.localeCompare(b.groupId))
+      .map(g => ({
+        id: g.groupId,
+        dishId: g.dishId,
+        instanceId: g.dishPuzzleInstanceId,
+        isComplete: g.isComplete,
+        pieces: [...g.pieceIds].sort()
+      }));
+
+    const activeInstances = session.dishPuzzleManager.getAllInstances()
+      .sort((a, b) => a.instanceId.localeCompare(b.instanceId))
+      .map(inst => ({
+        id: inst.instanceId,
+        dishId: inst.dishId,
+        isCompleted: inst.isCompleted,
+        spawnedSlots: Array.from(inst.spawnedSlots).sort()
+      }));
+
+    const currentOrder = session.orderSystem.currentOrder ? {
+      orderId: session.orderSystem.currentOrder.orderId,
+      dishId: session.orderSystem.currentOrder.dishId,
+      isFulfilled: session.orderSystem.currentOrder.isFulfilled
+    } : null;
+
+    const nextOrder = session.orderSystem.getNextOrderFact() ? {
+      orderId: session.orderSystem.getNextOrderFact()!.orderId,
+      dishId: session.orderSystem.getNextOrderFact()!.dishId
+    } : null;
+
+    const statePayload = {
+      pieces,
+      groups,
+      activeInstances,
+      currentOrder,
+      nextOrder,
+      preparedBuffer: [...session.orderSystem.preparedDishBuffer],
+      schedulerState: session.dishPuzzleManager.getSchedulerStateSnapshot(),
+      orderBagState: session.orderSystem.getOrderBagStateSnapshot(),
+      revenue: session.revenue,
+      stats: session.stats,
+      rngState: (session as any)._rng?.getState?.() ?? '',
+      gamePhase: phase
+    };
+
+    return crypto.createHash('sha256').update(JSON.stringify(statePayload)).digest('hex');
+  }
+
+  /**
+   * Replays an exact recorded action trace onto a fresh GameSession.
+   * Guarantees 100% deterministic reproduction without calling bot heuristics.
+   */
+  static replayActionTrace(
+    seed: string,
+    actionTrace: RecordedAction[],
+    dayNumber: number = 1
+  ): {
+    session: GameSession;
+    finalSnapshot: ReturnType<GameSession['getFullStateSnapshot']>;
+    finalStateHash: string;
+  } {
+    const dayConfig = DEFAULT_DAYS[dayNumber - 1] || DEFAULT_DAYS[0];
+    const session = new GameSession(dayConfig, seed, undefined, undefined, 'DISH_PUZZLE');
+
+    for (const action of actionTrace) {
+      if (action.type === 'RESOLVE_DISH') {
+        session.resolveCompletedDish(action.groupId);
+      } else if (action.type === 'MOVE_GROUP') {
+        session.moveDishGroup(
+          action.groupId,
+          action.targetCol!,
+          action.targetRow!,
+          action.refPieceId!
+        );
+      }
+    }
+
+    const finalSnapshot = session.getFullStateSnapshot();
+    const finalStateHash = DishPuzzleSimulationRunner.computeStateHash(session);
+
+    return {
+      session,
+      finalSnapshot,
+      finalStateHash
+    };
+  }
 
   /**
    * Evaluates if translating a group by deltaCol, deltaRow is legal.
@@ -314,7 +432,12 @@ export class DishPuzzleSimulationRunner {
   /**
    * Executes a single simulation run for a given seed and bot policy.
    */
-  static runSingleSeed(seed: string, policy: BotPolicyType, dayNumber: number = 1): SeedSimulationRun {
+  static runSingleSeed(
+    seed: string,
+    policy: BotPolicyType,
+    dayNumber: number = 1,
+    captureTrace: boolean = false
+  ): SeedSimulationRun {
     const dayConfig = DEFAULT_DAYS[dayNumber - 1] || DEFAULT_DAYS[0];
     const session = new GameSession(dayConfig, seed, undefined, undefined, 'DISH_PUZZLE');
     const rng = new SeededRandom(`${seed}_${policy}_bot`);
@@ -322,6 +445,7 @@ export class DishPuzzleSimulationRunner {
     let steps = 0;
     let orphanViolations = 0;
     let reservedViolations = 0;
+    const actionTrace: RecordedAction[] = [];
 
     const recentHistory: string[] = [];
     const recentPosSet = new Set<string>();
@@ -350,6 +474,13 @@ export class DishPuzzleSimulationRunner {
       // Check if any completed group is on board to resolve first
       const completedGroup = session.dishPuzzleManager.getAllGroups().find(g => g.pieceIds.length === 9 || g.isComplete);
       if (completedGroup) {
+        if (captureTrace) {
+          actionTrace.push({
+            step: steps,
+            type: 'RESOLVE_DISH',
+            groupId: completedGroup.groupId
+          });
+        }
         session.resolveCompletedDish(completedGroup.groupId);
         assertIntegrity();
         if (session.isGameOver) break;
@@ -408,6 +539,17 @@ export class DishPuzzleSimulationRunner {
 
       if (!chosenMove) break;
 
+      if (captureTrace) {
+        actionTrace.push({
+          step: steps,
+          type: 'MOVE_GROUP',
+          groupId: chosenMove.groupId,
+          targetCol: chosenMove.targetCol,
+          targetRow: chosenMove.targetRow,
+          refPieceId: chosenMove.refPieceId
+        });
+      }
+
       const moveRes = session.moveDishGroup(
         chosenMove.groupId,
         chosenMove.targetCol,
@@ -448,6 +590,9 @@ export class DishPuzzleSimulationRunner {
       }
     }
 
+    const finalStateHash = DishPuzzleSimulationRunner.computeStateHash(session);
+    const finalSnapshot = captureTrace ? session.getFullStateSnapshot() : undefined;
+
     return {
       seed,
       policy,
@@ -465,7 +610,10 @@ export class DishPuzzleSimulationRunner {
       dangerEpisodes: session.stats.dangerEpisodes,
       completionReflows: session.stats.completionReflows,
       orphanViolations,
-      reservedViolations
+      reservedViolations,
+      finalStateHash,
+      finalSnapshot,
+      actionTrace: captureTrace ? actionTrace : undefined
     };
   }
 
@@ -479,19 +627,19 @@ export class DishPuzzleSimulationRunner {
     // 1. Random Legal (300 seeds)
     for (let i = 1; i <= 300; i++) {
       const seed = `sim_random_${1000 + i}`;
-      runs.push(this.runSingleSeed(seed, 'random_legal', 1));
+      runs.push(this.runSingleSeed(seed, 'random_legal', 1, false));
     }
 
     // 2. Order Focus (350 seeds)
     for (let i = 1; i <= 350; i++) {
       const seed = `sim_order_${2000 + i}`;
-      runs.push(this.runSingleSeed(seed, 'order_focus', 1));
+      runs.push(this.runSingleSeed(seed, 'order_focus', 1, false));
     }
 
     // 3. Multi-Dish Planner (350 seeds)
     for (let i = 1; i <= 350; i++) {
       const seed = `sim_multidish_${3000 + i}`;
-      runs.push(this.runSingleSeed(seed, 'multi_dish_planner', 1));
+      runs.push(this.runSingleSeed(seed, 'multi_dish_planner', 1, false));
     }
 
     // Verify determinism on 30 random duplicate seeds
@@ -564,7 +712,8 @@ export class DishPuzzleSimulationRunner {
       unclassifiedRuns: unclassified,
       determinismPassed,
       policyBreakdown: breakdown,
-      sampleRuns: runs.slice(0, 30) // First 30 for sample inspection
+      sampleRuns: runs.slice(0, 30), // First 30 for sample inspection
+      allRuns: runs
     };
 
     return summary;

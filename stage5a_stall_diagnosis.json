@@ -1,22 +1,42 @@
 {
-  "timestamp": "2026-09-29T12:56:14.902Z",
+  "timestamp": "2026-09-29T14:22:06.747Z",
   "totalDiagnosed": 25,
   "categoryBreakdown": {
-    "A": 21,
-    "B": 4,
+    "A": 0,
+    "B": 25,
     "C": 0,
     "D": 0
   },
   "isCoreSound": true,
   "entries": [
     {
-      "seed": "sim_random_1001",
-      "policy": "random_legal",
+      "seed": "sim_multidish_3005",
+      "policy": "multi_dish_planner",
       "steps": 500,
       "revenue": 70,
       "businessGoal": 200,
-      "occupancyRatio": 0.20689655172413793,
-      "maxStackHeight": 6,
+      "occupancyRatio": 0.27586206896551724,
+      "maxStackHeight": 7,
+      "availableSpawnCellsCount": 8,
+      "isTopSpawnBlocked": false,
+      "legalCandidateMovesCount": 29,
+      "immediateMergeMovesCount": 0,
+      "deadlockDetectorResult": {
+        "isDeadlocked": false,
+        "legalMovesCount": 1
+      },
+      "canSupplyPieces": false,
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 29 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
+    },
+    {
+      "seed": "sim_multidish_3007",
+      "policy": "multi_dish_planner",
+      "steps": 500,
+      "revenue": 70,
+      "businessGoal": 200,
+      "occupancyRatio": 0.27586206896551724,
+      "maxStackHeight": 8,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
       "legalCandidateMovesCount": 38,
@@ -25,61 +45,21 @@
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
-      "canSupplyPieces": true,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (38), immediate merges available (0), supply possible (true)."
+      "canSupplyPieces": false,
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 38 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
-      "seed": "sim_random_1005",
-      "policy": "random_legal",
+      "seed": "sim_multidish_3009",
+      "policy": "multi_dish_planner",
       "steps": 500,
       "revenue": 70,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 11,
+      "maxStackHeight": 8,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 112,
-      "immediateMergeMovesCount": 2,
-      "deadlockDetectorResult": {
-        "isDeadlocked": false,
-        "legalMovesCount": 1
-      },
-      "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (112), immediate merges available (2), supply possible (false)."
-    },
-    {
-      "seed": "sim_random_1006",
-      "policy": "random_legal",
-      "steps": 500,
-      "revenue": 0,
-      "businessGoal": 200,
-      "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 11,
-      "availableSpawnCellsCount": 8,
-      "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 97,
-      "immediateMergeMovesCount": 1,
-      "deadlockDetectorResult": {
-        "isDeadlocked": false,
-        "legalMovesCount": 1
-      },
-      "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (97), immediate merges available (1), supply possible (false)."
-    },
-    {
-      "seed": "sim_random_1008",
-      "policy": "random_legal",
-      "steps": 500,
-      "revenue": 0,
-      "businessGoal": 200,
-      "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 12,
-      "availableSpawnCellsCount": 6,
-      "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 49,
+      "legalCandidateMovesCount": 44,
       "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
@@ -87,127 +67,147 @@
       },
       "canSupplyPieces": false,
       "category": "B",
-      "diagnosisReason": "No 1-step immediate merges found among 49 moves, but board has space (6 cells). Multi-step clearance / lookahead needed to connect separated groups."
+      "diagnosisReason": "No 1-step immediate merges found among 44 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
-      "seed": "sim_random_1009",
-      "policy": "random_legal",
+      "seed": "sim_multidish_3012",
+      "policy": "multi_dish_planner",
       "steps": 500,
-      "revenue": 0,
+      "revenue": 140,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 12,
-      "availableSpawnCellsCount": 7,
-      "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 71,
-      "immediateMergeMovesCount": 3,
-      "deadlockDetectorResult": {
-        "isDeadlocked": false,
-        "legalMovesCount": 1
-      },
-      "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (71), immediate merges available (3), supply possible (false)."
-    },
-    {
-      "seed": "sim_random_1014",
-      "policy": "random_legal",
-      "steps": 500,
-      "revenue": 0,
-      "businessGoal": 200,
-      "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 12,
-      "availableSpawnCellsCount": 4,
-      "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 83,
-      "immediateMergeMovesCount": 1,
-      "deadlockDetectorResult": {
-        "isDeadlocked": false,
-        "legalMovesCount": 1
-      },
-      "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (83), immediate merges available (1), supply possible (false)."
-    },
-    {
-      "seed": "sim_random_1015",
-      "policy": "random_legal",
-      "steps": 500,
-      "revenue": 0,
-      "businessGoal": 200,
-      "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 11,
+      "maxStackHeight": 8,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 53,
-      "immediateMergeMovesCount": 1,
+      "legalCandidateMovesCount": 34,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (53), immediate merges available (1), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 34 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
-      "seed": "sim_random_1021",
-      "policy": "random_legal",
+      "seed": "sim_multidish_3013",
+      "policy": "multi_dish_planner",
       "steps": 500,
-      "revenue": 0,
+      "revenue": 140,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 11,
+      "maxStackHeight": 6,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 83,
-      "immediateMergeMovesCount": 2,
+      "legalCandidateMovesCount": 15,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (83), immediate merges available (2), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 15 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
-      "seed": "sim_random_1022",
-      "policy": "random_legal",
+      "seed": "sim_multidish_3014",
+      "policy": "multi_dish_planner",
       "steps": 500,
       "revenue": 70,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 12,
-      "availableSpawnCellsCount": 7,
+      "maxStackHeight": 7,
+      "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 117,
-      "immediateMergeMovesCount": 2,
+      "legalCandidateMovesCount": 30,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (117), immediate merges available (2), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 30 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
-      "seed": "sim_random_1023",
-      "policy": "random_legal",
+      "seed": "sim_multidish_3016",
+      "policy": "multi_dish_planner",
+      "steps": 500,
+      "revenue": 140,
+      "businessGoal": 200,
+      "occupancyRatio": 0.27586206896551724,
+      "maxStackHeight": 7,
+      "availableSpawnCellsCount": 8,
+      "isTopSpawnBlocked": false,
+      "legalCandidateMovesCount": 20,
+      "immediateMergeMovesCount": 0,
+      "deadlockDetectorResult": {
+        "isDeadlocked": false,
+        "legalMovesCount": 1
+      },
+      "canSupplyPieces": false,
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 20 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
+    },
+    {
+      "seed": "sim_multidish_3017",
+      "policy": "multi_dish_planner",
+      "steps": 500,
+      "revenue": 140,
+      "businessGoal": 200,
+      "occupancyRatio": 0.27586206896551724,
+      "maxStackHeight": 8,
+      "availableSpawnCellsCount": 8,
+      "isTopSpawnBlocked": false,
+      "legalCandidateMovesCount": 47,
+      "immediateMergeMovesCount": 0,
+      "deadlockDetectorResult": {
+        "isDeadlocked": false,
+        "legalMovesCount": 1
+      },
+      "canSupplyPieces": false,
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 47 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
+    },
+    {
+      "seed": "sim_multidish_3018",
+      "policy": "multi_dish_planner",
       "steps": 500,
       "revenue": 70,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 11,
+      "maxStackHeight": 8,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 92,
-      "immediateMergeMovesCount": 1,
+      "legalCandidateMovesCount": 48,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (92), immediate merges available (1), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 48 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
+    },
+    {
+      "seed": "sim_multidish_3020",
+      "policy": "multi_dish_planner",
+      "steps": 500,
+      "revenue": 140,
+      "businessGoal": 200,
+      "occupancyRatio": 0.27586206896551724,
+      "maxStackHeight": 7,
+      "availableSpawnCellsCount": 8,
+      "isTopSpawnBlocked": false,
+      "legalCandidateMovesCount": 32,
+      "immediateMergeMovesCount": 0,
+      "deadlockDetectorResult": {
+        "isDeadlocked": false,
+        "legalMovesCount": 1
+      },
+      "canSupplyPieces": false,
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 32 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
       "seed": "sim_order_2001",
@@ -216,18 +216,18 @@
       "revenue": 70,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 9,
+      "maxStackHeight": 11,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 101,
-      "immediateMergeMovesCount": 2,
+      "legalCandidateMovesCount": 50,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (101), immediate merges available (2), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 50 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
       "seed": "sim_order_2002",
@@ -239,15 +239,15 @@
       "maxStackHeight": 11,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 124,
-      "immediateMergeMovesCount": 4,
+      "legalCandidateMovesCount": 68,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (124), immediate merges available (4), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 68 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
       "seed": "sim_order_2003",
@@ -256,18 +256,18 @@
       "revenue": 70,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 11,
+      "maxStackHeight": 9,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 103,
-      "immediateMergeMovesCount": 4,
+      "legalCandidateMovesCount": 67,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (103), immediate merges available (4), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 67 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
       "seed": "sim_order_2004",
@@ -276,10 +276,10 @@
       "revenue": 70,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 9,
-      "availableSpawnCellsCount": 8,
+      "maxStackHeight": 12,
+      "availableSpawnCellsCount": 5,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 82,
+      "legalCandidateMovesCount": 59,
       "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
@@ -287,7 +287,7 @@
       },
       "canSupplyPieces": false,
       "category": "B",
-      "diagnosisReason": "No 1-step immediate merges found among 82 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
+      "diagnosisReason": "No 1-step immediate merges found among 59 moves, but board has space (5 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
       "seed": "sim_order_2005",
@@ -296,18 +296,18 @@
       "revenue": 70,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 8,
+      "maxStackHeight": 10,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 83,
-      "immediateMergeMovesCount": 5,
+      "legalCandidateMovesCount": 73,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (83), immediate merges available (5), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 73 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
       "seed": "sim_order_2006",
@@ -316,18 +316,18 @@
       "revenue": 70,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 12,
-      "availableSpawnCellsCount": 5,
+      "maxStackHeight": 8,
+      "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 104,
-      "immediateMergeMovesCount": 4,
+      "legalCandidateMovesCount": 42,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (104), immediate merges available (4), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 42 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
       "seed": "sim_order_2007",
@@ -336,150 +336,90 @@
       "revenue": 70,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 9,
+      "maxStackHeight": 10,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 96,
-      "immediateMergeMovesCount": 5,
+      "legalCandidateMovesCount": 60,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (96), immediate merges available (5), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 60 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
       "seed": "sim_order_2008",
       "policy": "order_focus",
       "steps": 500,
-      "revenue": 0,
+      "revenue": 70,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
       "maxStackHeight": 9,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 90,
-      "immediateMergeMovesCount": 3,
+      "legalCandidateMovesCount": 49,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (90), immediate merges available (3), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 49 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
-      "seed": "sim_order_2009",
-      "policy": "order_focus",
+      "seed": "sim_random_1001",
+      "policy": "random_legal",
       "steps": 500,
-      "revenue": 70,
+      "revenue": 0,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 6,
-      "availableSpawnCellsCount": 8,
+      "maxStackHeight": 12,
+      "availableSpawnCellsCount": 4,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 79,
-      "immediateMergeMovesCount": 4,
+      "legalCandidateMovesCount": 60,
+      "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
         "legalMovesCount": 1
       },
       "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (79), immediate merges available (4), supply possible (false)."
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 60 moves, but board has space (4 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
-      "seed": "sim_order_2010",
-      "policy": "order_focus",
+      "seed": "sim_random_1005",
+      "policy": "random_legal",
       "steps": 500,
-      "revenue": 70,
+      "revenue": 0,
+      "businessGoal": 200,
+      "occupancyRatio": 0.27586206896551724,
+      "maxStackHeight": 12,
+      "availableSpawnCellsCount": 7,
+      "isTopSpawnBlocked": false,
+      "legalCandidateMovesCount": 78,
+      "immediateMergeMovesCount": 0,
+      "deadlockDetectorResult": {
+        "isDeadlocked": false,
+        "legalMovesCount": 1
+      },
+      "canSupplyPieces": false,
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 78 moves, but board has space (7 cells). Multi-step clearance / lookahead needed to connect separated groups."
+    },
+    {
+      "seed": "sim_random_1006",
+      "policy": "random_legal",
+      "steps": 500,
+      "revenue": 0,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
       "maxStackHeight": 12,
       "availableSpawnCellsCount": 5,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 90,
-      "immediateMergeMovesCount": 1,
-      "deadlockDetectorResult": {
-        "isDeadlocked": false,
-        "legalMovesCount": 1
-      },
-      "canSupplyPieces": false,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (90), immediate merges available (1), supply possible (false)."
-    },
-    {
-      "seed": "sim_multidish_3005",
-      "policy": "multi_dish_planner",
-      "steps": 500,
-      "revenue": 210,
-      "businessGoal": 200,
-      "occupancyRatio": 0.13793103448275862,
-      "maxStackHeight": 6,
-      "availableSpawnCellsCount": 8,
-      "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 21,
-      "immediateMergeMovesCount": 0,
-      "deadlockDetectorResult": {
-        "isDeadlocked": false,
-        "legalMovesCount": 1
-      },
-      "canSupplyPieces": true,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (21), immediate merges available (0), supply possible (true)."
-    },
-    {
-      "seed": "sim_multidish_3007",
-      "policy": "multi_dish_planner",
-      "steps": 500,
-      "revenue": 210,
-      "businessGoal": 200,
-      "occupancyRatio": 0.12643678160919541,
-      "maxStackHeight": 4,
-      "availableSpawnCellsCount": 8,
-      "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 33,
-      "immediateMergeMovesCount": 1,
-      "deadlockDetectorResult": {
-        "isDeadlocked": false,
-        "legalMovesCount": 1
-      },
-      "canSupplyPieces": true,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (33), immediate merges available (1), supply possible (true)."
-    },
-    {
-      "seed": "sim_multidish_3009",
-      "policy": "multi_dish_planner",
-      "steps": 500,
-      "revenue": 210,
-      "businessGoal": 200,
-      "occupancyRatio": 0.10344827586206896,
-      "maxStackHeight": 5,
-      "availableSpawnCellsCount": 8,
-      "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 27,
-      "immediateMergeMovesCount": 1,
-      "deadlockDetectorResult": {
-        "isDeadlocked": false,
-        "legalMovesCount": 1
-      },
-      "canSupplyPieces": true,
-      "category": "A",
-      "diagnosisReason": "Bot repeating ineffective policy / local oscillation. Legal moves exist (27), immediate merges available (1), supply possible (true)."
-    },
-    {
-      "seed": "sim_multidish_3012",
-      "policy": "multi_dish_planner",
-      "steps": 500,
-      "revenue": 140,
-      "businessGoal": 200,
-      "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 7,
-      "availableSpawnCellsCount": 8,
-      "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 27,
+      "legalCandidateMovesCount": 53,
       "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
@@ -487,19 +427,19 @@
       },
       "canSupplyPieces": false,
       "category": "B",
-      "diagnosisReason": "No 1-step immediate merges found among 27 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
+      "diagnosisReason": "No 1-step immediate merges found among 53 moves, but board has space (5 cells). Multi-step clearance / lookahead needed to connect separated groups."
     },
     {
-      "seed": "sim_multidish_3013",
-      "policy": "multi_dish_planner",
+      "seed": "sim_random_1008",
+      "policy": "random_legal",
       "steps": 500,
-      "revenue": 70,
+      "revenue": 0,
       "businessGoal": 200,
       "occupancyRatio": 0.27586206896551724,
-      "maxStackHeight": 8,
+      "maxStackHeight": 11,
       "availableSpawnCellsCount": 8,
       "isTopSpawnBlocked": false,
-      "legalCandidateMovesCount": 52,
+      "legalCandidateMovesCount": 59,
       "immediateMergeMovesCount": 0,
       "deadlockDetectorResult": {
         "isDeadlocked": false,
@@ -507,7 +447,67 @@
       },
       "canSupplyPieces": false,
       "category": "B",
-      "diagnosisReason": "No 1-step immediate merges found among 52 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
+      "diagnosisReason": "No 1-step immediate merges found among 59 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
+    },
+    {
+      "seed": "sim_random_1009",
+      "policy": "random_legal",
+      "steps": 500,
+      "revenue": 0,
+      "businessGoal": 200,
+      "occupancyRatio": 0.27586206896551724,
+      "maxStackHeight": 12,
+      "availableSpawnCellsCount": 6,
+      "isTopSpawnBlocked": false,
+      "legalCandidateMovesCount": 58,
+      "immediateMergeMovesCount": 0,
+      "deadlockDetectorResult": {
+        "isDeadlocked": false,
+        "legalMovesCount": 1
+      },
+      "canSupplyPieces": false,
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 58 moves, but board has space (6 cells). Multi-step clearance / lookahead needed to connect separated groups."
+    },
+    {
+      "seed": "sim_random_1014",
+      "policy": "random_legal",
+      "steps": 500,
+      "revenue": 0,
+      "businessGoal": 200,
+      "occupancyRatio": 0.27586206896551724,
+      "maxStackHeight": 12,
+      "availableSpawnCellsCount": 7,
+      "isTopSpawnBlocked": false,
+      "legalCandidateMovesCount": 58,
+      "immediateMergeMovesCount": 0,
+      "deadlockDetectorResult": {
+        "isDeadlocked": false,
+        "legalMovesCount": 1
+      },
+      "canSupplyPieces": false,
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 58 moves, but board has space (7 cells). Multi-step clearance / lookahead needed to connect separated groups."
+    },
+    {
+      "seed": "sim_random_1015",
+      "policy": "random_legal",
+      "steps": 500,
+      "revenue": 0,
+      "businessGoal": 200,
+      "occupancyRatio": 0.27586206896551724,
+      "maxStackHeight": 11,
+      "availableSpawnCellsCount": 8,
+      "isTopSpawnBlocked": false,
+      "legalCandidateMovesCount": 60,
+      "immediateMergeMovesCount": 0,
+      "deadlockDetectorResult": {
+        "isDeadlocked": false,
+        "legalMovesCount": 1
+      },
+      "canSupplyPieces": false,
+      "category": "B",
+      "diagnosisReason": "No 1-step immediate merges found among 60 moves, but board has space (8 cells). Multi-step clearance / lookahead needed to connect separated groups."
     }
   ]
 }

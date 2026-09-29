@@ -10,6 +10,7 @@ import {
   getProvisionalDishConfig
 } from '../src/index.js';
 import { computeSessionStateHash } from './DishPuzzleDeterminism.test.js';
+import { DishPuzzleSimulationRunner } from '../../simulation/src/DishPuzzleSimulationRunner.js';
 
 describe('Stage 5A Revision 2: Final Core Closure & Invariant Assertions', () => {
   // Invariant 1: Day 1 Gold Sample Layout is initialized only once
@@ -148,6 +149,51 @@ describe('Stage 5A Revision 2: Final Core Closure & Invariant Assertions', () =>
     assert.ok(
       sessionB.dishPuzzleManager.getAllPieces().length > initialCount,
       'Session B with maxPieceCount 30 must continue supplying pieces'
+    );
+
+    // Verification Patch Invariant: maxPieceCount batch penetration prevention
+    // Scenario 1: Piece = 23, maxPieceCount = 24, supplyPerAction = 3 -> Action -> final <= 24
+    const configPenetration = {
+      ...DEFAULT_DAYS[1],
+      dayNumber: 2,
+      maxPieceCount: 24,
+      supplyPerAction: 3,
+      targetIngredientCount: 0
+    };
+    const sessionPen = new GameSession(configPenetration, 'pen_action_seed', undefined, undefined, 'DISH_PUZZLE');
+    while (sessionPen.dishPuzzleManager.getAllPieces().length < 23) {
+      sessionPen.dishPuzzleManager.schedulePieceAcrossActiveDishes(1);
+    }
+    assert.strictEqual(sessionPen.dishPuzzleManager.getAllPieces().length, 23);
+
+    // Perform 1 action with supplyPerAction = 3
+    const pPen = sessionPen.dishPuzzleManager.getAllPieces()[0];
+    const gPen = sessionPen.dishPuzzleManager.getGroupByPieceId(pPen.pieceInstanceId)!;
+    sessionPen.moveDishGroup(gPen.groupId, pPen.boardCoord.col, pPen.boardCoord.row, pPen.pieceInstanceId);
+    assert.ok(
+      sessionPen.dishPuzzleManager.getAllPieces().length <= 24,
+      `Action supply must never penetrate maxPieceCount (got ${sessionPen.dishPuzzleManager.getAllPieces().length})`
+    );
+
+    // Scenario 2: Piece = 23, maxPieceCount = 24, completionRefillCount = 4 -> refill -> final <= 24
+    const configRefillPen = {
+      ...DEFAULT_DAYS[1],
+      dayNumber: 2,
+      maxPieceCount: 24,
+      completionRefillCount: 4,
+      targetIngredientCount: 0
+    };
+    const sessionRefill = new GameSession(configRefillPen, 'pen_refill_seed', undefined, undefined, 'DISH_PUZZLE');
+    while (sessionRefill.dishPuzzleManager.getAllPieces().length < 23) {
+      sessionRefill.dishPuzzleManager.schedulePieceAcrossActiveDishes(1);
+    }
+    assert.strictEqual(sessionRefill.dishPuzzleManager.getAllPieces().length, 23);
+
+    // Directly call schedulePieceAcrossActiveDishes with batch 4
+    sessionRefill.dishPuzzleManager.schedulePieceAcrossActiveDishes(4);
+    assert.ok(
+      sessionRefill.dishPuzzleManager.getAllPieces().length <= 24,
+      `Completion refill must never penetrate maxPieceCount (got ${sessionRefill.dishPuzzleManager.getAllPieces().length})`
     );
   });
 
@@ -290,5 +336,21 @@ describe('Stage 5A Revision 2: Final Core Closure & Invariant Assertions', () =>
       assert.deepStrictEqual(snap1.schedulerState, snap2.schedulerState);
       assert.deepStrictEqual(snap1.orderBagState, snap2.orderBagState);
     }
+  });
+
+  // Invariant 11: Exact actionTrace replay consistency and mandatory sim_multidish_3005 regression
+  it('11. should enforce byte-exact trace replay consistency and stall diagnosis invariant (sim_multidish_3005)', () => {
+    const seed = 'sim_multidish_3005';
+    const sim = DishPuzzleSimulationRunner.runSingleSeed(seed, 'multi_dish_planner', 1, true);
+    assert.strictEqual(sim.outcome, 'STALLED_NO_PROGRESS', 'sim_multidish_3005 must be STALLED');
+    assert.ok(sim.revenue < sim.businessGoal, 'Stalled simulation must NOT reach business goal');
+
+    const replayed = DishPuzzleSimulationRunner.replayActionTrace(seed, sim.actionTrace!, 1);
+    assert.strictEqual(replayed.session.revenue, sim.revenue, 'Replay revenue must match simulation');
+    assert.strictEqual(replayed.session.dayConfig.businessGoal, sim.businessGoal, 'businessGoal must match');
+    assert.strictEqual(replayed.finalStateHash, sim.finalStateHash, 'finalStateHash must match byte-for-byte');
+    assert.strictEqual(replayed.finalSnapshot.pieces.length, sim.finalSnapshot!.pieces.length);
+    assert.strictEqual(replayed.finalSnapshot.groups.length, sim.finalSnapshot!.groups.length);
+    assert.strictEqual(replayed.finalSnapshot.currentOrder?.orderId, sim.finalSnapshot!.currentOrder?.orderId);
   });
 });
