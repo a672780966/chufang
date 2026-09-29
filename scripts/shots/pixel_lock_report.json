@@ -1,0 +1,51 @@
+{
+  "overall_status": "PASS",
+  "resolution": {
+    "width": 400,
+    "height": 672
+  },
+  "static_pixels_per_frame": 67833,
+  "motion_pixels_per_frame": 200967,
+  "actions": [
+    {
+      "action": "cat_idle",
+      "frame_count": 16,
+      "changed_pixels_inside_motion_mask": 800260,
+      "changed_pixels_outside_motion_mask": 0,
+      "max_background_diff": 0,
+      "status": "PASS"
+    },
+    {
+      "action": "cat_chop",
+      "frame_count": 12,
+      "changed_pixels_inside_motion_mask": 2394978,
+      "changed_pixels_outside_motion_mask": 0,
+      "max_background_diff": 0,
+      "status": "PASS"
+    },
+    {
+      "action": "cat_stir",
+      "frame_count": 16,
+      "changed_pixels_inside_motion_mask": 3200520,
+      "changed_pixels_outside_motion_mask": 0,
+      "max_background_diff": 0,
+      "status": "PASS"
+    },
+    {
+      "action": "cat_pass",
+      "frame_count": 12,
+      "changed_pixels_inside_motion_mask": 2395754,
+      "changed_pixels_outside_motion_mask": 0,
+      "max_background_diff": 0,
+      "status": "PASS"
+    },
+    {
+      "action": "cat_win",
+      "frame_count": 24,
+      "changed_pixels_inside_motion_mask": 4809224,
+      "changed_pixels_outside_motion_mask": 0,
+      "max_background_diff": 0,
+      "status": "PASS"
+    }
+  ]
+}

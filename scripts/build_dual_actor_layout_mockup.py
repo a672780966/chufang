@@ -64,9 +64,9 @@ printer_x = STAGE_X + (STAGE_W - card_pw) // 2
 printer_y = PLAY_Y + 16
 mockup.paste(p_card, (printer_x, printer_y), p_card)
 
-# 3. Bottom Right Slot: Enlarged Cat Actor Card (Width: 100px, Height: 168px = 30.4% of stage height)
+# 3. Bottom Right Slot: Sealed Cat Actor Clip Window (Width: 100px, Height: 168px = 30.4% of stage height)
 # Floating 10px left over wooden board border, with zero playable cell obstruction
-cat_img = Image.open(os.path.join(BASE_DIR, 'packages', 'web-greybox', 'public', 'assets', 'actor_pack', 'cat', 'cat_chop', 'frame_00.png')).convert('RGBA')
+cat_img = Image.open(os.path.join(BASE_DIR, 'packages', 'web-greybox', 'public', 'assets', 'actor_pack', 'cat', 'idle', 'frame_00.png')).convert('RGBA')
 cat_w = 100
 cat_h = 168
 cat_scaled = cat_img.resize((cat_w, cat_h), Image.Resampling.LANCZOS)
@@ -85,6 +85,8 @@ cat_y = PLAY_Y + PLAY_H - cat_h
 mockup.paste(cat_card, (cat_x, cat_y), cat_card)
 
 # Save official layout deliverable
+mockup.save(os.path.join(SHOTS_DIR, 'shot_stage4_2_final_layout.png'))
+mockup.save(os.path.join(ARTIFACT_DIR, 'shot_stage4_2_final_layout.png'))
 mockup.save(os.path.join(SHOTS_DIR, 'shot_stage4_2_actor_pack_layout.png'))
 mockup.save(os.path.join(ARTIFACT_DIR, 'shot_stage4_2_actor_pack_layout.png'))
-print('shot_stage4_2_actor_pack_layout.png saved with clean independent layout!')
+print('shot_stage4_2_final_layout.png saved with clean independent layout!')
