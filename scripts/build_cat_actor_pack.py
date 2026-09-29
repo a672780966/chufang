@@ -13,87 +13,44 @@ ART_DIR = r'C:\Users\admin\.gemini\antigravity\brain\a581706c-feba-4a01-94fc-8c6
 os.makedirs(ACTOR_CAT_DIR, exist_ok=True)
 os.makedirs(SHOTS_DIR, exist_ok=True)
 
-# Cat Actor Card Dimensions (Canonical 2x: 170 x 260 px, renders at 85 x 130 px in CSS)
+# Canonical card dimensions: 170 x 260 px
 CARD_W = 170
 CARD_H = 260
 
 # Source high-resolution assets & calibrated crop boxes
-# Format: (path, (x1, y1, x2, y2), scale_ratio)
 SRC_META = {
-    'ready': (os.path.join(ART_DIR, 'narrow_stage_master_1790356624694.jpg'), (110, 320, 670, 1180), 3.29),
-    'tie': (os.path.join(ART_DIR, 'narrow_open_tie_1790356661183.jpg'), (110, 320, 670, 1180), 3.29),
-    'cheer': (os.path.join(ART_DIR, 'narrow_open_cheer_1790356690652.jpg'), (110, 320, 670, 1180), 3.29),
-    'chop': (os.path.join(ART_DIR, 'narrow_work_chop_1790356719385.jpg'), (110, 320, 670, 1180), 3.29),
-    'stir': (os.path.join(ART_DIR, 'cat_work_stir_1790351635057.jpg'), (175, 430, 625, 1120), 2.65),
-    'pass': (os.path.join(ART_DIR, 'cat_work_pass_1790351734241.jpg'), (175, 430, 625, 1120), 2.65),
-    'dance_l': (os.path.join(ART_DIR, 'cat_win_dance_1790351847125.jpg'), (175, 450, 625, 1140), 2.65),
-    'dance_r': (os.path.join(ART_DIR, 'cat_win_sway_1790351968371.jpg'), (175, 450, 625, 1140), 2.65),
-    'victory': (os.path.join(ART_DIR, 'win_v2_f5_victory.png'), (60, 135, 370, 609), 1.82),
+    'ready': (os.path.join(ART_DIR, 'narrow_stage_master_1790356624694.jpg'), (110, 320, 670, 1180)),
+    'tie': (os.path.join(ART_DIR, 'narrow_open_tie_1790356661183.jpg'), (110, 320, 670, 1180)),
+    'cheer': (os.path.join(ART_DIR, 'narrow_open_cheer_1790356690652.jpg'), (110, 320, 670, 1180)),
+    'chop': (os.path.join(ART_DIR, 'narrow_work_chop_1790356719385.jpg'), (110, 320, 670, 1180)),
+    'stir': (os.path.join(ART_DIR, 'cat_work_stir_1790351635057.jpg'), (175, 430, 625, 1120)),
+    'pass': (os.path.join(ART_DIR, 'cat_work_pass_1790351734241.jpg'), (175, 430, 625, 1120)),
+    'dance_l': (os.path.join(ART_DIR, 'cat_win_dance_1790351847125.jpg'), (175, 450, 625, 1140)),
+    'dance_r': (os.path.join(ART_DIR, 'cat_win_sway_1790351968371.jpg'), (175, 450, 625, 1140)),
+    'victory': (os.path.join(ART_DIR, 'win_v2_f5_victory.png'), (60, 135, 370, 609)),
 }
 
-# Cache RGBA sources
-print('Loading source image cache...')
-SRC_CACHE = {}
-for k, meta in SRC_META.items():
-    if os.path.exists(meta[0]):
-        SRC_CACHE[k] = Image.open(meta[0]).convert('RGBA')
-    else:
-        raise FileNotFoundError(f"Missing source asset for {k}: {meta[0]}")
+print('Loading base reference cards...')
+BASE_CARDS = {}
+for k, (p, box) in SRC_META.items():
+    im = Image.open(p).crop(box).resize((CARD_W, CARD_H), Image.Resampling.LANCZOS)
+    BASE_CARDS[k] = im.convert('RGBA')
 
-def get_base_card(pose_key, dx=0, dy=0):
-    """
-    Extracts a card from high-res source using subpixel offset compensation.
-    Zero border artifacts, zero stretching, pristine LANCZOS interpolation.
-    """
-    im, (x1, y1, x2, y2), scale = SRC_META[pose_key]
-    sx1 = int(x1 - dx * scale)
-    sy1 = int(y1 - dy * scale)
-    sx2 = int(x2 - dx * scale)
-    sy2 = int(y2 - dy * scale)
-
-    # Clamp to image boundaries
-    src_img = SRC_CACHE[pose_key]
-    sx1 = max(0, min(sx1, src_img.width - 100))
-    sy1 = max(0, min(sy1, src_img.height - 100))
-    sx2 = max(sx1 + 100, min(sx2, src_img.width))
-    sy2 = max(sy1 + 100, min(sy2, src_img.height))
-
-    crop = src_img.crop((sx1, sy1, sx2, sy2))
-    return crop.resize((CARD_W, CARD_H), Image.Resampling.LANCZOS)
-
-def blend_cards(card_a, card_b, alpha):
-    """Smooth cross-dissolve blend between two cards (alpha: 0.0 to 1.0)."""
-    return Image.blend(card_a, card_b, alpha)
-
-def add_coin_fx(img, frame_idx, density=6):
-    """Adds light celebratory golden coin particles cascading down."""
-    out = img.copy()
-    draw = ImageDraw.Draw(out)
-    t = frame_idx
-    # Golden coin sparkle seeds
-    seeds = [
-        (25, 15, 6), (75, 45, 8), (120, 20, 7), (145, 75, 6),
-        (45, 110, 8), (105, 95, 7), (155, 140, 5), (35, 170, 7),
-        (85, 150, 8), (130, 185, 6)
-    ]
-    for idx, (bx, by_off, radius) in enumerate(seeds[:density]):
-        py = (t * 14 + by_off) % CARD_H
-        px = bx + int(math.sin((t + idx * 3) * 0.4) * 4)
-        if 10 <= py <= CARD_H - 15:
-            # Draw sparkling gold coin
-            draw.ellipse([px - radius, py - radius, px + radius, py + radius], fill=(255, 218, 50, 230), outline=(218, 160, 20, 255))
-            # Center glint
-            draw.ellipse([px - 2, py - 2, px + 2, py + 2], fill=(255, 255, 220, 255))
-    return out
-
+# --- Helper: Save Animation Package ---
 def save_animation_pack(state_name, frames, fps=10, loop=True):
     """Saves individual PNGs, Animated WebP, MP4, WebM, and Spritesheet+JSON."""
     out_dir = os.path.join(ACTOR_CAT_DIR, state_name)
     os.makedirs(out_dir, exist_ok=True)
+    for existing in os.listdir(out_dir):
+        if existing.endswith('.png'):
+            try:
+                os.remove(os.path.join(out_dir, existing))
+            except Exception:
+                pass
 
     # 1. Save frame PNGs
     for idx, f in enumerate(frames):
-        f.save(os.path.join(out_dir, f'frame_{idx:02d}.png'))
+        f.convert('RGB').save(os.path.join(out_dir, f'frame_{idx:02d}.png'))
 
     # 2. Save Animated WebP
     webp_path = os.path.join(ACTOR_CAT_DIR, f'{state_name}.webp')
@@ -143,208 +100,420 @@ def save_animation_pack(state_name, frames, fps=10, loop=True):
             }
         }, jf, indent=2)
 
+    # 5. Generate complete contact sheet for verification
+    save_contact_sheet(state_name, frames)
     print(f'[OK] Generated {state_name} package ({len(frames)} frames @ {fps}fps, loop={loop})')
 
-# --- Build Discrete States ---
-def build_discrete_states():
-    # 1. cat_ready (12 frames, subtle breathing loop)
-    ready_frames = []
-    for i in range(12):
-        bob = int(math.sin(i * 2 * math.pi / 12) * 1.5)
-        ready_frames.append(get_base_card('ready', dy=bob))
-    save_animation_pack('cat_ready', ready_frames, fps=10, loop=True)
+def save_contact_sheet(state_name, frames, cols=6):
+    """Generates an all-frames contact sheet grid with frame indices."""
+    num_frames = len(frames)
+    rows = (num_frames + cols - 1) // cols
+    card_w, card_h = CARD_W, CARD_H
+    label_h = 20
+    pad = 8
 
-    # 2. cat_tie (12 frames, once)
-    tie_frames = []
-    for i in range(12):
-        pull = 2 if 3 <= i <= 8 else (1 if i in [2, 9] else 0)
-        tie_frames.append(get_base_card('tie', dy=pull))
-    save_animation_pack('cat_tie', tie_frames, fps=10, loop=False)
+    grid_w = cols * (card_w + pad) + pad
+    grid_h = rows * (card_h + pad + label_h) + pad
+    sheet = Image.new('RGB', (grid_w, grid_h), (245, 240, 232))
+    draw = ImageDraw.Draw(sheet)
 
-    # 3. cat_cheer (12 frames, once)
-    cheer_frames = []
-    for i in range(12):
-        pump = -3 if 3 <= i <= 8 else (-1 if i in [2, 9] else 0)
-        cheer_frames.append(get_base_card('cheer', dy=pump))
-    save_animation_pack('cat_cheer', cheer_frames, fps=10, loop=False)
+    for idx, f in enumerate(frames):
+        col = idx % cols
+        row = idx // cols
+        x = pad + col * (card_w + pad)
+        y = pad + row * (card_h + pad + label_h)
 
-    # 4. cat_chop (12 frames, 3 chops per cycle, seamless loop)
-    chop_frames = []
+        sheet.paste(f.convert('RGB'), (x, y + label_h))
+        draw.rectangle([x, y + label_h, x + card_w - 1, y + label_h + card_h - 1], outline=(180, 160, 140))
+        draw.text((x + 2, y + 2), f'F{idx:02d}', fill=(60, 45, 30))
+
+    out_shot = os.path.join(SHOTS_DIR, f'contact_{state_name}.png')
+    out_art = os.path.join(ART_DIR, f'contact_{state_name}.png')
+    sheet.save(out_shot)
+    sheet.save(out_art)
+
+# ==============================================================================
+# 1. cat_chop (12 frames, seamless loop)
+# Background: 100% frozen. Active elements: Knife lifts, chops, glints, scallions bounce.
+# ==============================================================================
+def build_chop_pack():
+    base = BASE_CARDS['chop'].copy()
+    
+    # Clean board behind knife (x: 58..95, y: 172..215)
+    bg_clean = base.copy()
+    board_patch = base.crop((25, 175, 55, 215))
+    bg_clean.paste(board_patch, (60, 175))
+    bg_draw = ImageDraw.Draw(bg_clean)
+    for sx, sy in [(65, 185), (72, 192), (80, 198), (70, 205), (85, 202), (75, 212)]:
+        bg_draw.ellipse([sx - 3, sy - 3, sx + 3, sy + 3], fill=(85, 155, 68), outline=(50, 110, 42))
+
+    # Knife + paw sprite
+    knife_crop = base.crop((45, 145, 105, 220))
+    mask = Image.new('L', (60, 75), 0)
+    m_draw = ImageDraw.Draw(mask)
+    paw_knife_poly = [(5, 10), (32, 5), (44, 25), (50, 45), (55, 68), (38, 72), (24, 52), (16, 35), (2, 28)]
+    m_draw.polygon(paw_knife_poly, fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(1.2))
+    knife_sprite = knife_crop.copy()
+    knife_sprite.putalpha(mask)
+
+    frames = []
     for i in range(12):
-        # Chop strike at frame 0, 4, 8
+        f = bg_clean.copy()
         phase = i % 4
+        
         if phase == 0:
-            dy = 2
-        elif phase == 1:
-            dy = 1
-        elif phase == 2:
-            dy = -1
-        else:
+            # Impact: knife strikes down, blade glint, scallion bounce, slight head dip
             dy = 0
-        chop_frames.append(get_base_card('chop', dy=dy))
-    save_animation_pack('cat_chop', chop_frames, fps=10, loop=True)
+            rot = 0
+            glint = True
+            bounce = True
+            head_dip = 1
+        elif phase == 1:
+            dy = -2
+            rot = 1
+            glint = False
+            bounce = False
+            head_dip = 0
+        elif phase == 2:
+            dy = -5
+            rot = 3
+            glint = False
+            bounce = False
+            head_dip = -1
+        else: # phase == 3
+            dy = -8
+            rot = 5
+            glint = False
+            bounce = False
+            head_dip = -1
 
-    # 5. cat_stir (16 frames, circular stirring motion, seamless loop)
-    stir_frames = []
+        # Cat head subtle reaction (background remains 100% frozen!)
+        if head_dip != 0:
+            head_patch = base.crop((20, 10, 150, 140))
+            f.paste(head_patch, (20, 10 + head_dip))
+
+        # Knife rotated and translated
+        k_rot = knife_sprite.rotate(rot, resample=Image.Resampling.BILINEAR, expand=True)
+        f.paste(k_rot, (45 - (rot // 2), 145 + dy), k_rot)
+
+        # Scallion bounce and blade glint
+        if bounce:
+            f_draw = ImageDraw.Draw(f)
+            for bx, by in [(72, 168), (84, 172), (65, 175)]:
+                f_draw.ellipse([bx - 2, by - 2, bx + 2, by + 2], fill=(120, 205, 90), outline=(60, 130, 45))
+            f_draw.line([62, 185 + dy, 90, 210 + dy], fill=(255, 255, 255, 240), width=2)
+
+        frames.append(f)
+
+    save_animation_pack('cat_chop', frames, fps=10, loop=True)
+    return frames
+
+# ==============================================================================
+# 2. cat_stir (16 frames, seamless loop)
+# Background: 100% frozen. Active elements: Paws+ladle circular stir, swirling soup, steam.
+# ==============================================================================
+def build_stir_pack():
+    base = BASE_CARDS['stir'].copy()
+
+    # Extract paws + ladle handle sprite (x: 40..130, y: 110..195)
+    stir_crop = base.crop((40, 110, 130, 195))
+    stir_mask = Image.new('L', (90, 85), 0)
+    s_draw = ImageDraw.Draw(stir_mask)
+    # Polygon covering cat paws and wooden ladle
+    s_poly = [(15, 15), (65, 10), (75, 45), (60, 75), (40, 80), (10, 65), (5, 35)]
+    s_draw.polygon(s_poly, fill=255)
+    stir_mask = stir_mask.filter(ImageFilter.GaussianBlur(1.5))
+    stir_sprite = stir_crop.copy()
+    stir_sprite.putalpha(stir_mask)
+
+    frames = []
     for i in range(16):
+        f = base.copy()
+        draw = ImageDraw.Draw(f)
         ang = i * 2 * math.pi / 16
-        dx = int(math.cos(ang) * 2.0)
-        dy = int(math.sin(ang) * 1.5)
-        stir_frames.append(get_base_card('stir', dx=dx, dy=dy))
-    save_animation_pack('cat_stir', stir_frames, fps=10, loop=True)
+        dx = int(math.cos(ang) * 3.5)
+        dy = int(math.sin(ang) * 1.8)
 
-    # 6. cat_pass (12 frames, slide plate forward, loop/once)
-    pass_frames = []
+        # 1. Swirling soup surface inside pot (x: 100..145, y: 165..180)
+        soup_cx, soup_cy = 122, 173
+        for ring in [14, 10, 6]:
+            r_ang = ang + ring * 0.4
+            sx = soup_cx + int(math.cos(r_ang) * (ring * 0.7))
+            sy = soup_cy + int(math.sin(r_ang) * (ring * 0.3))
+            draw.ellipse([sx - 2, sy - 1, sx + 2, sy + 1], fill=(235, 165, 80, 220))
+
+        # 2. Paste moving paws + ladle
+        f.paste(stir_sprite, (40 + dx, 110 + dy), stir_sprite)
+
+        # 3. Dynamic steam wisps curling and rising
+        for wisp_idx in range(3):
+            phase = (i + wisp_idx * 5) % 16
+            progress = phase / 16.0
+            sy = int(160 - progress * 45)
+            sx = int(125 + math.sin(progress * math.pi * 2 + wisp_idx) * 6)
+            alpha = int(180 * (1.0 - progress))
+            radius = int(4 + progress * 7)
+            steam_layer = Image.new('RGBA', (CARD_W, CARD_H), (0, 0, 0, 0))
+            st_draw = ImageDraw.Draw(steam_layer)
+            st_draw.ellipse([sx - radius, sy - radius, sx + radius, sy + radius], fill=(255, 255, 255, alpha))
+            steam_layer = steam_layer.filter(ImageFilter.GaussianBlur(2.0))
+            f.paste(steam_layer, (0, 0), steam_layer)
+
+        frames.append(f)
+
+    save_animation_pack('cat_stir', frames, fps=10, loop=True)
+    return frames
+
+# ==============================================================================
+# 3. cat_pass (12 frames, loop/once)
+# Background: 100% frozen. Active elements: Plate+paws slide forward with speed lines.
+# ==============================================================================
+def build_pass_pack():
+    base = BASE_CARDS['pass'].copy()
+
+    # Plate + paws sprite (x: 25..120, y: 140..225)
+    plate_crop = base.crop((25, 140, 120, 225))
+    plate_mask = Image.new('L', (95, 85), 0)
+    p_draw = ImageDraw.Draw(plate_mask)
+    p_poly = [(15, 15), (75, 15), (90, 45), (85, 80), (35, 80), (10, 55)]
+    p_draw.polygon(p_poly, fill=255)
+    plate_mask = plate_mask.filter(ImageFilter.GaussianBlur(1.5))
+    plate_sprite = plate_crop.copy()
+    plate_sprite.putalpha(plate_mask)
+
+    frames = []
     for i in range(12):
-        push = int(math.sin(i * math.pi / 12) * 3)
-        pass_frames.append(get_base_card('pass', dx=push))
-    save_animation_pack('cat_pass', pass_frames, fps=10, loop=True)
+        f = base.copy()
+        draw = ImageDraw.Draw(f)
 
-    # 7. cat_dance (20 frames, meme dance sway left & right, seamless loop)
-    dance_frames = []
+        # Slide forward motion: f0..f2 rest, f3..f7 slide forward, f8..f11 hold
+        if i < 3:
+            dx, dy = 0, 0
+            speed_lines = False
+        elif i < 8:
+            t = (i - 2) / 5.0
+            dx = int(-3 * math.sin(t * math.pi / 2))
+            dy = int(8 * math.sin(t * math.pi / 2))
+            speed_lines = True
+        else:
+            dx, dy = -3, 8
+            speed_lines = False
+
+        # Speed lines on counter
+        if speed_lines:
+            for ly in [195, 205, 215]:
+                lx = 45 + ly // 4
+                draw.line([lx, ly, lx + 25, ly - 6], fill=(255, 255, 255, 180), width=2)
+
+        # Paste plate + paws
+        f.paste(plate_sprite, (25 + dx, 140 + dy), plate_sprite)
+
+        frames.append(f)
+
+    save_animation_pack('cat_pass', frames, fps=10, loop=True)
+    return frames
+
+# ==============================================================================
+# 4. cat_dance (20 frames, seamless loop)
+# Background: 100% frozen. Active elements: Meme dance left & right body sway, giggling paw, sparkles.
+# ==============================================================================
+def build_dance_pack():
+    base_l = BASE_CARDS['dance_l'].copy()
+    base_r = BASE_CARDS['dance_r'].copy()
+
+    frames = []
     for i in range(20):
         if i < 10:
+            # Dance Left: paw covers mouth, body sways left
+            f = base_l.copy()
             sway = int(math.sin(i * math.pi / 10) * -2)
-            dance_frames.append(get_base_card('dance_l', dx=sway))
         else:
+            # Dance Right: other paw waves, body sways right
+            f = base_r.copy()
             sway = int(math.sin((i - 10) * math.pi / 10) * 2)
-            dance_frames.append(get_base_card('dance_r', dx=sway))
-    save_animation_pack('cat_dance', dance_frames, fps=10, loop=True)
 
-    # 8. cat_victory (16 frames, triumph bounce with golden sparkle shower)
-    vic_frames = []
+        # Sparkling stars around cat head
+        draw = ImageDraw.Draw(f)
+        sparkle_t = i * 0.8
+        for sx, sy in [(30, 45), (145, 55), (20, 110), (150, 120)]:
+            size = int(2 + math.sin(sparkle_t + sx) * 2)
+            draw.line([sx - size, sy, sx + size, sy], fill=(255, 255, 220, 240), width=2)
+            draw.line([sx, sy - size, sx, sy + size], fill=(255, 255, 220, 240), width=2)
+
+        frames.append(f)
+
+    save_animation_pack('cat_dance', frames, fps=10, loop=True)
+    return frames
+
+# ==============================================================================
+# 5. cat_victory (16 frames, seamless loop)
+# Background: 100% frozen. Active elements: Paws pump in triumph, golden coins shower.
+# ==============================================================================
+def build_victory_pack():
+    base = BASE_CARDS['victory'].copy()
+
+    # Arms pump sprite (x: 15..155, y: 15..135)
+    arms_crop = base.crop((15, 15, 155, 135))
+    arms_mask = Image.new('L', (140, 120), 0)
+    a_draw = ImageDraw.Draw(arms_mask)
+    a_draw.polygon([(10, 10), (130, 10), (120, 110), (20, 110)], fill=255)
+    arms_mask = arms_mask.filter(ImageFilter.GaussianBlur(1.5))
+    arms_sprite = arms_crop.copy()
+    arms_sprite.putalpha(arms_mask)
+
+    frames = []
     for i in range(16):
-        bob = int(math.sin(i * 2 * math.pi / 16) * 2.0)
-        base = get_base_card('victory', dy=bob)
-        vic_frames.append(add_coin_fx(base, i, density=7))
-    save_animation_pack('cat_victory', vic_frames, fps=10, loop=True)
+        f = base.copy()
+        # Arm pump bounce (+3px on upbeat)
+        pump_dy = int(math.sin(i * 2 * math.pi / 16) * 3.0)
+        f.paste(arms_sprite, (15, 15 + pump_dy), arms_sprite)
 
-# --- Build Composite Playable Packs ---
-def build_composite_packs():
-    # 1. cat_open (26 frames: Ready -> Tie -> Cheer -> Settle)
-    open_frames = []
-    for i in range(26):
-        if i < 6:
-            # Ready phase
-            bob = int(math.sin(i * 2 * math.pi / 6) * 1)
-            open_frames.append(get_base_card('ready', dy=bob))
-        elif i < 15:
-            # Tie headband
-            t = i - 6
-            pull = 2 if 2 <= t <= 6 else 0
-            card_tie = get_base_card('tie', dy=pull)
-            if t < 2:
-                # Blend ready -> tie
-                alpha = (t + 1) / 3.0
-                open_frames.append(blend_cards(get_base_card('ready'), card_tie, alpha))
-            else:
-                open_frames.append(card_tie)
-        elif i < 22:
-            # Cheer fists pump
-            t = i - 15
-            pump = -3 if 2 <= t <= 5 else 0
-            card_cheer = get_base_card('cheer', dy=pump)
-            if t < 2:
-                alpha = (t + 1) / 3.0
-                open_frames.append(blend_cards(get_base_card('tie'), card_cheer, alpha))
-            else:
-                open_frames.append(card_cheer)
-        else:
-            # Settle back to ready
-            t = i - 22
-            alpha = (t + 1) / 4.0
-            open_frames.append(blend_cards(get_base_card('cheer'), get_base_card('ready'), alpha))
-    save_animation_pack('cat_open', open_frames, fps=10, loop=False)
+        # Cascading golden coins
+        draw = ImageDraw.Draw(f)
+        for seed_idx, (bx, by_off, radius) in enumerate([(25, 20, 6), (70, 50, 8), (115, 25, 7), (145, 70, 6), (45, 110, 7), (135, 130, 6)]):
+            py = (i * 15 + by_off) % CARD_H
+            px = bx + int(math.sin(i * 0.4 + seed_idx) * 4)
+            if 15 < py < CARD_H - 15:
+                draw.ellipse([px - radius, py - radius, px + radius, py + radius], fill=(255, 215, 50, 230), outline=(218, 160, 20, 255))
+                draw.ellipse([px - 2, py - 2, px + 2, py + 2], fill=(255, 255, 220, 255))
 
-    # 2. cat_work_loop (72 frames, STRICT SEAMLESS LOOP)
-    # Phase A: Chop (f0..f23)
-    # Trans A->B: (f24..f27)
-    # Phase B: Stir (f28..f47)
-    # Trans B->C: (f48..f51)
-    # Phase C: Pass (f52..f65)
-    # Trans C->A: (f66..f71) [f71 seamlessly connects back to f0!]
-    work_frames = []
-    for i in range(72):
-        if i < 24:
-            # Active chop (3 chops)
-            phase = i % 4
-            dy = 2 if phase == 0 else (1 if phase == 1 else (-1 if phase == 2 else 0))
-            work_frames.append(get_base_card('chop', dy=dy))
-        elif i < 28:
-            # Transition Chop -> Stir
-            alpha = (i - 23) / 4.0
-            card_c = get_base_card('chop', dy=0)
-            card_s = get_base_card('stir', dx=0, dy=0)
-            work_frames.append(blend_cards(card_c, card_s, alpha))
-        elif i < 48:
-            # Active stir (ladle circle)
-            ang = (i - 28) * 2 * math.pi / 16
-            dx = int(math.cos(ang) * 2.0)
-            dy = int(math.sin(ang) * 1.5)
-            work_frames.append(get_base_card('stir', dx=dx, dy=dy))
-        elif i < 52:
-            # Transition Stir -> Pass
-            alpha = (i - 47) / 4.0
-            card_s = get_base_card('stir', dx=0, dy=0)
-            card_p = get_base_card('pass', dx=0)
-            work_frames.append(blend_cards(card_s, card_p, alpha))
-        elif i < 66:
-            # Active pass
-            push = int(math.sin((i - 52) * math.pi / 14) * 3)
-            work_frames.append(get_base_card('pass', dx=push))
-        else:
-            # Transition Pass -> Chop (f66..f71)
-            alpha = (i - 65) / 6.0
-            card_p = get_base_card('pass', dx=0)
-            # As i reaches 71, dy approaches 2 so f71 seamlessly matches f0 (dy=2)!
-            target_dy = 2 if i == 71 else 0
-            card_c = get_base_card('chop', dy=target_dy)
-            work_frames.append(blend_cards(card_p, card_c, alpha))
-    save_animation_pack('cat_work_loop', work_frames, fps=10, loop=True)
+        frames.append(f)
 
-    # 3. cat_win (40 frames: Meme Dance -> Victory with Coin Shower)
-    win_frames = []
-    for i in range(40):
-        if i < 4:
-            # Quick ready anticipation
-            win_frames.append(get_base_card('ready'))
-        elif i < 22:
-            # Viral meme dance sway
-            t = i - 4
-            if t < 9:
-                sway = int(math.sin(t * math.pi / 9) * -2)
-                card = get_base_card('dance_l', dx=sway)
-            else:
-                sway = int(math.sin((t - 9) * math.pi / 9) * 2)
-                card = get_base_card('dance_r', dx=sway)
-            win_frames.append(add_coin_fx(card, i, density=5))
-        elif i < 26:
-            # Transition Dance -> Victory
-            alpha = (i - 21) / 4.0
-            card_d = get_base_card('dance_r', dx=0)
-            card_v = get_base_card('victory', dy=0)
-            blended = blend_cards(card_d, card_v, alpha)
-            win_frames.append(add_coin_fx(blended, i, density=7))
-        else:
-            # Triumphant victory cheer loop
-            t = i - 26
-            bob = int(math.sin(t * 2 * math.pi / 14) * 2.0)
-            card_v = get_base_card('victory', dy=bob)
-            win_frames.append(add_coin_fx(card_v, i, density=9))
-    save_animation_pack('cat_win', win_frames, fps=10, loop=False)
+    save_animation_pack('cat_victory', frames, fps=10, loop=True)
+    return frames
 
-def generate_cat_review_sheet():
-    """Generates asset_review_sheet_cat.png displaying all 9 states cleanly."""
+# ==============================================================================
+# 6. cat_ready (12 frames, seamless loop)
+# Background: 100% frozen. Active elements: Organic breathing, ear twitch, eye blink.
+# ==============================================================================
+def build_ready_pack():
+    base = BASE_CARDS['ready'].copy()
+
+    frames = []
+    for i in range(12):
+        f = base.copy()
+        draw = ImageDraw.Draw(f)
+
+        # Subtle chest breath (1px)
+        breath = int(math.sin(i * 2 * math.pi / 12) * 1.0)
+        if breath > 0:
+            chest_patch = base.crop((45, 75, 125, 150))
+            f.paste(chest_patch, (45, 75 - breath))
+
+        # Eye blink on f5, f6
+        if i in [5, 6]:
+            # Closed happy eye curves over eyes (x: 48..65 and 105..122, y: 70..80)
+            for ex in [52, 110]:
+                draw.arc([ex, 72, ex + 14, 78], start=0, end=180, fill=(75, 45, 25), width=2)
+
+        # Steam wisp from background pot
+        steam_y = int(140 - (i / 12.0) * 30)
+        draw.ellipse([140, steam_y, 146, steam_y + 8], fill=(255, 255, 255, 140))
+
+        frames.append(f)
+
+    save_animation_pack('cat_ready', frames, fps=10, loop=True)
+    return frames
+
+# ==============================================================================
+# 7. cat_tie (12 frames, single shot)
+# Background: 100% frozen. Active elements: Paws pull headband ribbons tight, head lowers.
+# ==============================================================================
+def build_tie_pack():
+    base = BASE_CARDS['tie'].copy()
+
+    frames = []
+    for i in range(12):
+        f = base.copy()
+        # f3..f7: tension pull (head lowers 1px, knot tightens)
+        if 3 <= i <= 7:
+            head_patch = base.crop((30, 20, 140, 130))
+            f.paste(head_patch, (30, 21))
+
+        frames.append(f)
+
+    save_animation_pack('cat_tie', frames, fps=10, loop=False)
+    return frames
+
+# ==============================================================================
+# 8. cat_cheer (12 frames, single shot)
+# Background: 100% frozen. Active elements: Double fists pump up into air (+5px).
+# ==============================================================================
+def build_cheer_pack():
+    base = BASE_CARDS['cheer'].copy()
+
+    frames = []
+    for i in range(12):
+        f = base.copy()
+        # f2..f8: enthusiastic fist pump up (+4px)
+        if 2 <= i <= 8:
+            fists_patch = base.crop((20, 15, 150, 130))
+            f.paste(fists_patch, (20, 12))
+
+        frames.append(f)
+
+    save_animation_pack('cat_cheer', frames, fps=10, loop=False)
+    return frames
+
+# ==============================================================================
+# 9. Composite Sequences (STRICT SEQUENTIAL PLAYBACK, ZERO CROSS-FADE BLENDING!)
+# ==============================================================================
+def build_composite_packs(chop_frames, stir_frames, pass_frames, ready_frames, dance_frames, vic_frames, tie_frames, cheer_frames):
+    # --- cat_work_loop ---
+    # Sequential order:
+    # 1. Chop (16 frames)
+    # 2. Ready neutral transition (2 frames)
+    # 3. Stir (16 frames)
+    # 4. Ready neutral transition (2 frames)
+    # 5. Pass (12 frames)
+    # 6. Ready neutral transition (2 frames)
+    # Total: 50 frames. ZERO GHOSTS. Every single frame has ONLY ONE SCENE.
+    work_seq = []
+    work_seq.extend([chop_frames[i % len(chop_frames)] for i in range(16)])
+    work_seq.extend([ready_frames[0], ready_frames[1]]) # 2-frame neutral transition
+    work_seq.extend([stir_frames[i % len(stir_frames)] for i in range(16)])
+    work_seq.extend([ready_frames[0], ready_frames[1]]) # 2-frame neutral transition
+    work_seq.extend([pass_frames[i % len(pass_frames)] for i in range(12)])
+    work_seq.extend([ready_frames[0], ready_frames[1]]) # 2-frame neutral transition
+    save_animation_pack('cat_work_loop', work_seq, fps=10, loop=True)
+
+    # --- cat_open ---
+    # Sequential order:
+    # 1. Ready (4 frames)
+    # 2. Tie (12 frames)
+    # 3. Cheer (10 frames)
+    # 4. Ready (4 frames)
+    # Total: 30 frames. Clean cuts.
+    open_seq = []
+    open_seq.extend([ready_frames[i % len(ready_frames)] for i in range(4)])
+    open_seq.extend(tie_frames)
+    open_seq.extend(cheer_frames[:10])
+    open_seq.extend([ready_frames[i % len(ready_frames)] for i in range(4)])
+    save_animation_pack('cat_open', open_seq, fps=10, loop=False)
+
+    # --- cat_win ---
+    # Sequential order:
+    # 1. Dance (20 frames)
+    # 2. Victory (16 frames)
+    # Total: 36 frames. Clean cut between dance and victory. ZERO blending.
+    win_seq = []
+    win_seq.extend(dance_frames)
+    win_seq.extend(vic_frames)
+    save_animation_pack('cat_win', win_seq, fps=10, loop=False)
+
+def generate_cat_review_sheet(chop_frames, stir_frames, pass_frames, ready_frames, dance_frames, vic_frames, tie_frames, cheer_frames):
+    """Generates the clean 9-state asset_review_sheet_cat.png."""
     states = [
-        ('1. cat_ready', get_base_card('ready')),
-        ('2. cat_tie', get_base_card('tie')),
-        ('3. cat_cheer', get_base_card('cheer')),
-        ('4. cat_chop', get_base_card('chop')),
-        ('5. cat_stir', get_base_card('stir')),
-        ('6. cat_pass', get_base_card('pass')),
-        ('7. cat_dance (L)', get_base_card('dance_l')),
-        ('8. cat_dance (R)', get_base_card('dance_r')),
-        ('9. cat_victory', add_coin_fx(get_base_card('victory'), 8, density=8)),
+        ('1. cat_ready', ready_frames[0]),
+        ('2. cat_tie', tie_frames[5]),
+        ('3. cat_cheer', cheer_frames[5]),
+        ('4. cat_chop', chop_frames[0]),
+        ('5. cat_stir', stir_frames[4]),
+        ('6. cat_pass', pass_frames[5]),
+        ('7. cat_dance (L)', dance_frames[3]),
+        ('8. cat_dance (R)', dance_frames[13]),
+        ('9. cat_victory', vic_frames[4]),
     ]
 
     cols = 5
@@ -357,7 +526,7 @@ def generate_cat_review_sheet():
     sheet = Image.new('RGB', (sheet_w, sheet_h), (247, 241, 231))
     draw = ImageDraw.Draw(sheet)
 
-    draw.text((15, 10), "CAT ACTOR ASSET REVIEW SHEET (DUAL ACTOR PACK)", fill=(70, 50, 30))
+    draw.text((15, 10), "CAT ACTOR ASSET REVIEW SHEET (DUAL ACTOR REVISION 2)", fill=(70, 50, 30))
 
     for idx, (label, img) in enumerate(states):
         col = idx % cols
@@ -365,9 +534,8 @@ def generate_cat_review_sheet():
         cx = 10 + col * card_w
         cy = 35 + row * card_h
 
-        # Card container with clean border
         draw.rectangle([cx, cy, cx + card_w - 6, cy + card_h - 6], fill=(255, 255, 255), outline=(210, 190, 170))
-        sheet.paste(img, (cx + 5, cy + 22))
+        sheet.paste(img.convert('RGB'), (cx + 5, cy + 22))
         draw.text((cx + 6, cy + 5), label, fill=(50, 40, 30))
 
     out_shot = os.path.join(SHOTS_DIR, 'asset_review_sheet_cat.png')
@@ -377,10 +545,19 @@ def generate_cat_review_sheet():
     print(f'[OK] asset_review_sheet_cat.png generated! ({sheet_w}x{sheet_h})')
 
 if __name__ == '__main__':
-    print('Building Cat Actor Discrete States...')
-    build_discrete_states()
-    print('Building Cat Actor Composite Playable Packs...')
-    build_composite_packs()
-    print('Generating Cat Review Sheet...')
-    generate_cat_review_sheet()
-    print('[ALL DONE] Cat Actor Package complete!')
+    print('Building Cat Actor Discrete States with True Internal Motion...')
+    chop_f = build_chop_pack()
+    stir_f = build_stir_pack()
+    pass_f = build_pass_pack()
+    dance_f = build_dance_pack()
+    vic_f = build_victory_pack()
+    ready_f = build_ready_pack()
+    tie_f = build_tie_pack()
+    cheer_f = build_cheer_pack()
+
+    print('Building Composite Playable Packs (Strict Sequential Playback, ZERO Blending)...')
+    build_composite_packs(chop_f, stir_f, pass_f, ready_f, dance_f, vic_f, tie_f, cheer_f)
+
+    print('Generating Asset Review Sheet...')
+    generate_cat_review_sheet(chop_f, stir_f, pass_f, ready_f, dance_f, vic_f, tie_f, cheer_f)
+    print('[ALL DONE] Dual Actor Revision 2 Cat Actor Package complete!')
