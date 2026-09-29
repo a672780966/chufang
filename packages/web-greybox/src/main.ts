@@ -23,12 +23,19 @@ import { PastoralTheme } from './theme/PastoralTheme.js';
 import { DishTextureManager } from './pipeline/DishTextureManager.js';
 import { GameFeelProfile } from './theme/GameFeelProfile.js';
 import { PresentationStateMachine } from './pipeline/PresentationStateMachine.js';
+import { CatActorPlayer } from './actor/CatActorPlayer.js';
+import { PrinterActorPlayer } from './actor/PrinterActorPlayer.js';
 
 class WebGameApp {
   private flow!: GameFlowManager;
   private canvas!: HTMLCanvasElement;
   private ctx!: CanvasRenderingContext2D;
   private currentTutorialCue: DragTutorialCue | null = null;
+
+  // Cat & Printer Ambient Actors
+  public catActor!: CatActorPlayer;
+  public printerActor!: PrinterActorPlayer;
+  private catReturnIdleTimer: number | null = null;
 
   // Presentation State Machine & Physical Animation
   private stateMachine = new PresentationStateMachine();
@@ -204,6 +211,16 @@ class WebGameApp {
     this.canvas.addEventListener('pointermove', (e) => this.onPointerMove(e));
     this.canvas.addEventListener('pointerup', (e) => this.onPointerUp(e));
     this.canvas.addEventListener('pointercancel', (e) => this.onPointerUp(e));
+
+    // Mount Runtime Cat & Printer Actors
+    const catSlot = document.getElementById('cat-actor-slot');
+    if (catSlot) {
+      this.catActor = new CatActorPlayer(catSlot, { renderMode: 'spritesheet' });
+    }
+    const printerSlot = document.getElementById('printer-actor-slot');
+    if (printerSlot) {
+      this.printerActor = new PrinterActorPlayer(printerSlot);
+    }
   }
 
   private handleTrayServe(slotIdx: number): void {
@@ -249,6 +266,8 @@ class WebGameApp {
       menuView.classList.remove('view-hidden');
       gameView.classList.add('view-hidden');
       this.renderMenuDayGrid();
+      this.catActor?.onEvent('ORDER_WAITING');
+      this.printerActor?.playState('IDLE');
     } else {
       menuView.classList.add('view-hidden');
       gameView.classList.remove('view-hidden');
@@ -314,8 +333,15 @@ class WebGameApp {
       this.flow.beginPlaying();
     }, 250);
 
-    // Bind session audio & visual cues
+    // Bind session audio & actor visual cues
+    this.catActor?.onEvent('ORDER_WAITING');
+    this.printerActor?.printNewOrder();
+
     session.events.on('PIECE_PLACED', () => AudioDirector.playPieceSnap());
+    session.events.on('ORDER_CREATED', () => {
+      this.printerActor?.printNewOrder();
+      this.updateHUD();
+    });
     session.events.on('ORDER_COMPLETED', () => {
       this.updateHUD();
     });
@@ -323,7 +349,10 @@ class WebGameApp {
       this.updateHUD();
     });
     session.events.on('BOARD_SETTLED', () => AudioDirector.playBoardSettling());
-    session.events.on('DAY_CLEARED', () => AudioDirector.playDayClear());
+    session.events.on('DAY_CLEARED', () => {
+      this.catActor?.onEvent('ROUND_WIN');
+      AudioDirector.playDayClear();
+    });
 
     AudioDirector.playReceiptPrint();
     if (this.flow.campaignState.settings.musicEnabled) {
@@ -602,6 +631,18 @@ class WebGameApp {
         this.stateMachine.transitionTo('DRAGGING');
         AudioDirector.playPiecePick();
         try { this.canvas.setPointerCapture(e.pointerId); } catch {}
+
+        // Drive Cat Actor from real gameplay interaction
+        const dishId = hitPiece.dishId;
+        if (dishId === 'dish_ramen') {
+          this.catActor?.onEvent('COOK_STIR');
+        } else {
+          this.catActor?.onEvent('COOK_CHOP');
+        }
+        if (this.catReturnIdleTimer) {
+          clearTimeout(this.catReturnIdleTimer);
+          this.catReturnIdleTimer = null;
+        }
       }
     }
   }
@@ -687,11 +728,30 @@ class WebGameApp {
     this.draggingGroup = null;
     try { this.canvas.releasePointerCapture(e.pointerId); } catch {}
     this.updateHUD();
+
+    // Revert to IDLE after 1.5s if not completing a dish
+    if (!moveResult.success || !moveResult.completedDish) {
+      if (this.catReturnIdleTimer) clearTimeout(this.catReturnIdleTimer);
+      this.catReturnIdleTimer = window.setTimeout(() => {
+        const cur = this.catActor?.getState();
+        if (cur === 'CHOP' || cur === 'STIR') {
+          this.catActor?.onEvent('ORDER_WAITING');
+        }
+        this.catReturnIdleTimer = null;
+      }, 1500);
+    }
   }
 
   // --- Serve Arrival & Settlement Flow ---
   private triggerDishServeArrival(dishId: string, groupId: string): void {
     AudioDirector.playDishServe();
+
+    // Clear idle return timer and play ORDER_READY (PASS)
+    if (this.catReturnIdleTimer) {
+      clearTimeout(this.catReturnIdleTimer);
+      this.catReturnIdleTimer = null;
+    }
+    this.catActor?.onEvent('ORDER_READY');
 
     // 1. Camera micro-pulse
     const container = document.getElementById('game-container');
@@ -1214,7 +1274,8 @@ class WebGameApp {
 // Boot application
 function boot(): void {
   try {
-    new WebGameApp();
+    const app = new WebGameApp();
+    (window as any).gameApp = app;
     console.log('[WebGameApp] Game initialized successfully.');
   } catch (err) {
     console.error('[WebGameApp] Boot failed:', err);
