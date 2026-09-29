@@ -47,28 +47,27 @@ mask_draw.rounded_rectangle([0, 0, BOARD_W, PLAY_H], radius=18, fill=255)
 board_draw.rounded_rectangle([0, 0, BOARD_W - 1, PLAY_H - 1], radius=18, outline=(216, 181, 140, 255), width=3)
 mockup.paste(linen_board, (BOARD_X, PLAY_Y), mask_board)
 
-# 2. Right Stage Background
-stage_bg = Image.open(os.path.join(BASE_DIR, 'packages', 'web-greybox', 'public', 'assets', 'cat', 'stage_background.png')).convert('RGBA')
-stage_bg_1x = stage_bg.resize((STAGE_W, PLAY_H), Image.Resampling.LANCZOS)
-stage_draw = ImageDraw.Draw(stage_bg_1x)
+# 2. Right Side: No monolithic cedar strip! Clean natural cream background with independent actors.
 
-# Top Slot: Printer Actor
+# Top Right Slot: Independent Hanging Printer Actor Card
 printer_img = Image.open(os.path.join(BASE_DIR, 'packages', 'web-greybox', 'public', 'assets', 'actor_pack', 'printer', 'frames_print', 'frame_08.png')).convert('RGBA')
-pw, ph = int(printer_img.width * 0.55), int(printer_img.height * 0.55) # ~42x50px
+pw, ph = int(printer_img.width * 0.52), int(printer_img.height * 0.52) # ~40x48px
 printer_fitted = printer_img.resize((pw, ph), Image.Resampling.LANCZOS)
-px = (STAGE_W - pw) // 2
-stage_bg_1x.paste(printer_fitted, (px, 16), printer_fitted)
 
-# Rounded stage frame mask
-mask_stage = Image.new('L', (STAGE_W, PLAY_H), 0)
-mask_stage_draw = ImageDraw.Draw(mask_stage)
-mask_stage_draw.rounded_rectangle([0, 0, STAGE_W, PLAY_H], radius=18, fill=255)
-stage_draw.rounded_rectangle([0, 0, STAGE_W - 1, PLAY_H - 1], radius=18, outline=(196, 158, 114, 255), width=3)
-mockup.paste(stage_bg_1x, (STAGE_X, PLAY_Y), mask_stage)
+card_pw, card_ph = 48, 56
+p_card = Image.new('RGBA', (card_pw, card_ph), (255, 255, 255, 240))
+p_draw = ImageDraw.Draw(p_card)
+p_draw.rounded_rectangle([0, 0, card_pw - 1, card_ph - 1], radius=8, outline=(210, 190, 170, 220), width=1)
+p_card.paste(printer_fitted, ((card_pw - pw) // 2, (card_ph - ph) // 2), printer_fitted)
 
-# 3. Bottom Slot: Enlarged Cat Actor (Width: 95px, Height: 168px = 30.4% of stage)
+printer_x = STAGE_X + (STAGE_W - card_pw) // 2
+printer_y = PLAY_Y + 16
+mockup.paste(p_card, (printer_x, printer_y), p_card)
+
+# 3. Bottom Right Slot: Enlarged Cat Actor Card (Width: 100px, Height: 168px = 30.4% of stage height)
+# Floating 10px left over wooden board border, with zero playable cell obstruction
 cat_img = Image.open(os.path.join(BASE_DIR, 'packages', 'web-greybox', 'public', 'assets', 'actor_pack', 'cat', 'cat_chop', 'frame_00.png')).convert('RGBA')
-cat_w = 95
+cat_w = 100
 cat_h = 168
 cat_scaled = cat_img.resize((cat_w, cat_h), Image.Resampling.LANCZOS)
 
@@ -79,7 +78,7 @@ cm_draw.rounded_rectangle([0, 0, cat_w, cat_h], radius=14, fill=255)
 
 cat_card.paste(cat_scaled, (0, 0), cat_mask)
 cat_draw = ImageDraw.Draw(cat_card)
-cat_draw.rounded_rectangle([0, 0, cat_w - 1, cat_h - 1], radius=14, outline=(196, 158, 114, 220), width=2)
+cat_draw.rounded_rectangle([0, 0, cat_w - 1, cat_h - 1], radius=14, outline=(196, 158, 114, 230), width=2)
 
 cat_x = STAGE_X - 10
 cat_y = PLAY_Y + PLAY_H - cat_h
@@ -88,4 +87,4 @@ mockup.paste(cat_card, (cat_x, cat_y), cat_card)
 # Save official layout deliverable
 mockup.save(os.path.join(SHOTS_DIR, 'shot_stage4_2_actor_pack_layout.png'))
 mockup.save(os.path.join(ARTIFACT_DIR, 'shot_stage4_2_actor_pack_layout.png'))
-print('shot_stage4_2_actor_pack_layout.png saved with perfect flush boundaries!')
+print('shot_stage4_2_actor_pack_layout.png saved with clean independent layout!')
